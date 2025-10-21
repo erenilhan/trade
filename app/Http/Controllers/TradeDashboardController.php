@@ -156,6 +156,7 @@ class TradeDashboardController extends Controller
                     'pnl_percent' => $pnlPercent,
                     'unrealized_pnl' => $pos->unrealized_pnl ?? $pnl,
                     'opened_at' => $pos->opened_at?->diffForHumans(),
+                    'price_updated_at' => $pos->price_updated_at?->diffForHumans() ?? 'Never',
                     'liquidation_price' => $pos->liquidation_price,
                     'targets' => [
                         'profit_target' => $profitTarget,

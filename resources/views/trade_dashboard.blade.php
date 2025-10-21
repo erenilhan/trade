@@ -253,6 +253,10 @@
                                 <span class="position-label text-gray-500 text-xs">Opened</span>
                                 <span class="position-value text-gray-400 text-xs">${pos.opened_at || 'N/A'}</span>
                             </div>
+                            <div class="position-row flex justify-between py-1">
+                                <span class="position-label text-gray-500 text-xs">🔄 Updated</span>
+                                <span class="position-value text-blue-400 text-xs font-semibold">${pos.price_updated_at || 'Never'}</span>
+                            </div>
                         </div>
                     `;
                 }).join('');

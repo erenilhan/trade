@@ -9,7 +9,7 @@ class MarketDataService
 {
     private BinanceService $binance;
 
-    // Default supported coins (fallback)
+    // Default supported coins (fallback) - Top 10
     private const array DEFAULT_SUPPORTED_COINS = [
         'BTC/USDT',
         'ETH/USDT',
@@ -17,6 +17,10 @@ class MarketDataService
         'BNB/USDT',
         'XRP/USDT',
         'DOGE/USDT',
+        'ADA/USDT',   // Cardano
+        'AVAX/USDT',  // Avalanche
+        'LINK/USDT',  // Chainlink
+        'DOT/USDT',   // Polkadot
     ];
 
     public function __construct(BinanceService $binance)

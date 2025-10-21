@@ -28,6 +28,7 @@ class Position extends Model
         'is_open',
         'opened_at',
         'closed_at',
+        'price_updated_at',
     ];
 
     protected $casts = [
@@ -46,6 +47,7 @@ class Position extends Model
         'is_open' => 'boolean',
         'opened_at' => 'datetime',
         'closed_at' => 'datetime',
+        'price_updated_at' => 'datetime',
     ];
 
     public function scopeOpen($query)

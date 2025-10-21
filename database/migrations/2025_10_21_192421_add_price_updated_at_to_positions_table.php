@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('positions', function (Blueprint $table) {
-            $table->decimal('notional_usd', 15, 2)->default(0)->after('notional_value');
+            $table->timestamp('price_updated_at')->nullable()->after('opened_at');
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('positions', function (Blueprint $table) {
-            $table->dropColumn('notional_usd');
+            $table->dropColumn('price_updated_at');
         });
     }
 };

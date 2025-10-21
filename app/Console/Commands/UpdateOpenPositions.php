@@ -54,6 +54,7 @@ class UpdateOpenPositions extends Command
                 $position->update([
                     'current_price' => $currentPrice,
                     'unrealized_pnl' => $unrealizedPnl,
+                    'price_updated_at' => now(),
                 ]);
 
                 $pnlEmoji = $unrealizedPnl >= 0 ? '🟢' : '🔴';
