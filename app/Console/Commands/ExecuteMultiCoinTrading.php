@@ -95,6 +95,12 @@ class ExecuteMultiCoinTrading extends Command
      */
     private function executeBuy(string $symbol, array $decision, float $availableCash): void
     {
+        // Skip BTC and ETH if cash is below $5
+        if ($availableCash < 5 && in_array($symbol, ['BTC/USDT', 'ETH/USDT'])) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Cash below $5 (have \${$availableCash})");
+            return;
+        }
+
         // Check if position already exists
         $existingPosition = Position::active()->bySymbol($symbol)->first();
         if ($existingPosition) {
