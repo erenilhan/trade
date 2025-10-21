@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Models\BotSetting;
 use BackedEnum;
+use Exception;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -67,7 +68,7 @@ class ManageBotSettings extends Page implements HasForms
                             ->helperText('Master switch for the entire trading bot')
                             ->default(true)
                             ->live()
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('bot_enabled', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('bot_enabled', $state)),
                     ])
                     ->columns(1),
 
@@ -79,7 +80,7 @@ class ManageBotSettings extends Page implements HasForms
                             ->helperText('Enable AI-powered trading decisions')
                             ->default(true)
                             ->live()
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('use_ai', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('use_ai', $state)),
 
                         Select::make('ai_provider')
                             ->label('AI Provider')
@@ -91,14 +92,14 @@ class ManageBotSettings extends Page implements HasForms
                             ->default(env('AI_PROVIDER', 'openrouter'))
                             ->helperText('Select which AI service to use')
                             ->live()
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('ai_provider', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_provider', $state)),
 
                         TextInput::make('ai_model')
                             ->label('AI Model')
                             ->default(env('OPENROUTER_MODEL', 'deepseek/deepseek-chat'))
                             ->helperText('Model name (e.g., deepseek/deepseek-chat, x-ai/grok-2-vision-1212)')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('ai_model', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_model', $state)),
 
                         Textarea::make('ai_system_prompt')
                             ->label('System Prompt Override')
@@ -106,7 +107,7 @@ class ManageBotSettings extends Page implements HasForms
                             ->placeholder('Leave empty to use default prompt...')
                             ->helperText('Custom system prompt for AI (optional, leave empty for default)')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('ai_system_prompt', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_system_prompt', $state)),
                     ])
                     ->columns(2),
 
@@ -120,7 +121,7 @@ class ManageBotSettings extends Page implements HasForms
                             ->default(9)
                             ->helperText('Starting balance for ROI calculation')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('initial_capital', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('initial_capital', $state)),
 
                         TextInput::make('position_size_usdt')
                             ->label('Position Size (USDT)')
@@ -129,7 +130,7 @@ class ManageBotSettings extends Page implements HasForms
                             ->default(100)
                             ->helperText('Size of each position in USDT')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('position_size_usdt', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('position_size_usdt', $state)),
 
                         TextInput::make('max_leverage')
                             ->label('Max Leverage')
@@ -140,7 +141,7 @@ class ManageBotSettings extends Page implements HasForms
                             ->maxValue(125)
                             ->helperText('Maximum leverage to use (1-125x)')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('max_leverage', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('max_leverage', $state)),
 
                         TextInput::make('take_profit_percent')
                             ->label('Take Profit %')
@@ -150,7 +151,7 @@ class ManageBotSettings extends Page implements HasForms
                             ->suffix('%')
                             ->helperText('Target profit percentage')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('take_profit_percent', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('take_profit_percent', $state)),
 
                         TextInput::make('stop_loss_percent')
                             ->label('Stop Loss %')
@@ -160,7 +161,7 @@ class ManageBotSettings extends Page implements HasForms
                             ->suffix('%')
                             ->helperText('Maximum loss percentage')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('stop_loss_percent', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('stop_loss_percent', $state)),
                     ])
                     ->columns(2),
 
@@ -176,12 +177,17 @@ class ManageBotSettings extends Page implements HasForms
                                 'SOL/USDT' => 'Solana (SOL/USDT)',
                                 'BNB/USDT' => 'BNB (BNB/USDT)',
                                 'XRP/USDT' => 'Ripple (XRP/USDT)',
+                                'BTC/USDT',
                                 'DOGE/USDT' => 'Dogecoin (DOGE/USDT)',
+                                'ADA/USDT' => 'Cardano (ADA/USDT)',
+                                'AVAX/USDT' => 'Avalanche (AVAX/USDT)',
+                                'LINK/USDT' => 'Chainlink (LINK/USDT)',
+                                'DOT/USDT' => 'Polkadot (DOT/USDT)',
                             ])
                             ->default(['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT'])
                             ->helperText('Select which coins to trade (multi-coin system only)')
                             ->live()
-                            ->afterStateUpdated(fn ($state) => $this->saveSetting('supported_coins', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('supported_coins', $state)),
                     ])
                     ->columns(1),
             ])
@@ -242,13 +248,27 @@ class ManageBotSettings extends Page implements HasForms
                 ->success()
                 ->send();
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Notification::make()
                 ->title('Error')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();
         }
+    }
+
+    protected function getSettingDescription(string $key): string
+    {
+        return match ($key) {
+            'bot_enabled' => 'Master switch for trading bot',
+            'use_ai' => 'Enable AI-powered trading',
+            'initial_capital' => 'Starting capital for ROI calculation',
+            'position_size_usdt' => 'Size of each position in USDT',
+            'max_leverage' => 'Maximum leverage multiplier',
+            'take_profit_percent' => 'Target profit percentage',
+            'stop_loss_percent' => 'Maximum loss percentage',
+            default => ucfirst(str_replace('_', ' ', $key)),
+        };
     }
 
     protected function updateEnvFile(string $key, mixed $value): void
@@ -278,20 +298,6 @@ class ManageBotSettings extends Page implements HasForms
 
             file_put_contents($path, $content);
         }
-    }
-
-    protected function getSettingDescription(string $key): string
-    {
-        return match ($key) {
-            'bot_enabled' => 'Master switch for trading bot',
-            'use_ai' => 'Enable AI-powered trading',
-            'initial_capital' => 'Starting capital for ROI calculation',
-            'position_size_usdt' => 'Size of each position in USDT',
-            'max_leverage' => 'Maximum leverage multiplier',
-            'take_profit_percent' => 'Target profit percentage',
-            'stop_loss_percent' => 'Maximum loss percentage',
-            default => ucfirst(str_replace('_', ' ', $key)),
-        };
     }
 
     protected function getSettingLabel(string $key): string

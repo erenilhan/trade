@@ -268,22 +268,28 @@
                 closedPositionsEl.innerHTML = '<div class="empty-state text-center py-8 text-gray-400">No closed positions</div>';
             } else {
                 closedPositionsEl.innerHTML = `
-                    <div class="grid grid-cols-4 bg-dark-700 text-gray-300 font-semibold p-3">
+                    <div class="grid grid-cols-5 bg-dark-700 text-gray-300 font-semibold p-3">
                         <div>Symbol</div>
                         <div>Entry Price</div>
+                        <div>Leverage</div>
                         <div>P&L</div>
                         <div>Closed</div>
                     </div>
-                    ${closed_positions.map(pos => `
-                        <div class="grid grid-cols-4 p-3 border-b border-dark-700">
-                            <div class="font-medium text-white">${pos.symbol}</div>
-                            <div>${formatMoney(pos.entry_price)}</div>
-                            <div class="${pos.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">
-                                ${formatMoney(pos.pnl)}
+                    ${closed_positions.map(pos => {
+                        const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
+                        const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
+                        return `
+                            <div class="grid grid-cols-5 p-3 border-b border-dark-700 hover:bg-dark-700/30">
+                                <div class="font-medium text-white">${pos.symbol}</div>
+                                <div class="text-gray-300">${formatMoney(pos.entry_price)}</div>
+                                <div class="text-blue-400">${pos.leverage}x</div>
+                                <div class="${pnlColor} font-semibold">
+                                    ${pnlEmoji} ${formatMoney(pos.pnl)} (${formatPercent(pos.pnl_percent)})
+                                </div>
+                                <div class="text-gray-400 text-sm">${pos.closed_at || 'N/A'}</div>
                             </div>
-                            <div class="text-gray-400">${pos.closed_at || 'N/A'}</div>
-                        </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 `;
             }
 

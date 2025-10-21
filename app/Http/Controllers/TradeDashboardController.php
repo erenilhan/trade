@@ -175,11 +175,23 @@ class TradeDashboardController extends Controller
                 ->limit(10)
                 ->get()
                 ->map(function ($pos) {
+                    $pnl = $pos->realized_pnl ?? 0;
+                    $entryPrice = $pos->entry_price;
+
+                    // Calculate PNL percentage with leverage
+                    $pnlPercent = 0;
+                    if ($entryPrice > 0 && $pos->quantity > 0) {
+                        $priceDiff = $pnl / ($pos->quantity * ($pos->leverage ?? 1));
+                        $pnlPercent = ($priceDiff / $entryPrice) * 100 * ($pos->leverage ?? 1);
+                    }
+
                     return [
                         'symbol' => $pos->symbol,
                         'side' => $pos->side,
-                        'entry_price' => $pos->entry_price,
-                        'pnl' => $pos->realized_pnl ?? 0,
+                        'entry_price' => $entryPrice,
+                        'pnl' => $pnl,
+                        'pnl_percent' => $pnlPercent,
+                        'leverage' => $pos->leverage ?? 1,
                         'closed_at' => $pos->closed_at?->diffForHumans(),
                     ];
                 });
