@@ -82,9 +82,18 @@ class MultiCoinAIService
     private function buildMultiCoinPrompt(array $account, array $allMarketData): string
     {
         $prompt = "CURRENT MARKET STATE FOR ALL COINS\n\n";
+
+        // Skip BTC and ETH if cash is below $10
+        $skipExpensiveCoins = $account['cash'] < 10;
+
         // Add each coin's data
         foreach ($allMarketData as $symbol => $data) {
             if (!$data) continue;
+
+            // Skip BTC and ETH if cash is low
+            if ($skipExpensiveCoins && in_array($symbol, ['BTC/USDT', 'ETH/USDT'])) {
+                continue;
+            }
 
             $data3m = $data['3m'];
             $data4h = $data['4h'];

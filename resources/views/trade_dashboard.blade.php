@@ -84,27 +84,6 @@
             </div>
         </div>
 
-        <!-- AI Logs Section -->
-        <div class="mb-8">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold text-white">Recent AI Decisions</h2>
-                <div class="text-sm text-gray-400">
-                    <span>Provider: </span><span id="ai-provider" class="text-blue-400">-</span> | 
-                    <span>Model: </span><span id="ai-model" class="text-blue-400">-</span>
-                </div>
-            </div>
-            
-            <div class="bg-dark-800 rounded-lg overflow-hidden">
-                <div class="history-body p-4" id="ai-logs">
-                    <div class="loading text-center py-8 text-gray-400">Loading AI logs...</div>
-                </div>
-            </div>
-            
-            <div class="text-right text-sm text-gray-400 mt-2">
-                Last AI run: <span id="last-ai-run">N/A</span>
-            </div>
-        </div>
-
         <!-- Open Positions -->
         <div class="mb-8">
             <h2 class="text-xl font-semibold text-white mb-4">Open Positions</h2>
@@ -115,10 +94,27 @@
 
         <!-- Closed Positions -->
         <div class="mb-8">
-            <h2 class="text-xl font-semibold text-white mb-4">Closed Positions</h2>
+            <h2 class="text-xl font-semibold text-white mb-4">Closed Positions (Last 10)</h2>
             <div class="bg-dark-800 rounded-lg overflow-hidden">
                 <div class="history-body p-4" id="closed-positions">
                     <div class="loading text-center py-8 text-gray-400">Loading positions...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Logs Section -->
+        <div class="mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-white">Recent AI Decisions (Last 10)</h2>
+                <div class="text-sm text-gray-400">
+                    <span>Provider: </span><span id="ai-provider" class="text-blue-400">-</span> |
+                    <span>Last run: </span><span id="last-ai-run" class="text-blue-400">N/A</span>
+                </div>
+            </div>
+
+            <div class="bg-dark-800 rounded-lg overflow-hidden">
+                <div class="history-body p-4" id="ai-logs">
+                    <div class="loading text-center py-8 text-gray-400">Loading AI logs...</div>
                 </div>
             </div>
         </div>
@@ -263,15 +259,33 @@
                 ai_logs.forEach(log => {
                     if (log.decisions && log.decisions.length > 0) {
                         log.decisions.forEach(decision => {
+                            // Color code actions
+                            let actionClass = 'text-gray-400';
+                            let actionBadge = decision.action.toUpperCase();
+                            if (decision.action === 'buy') {
+                                actionClass = 'text-green-400 font-bold';
+                                actionBadge = '🟢 BUY';
+                            } else if (decision.action === 'close_profitable') {
+                                actionClass = 'text-blue-400 font-bold';
+                                actionBadge = '🔵 CLOSE';
+                            } else if (decision.action === 'stop_loss') {
+                                actionClass = 'text-red-400 font-bold';
+                                actionBadge = '🔴 STOP';
+                            } else if (decision.action === 'hold') {
+                                actionClass = 'text-yellow-400';
+                                actionBadge = '⚪ HOLD';
+                            }
+
                             aiLogItems.push(`
-                                <div class="history-item grid grid-cols-4 p-3 border-b border-dark-700 hover:bg-dark-700/50 cursor-pointer ai-decision"
-                                     data-provider="${log.provider.replace(/"/g, '&quot;')}" 
-                                     data-decision="${encodeURIComponent(JSON.stringify(decision))}" 
+                                <div class="history-item grid grid-cols-5 p-3 border-b border-dark-700 hover:bg-dark-700/50 cursor-pointer ai-decision"
+                                     data-provider="${log.provider.replace(/"/g, '&quot;')}"
+                                     data-decision="${encodeURIComponent(JSON.stringify(decision))}"
                                      data-created-at="${log.created_at.replace(/"/g, '&quot;')}">
-                                    <div class="font-medium text-white">${log.provider}</div>
-                                    <div>${decision.symbol} - ${decision.action} (${(decision.confidence * 100).toFixed(0)}%)</div>
-                                    <div class="text-gray-400">${log.created_at}</div>
-                                    <div class="text-gray-400 truncate" title="${decision.reasoning}">${decision.reasoning.substring(0, 60)}...</div>
+                                    <div class="font-medium text-white">${decision.symbol}</div>
+                                    <div class="${actionClass}">${actionBadge}</div>
+                                    <div class="text-gray-300">${(decision.confidence * 100).toFixed(0)}%</div>
+                                    <div class="text-gray-400 text-sm">${log.created_at}</div>
+                                    <div class="text-gray-400 truncate text-sm" title="${decision.reasoning}">${decision.reasoning.substring(0, 50)}...</div>
                                 </div>
                             `);
                         });
@@ -279,9 +293,10 @@
                 });
                 
                 aiLogsEl.innerHTML = `
-                    <div class="grid grid-cols-4 bg-dark-700 text-gray-300 font-semibold p-3">
-                        <div>Provider</div>
-                        <div>Action (Confidence)</div>
+                    <div class="grid grid-cols-5 bg-dark-700 text-gray-300 font-semibold p-3">
+                        <div>Symbol</div>
+                        <div>Action</div>
+                        <div>Confidence</div>
                         <div>Time</div>
                         <div>Reasoning</div>
                     </div>
