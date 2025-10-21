@@ -90,8 +90,8 @@ class MultiCoinAIService
         foreach ($allMarketData as $symbol => $data) {
             if (!$data) continue;
 
-            // Skip BTC and ETH if cash is low
-            if ($skipExpensiveCoins && in_array($symbol, ['BTC/USDT', 'ETH/USDT'])) {
+            // Skip BTC, ETH, and BNB if cash is low
+            if ($skipExpensiveCoins && in_array($symbol, ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'])) {
                 continue;
             }
 

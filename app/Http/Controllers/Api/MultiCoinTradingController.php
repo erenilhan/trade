@@ -98,8 +98,8 @@ class MultiCoinTradingController extends Controller
      */
     private function executeBuy(string $symbol, array $decision, float $availableCash): array
     {
-        // Skip BTC and ETH if cash is below $10
-        if ($availableCash < 10 && in_array($symbol, ['BTC/USDT', 'ETH/USDT'])) {
+        // Skip BTC, ETH, and BNB if cash is below $10
+        if ($availableCash < 10 && in_array($symbol, ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'])) {
             return ['action' => 'hold', 'reason' => "Cash below $10, skipping {$symbol}"];
         }
 
