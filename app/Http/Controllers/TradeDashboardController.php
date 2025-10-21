@@ -114,19 +114,57 @@ class TradeDashboardController extends Controller
             // Get active positions
             $positions = Position::active()->get()->map(function ($pos) {
                 $currentPrice = $pos->current_price;
-                $pnl = ($currentPrice - $pos->entry_price) * $pos->quantity;
-                $pnlPercent = (($currentPrice - $pos->entry_price) / $pos->entry_price) * 100;
+                $entryPrice = $pos->entry_price;
+
+                // Calculate PNL
+                $priceDiff = $currentPrice - $entryPrice;
+                if ($pos->side === 'short') {
+                    $priceDiff = -$priceDiff;
+                }
+                $pnl = $priceDiff * $pos->quantity * $pos->leverage;
+                $pnlPercent = ($priceDiff / $entryPrice) * 100 * $pos->leverage;
+
+                // Get exit plan targets
+                $exitPlan = $pos->exit_plan ?? [];
+                $profitTarget = $exitPlan['profit_target'] ?? null;
+                $stopLoss = $exitPlan['stop_loss'] ?? null;
+
+                // Calculate distance to targets
+                $distanceToProfit = null;
+                $distanceToStop = null;
+                $profitNeeded = null;
+                $stopDistance = null;
+
+                if ($profitTarget) {
+                    $distanceToProfit = (($profitTarget - $currentPrice) / $currentPrice) * 100;
+                    $profitNeeded = $profitTarget - $currentPrice;
+                }
+
+                if ($stopLoss) {
+                    $distanceToStop = (($currentPrice - $stopLoss) / $currentPrice) * 100;
+                    $stopDistance = $currentPrice - $stopLoss;
+                }
 
                 return [
                     'symbol' => $pos->symbol,
                     'side' => $pos->side,
-                    'entry_price' => $pos->entry_price,
+                    'entry_price' => $entryPrice,
                     'current_price' => $currentPrice,
                     'quantity' => $pos->quantity,
                     'leverage' => $pos->leverage,
                     'pnl' => $pnl,
                     'pnl_percent' => $pnlPercent,
+                    'unrealized_pnl' => $pos->unrealized_pnl ?? $pnl,
                     'opened_at' => $pos->opened_at?->diffForHumans(),
+                    'liquidation_price' => $pos->liquidation_price,
+                    'targets' => [
+                        'profit_target' => $profitTarget,
+                        'stop_loss' => $stopLoss,
+                        'distance_to_profit_pct' => $distanceToProfit,
+                        'distance_to_stop_pct' => $distanceToStop,
+                        'profit_needed' => $profitNeeded,
+                        'stop_distance' => $stopDistance,
+                    ],
                 ];
             });
 

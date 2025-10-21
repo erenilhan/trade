@@ -192,32 +192,70 @@
             if (positions.length === 0) {
                 openPositionsEl.innerHTML = '<div class="empty-state text-center py-8 text-gray-400">No open positions</div>';
             } else {
-                openPositionsEl.innerHTML = positions.map(pos => `
-                    <div class="position-card bg-dark-800 border border-dark-700 rounded-lg p-4 hover:shadow-lg transition-shadow">
-                        <div class="position-header flex justify-between items-center pb-2 mb-2 border-b border-dark-700">
-                            <div class="symbol font-semibold text-lg text-white">${pos.symbol}</div>
-                            <div class="leverage-badge bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
+                openPositionsEl.innerHTML = positions.map(pos => {
+                    const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
+                    const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
+
+                    let targetsHtml = '';
+                    if (pos.targets) {
+                        if (pos.targets.profit_target) {
+                            const distPct = pos.targets.distance_to_profit_pct?.toFixed(2) || '0.00';
+                            const priceNeeded = pos.targets.profit_needed?.toFixed(2) || '0.00';
+                            targetsHtml += `
+                                <div class="position-row flex justify-between py-1 bg-green-900/20 px-2 rounded mt-2">
+                                    <span class="position-label text-green-400 text-sm">🎯 Target</span>
+                                    <span class="position-value text-green-300 text-sm">
+                                        $${pos.targets.profit_target.toFixed(2)} (${distPct}% / +$${priceNeeded})
+                                    </span>
+                                </div>
+                            `;
+                        }
+                        if (pos.targets.stop_loss) {
+                            const stopPct = pos.targets.distance_to_stop_pct?.toFixed(2) || '0.00';
+                            const stopDist = pos.targets.stop_distance?.toFixed(2) || '0.00';
+                            targetsHtml += `
+                                <div class="position-row flex justify-between py-1 bg-red-900/20 px-2 rounded mt-1">
+                                    <span class="position-label text-red-400 text-sm">🛑 Stop</span>
+                                    <span class="position-value text-red-300 text-sm">
+                                        $${pos.targets.stop_loss.toFixed(2)} (${stopPct}% buffer / $${stopDist})
+                                    </span>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    return `
+                        <div class="position-card bg-dark-800 border border-dark-700 rounded-lg p-4 hover:shadow-lg transition-shadow">
+                            <div class="position-header flex justify-between items-center pb-2 mb-2 border-b border-dark-700">
+                                <div class="symbol font-semibold text-lg text-white">${pos.symbol}</div>
+                                <div class="leverage-badge bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
+                            </div>
+                            <div class="position-row flex justify-between py-1">
+                                <span class="position-label text-gray-400">Entry</span>
+                                <span class="position-value text-white">${formatMoney(pos.entry_price)}</span>
+                            </div>
+                            <div class="position-row flex justify-between py-1">
+                                <span class="position-label text-gray-400">Current</span>
+                                <span class="position-value text-white font-semibold">${formatMoney(pos.current_price)}</span>
+                            </div>
+                            <div class="position-row flex justify-between py-1">
+                                <span class="position-label text-gray-400">P&L</span>
+                                <span class="position-value ${pnlColor} font-bold">
+                                    ${pnlEmoji} ${formatMoney(pos.pnl)} (${formatPercent(pos.pnl_percent)})
+                                </span>
+                            </div>
+                            ${targetsHtml}
+                            <div class="position-row flex justify-between py-1 mt-2 pt-2 border-t border-dark-700">
+                                <span class="position-label text-gray-500 text-xs">Liq Price</span>
+                                <span class="position-value text-gray-400 text-xs">${pos.liquidation_price ? formatMoney(pos.liquidation_price) : 'N/A'}</span>
+                            </div>
+                            <div class="position-row flex justify-between py-1">
+                                <span class="position-label text-gray-500 text-xs">Opened</span>
+                                <span class="position-value text-gray-400 text-xs">${pos.opened_at || 'N/A'}</span>
+                            </div>
                         </div>
-                        <div class="position-row flex justify-between py-1">
-                            <span class="position-label text-gray-400">Entry</span>
-                            <span class="position-value text-white">${formatMoney(pos.entry_price)}</span>
-                        </div>
-                        <div class="position-row flex justify-between py-1">
-                            <span class="position-label text-gray-400">Current</span>
-                            <span class="position-value text-white">${formatMoney(pos.current_price)}</span>
-                        </div>
-                        <div class="position-row flex justify-between py-1">
-                            <span class="position-label text-gray-400">P&L</span>
-                            <span class="position-value ${pos.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">
-                                ${formatMoney(pos.pnl)} (${formatPercent(pos.pnl_percent)})
-                            </span>
-                        </div>
-                        <div class="position-row flex justify-between py-1">
-                            <span class="position-label text-gray-400">Opened</span>
-                            <span class="position-value text-gray-300">${pos.opened_at || 'N/A'}</span>
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             }
 
             // Render closed positions

@@ -14,3 +14,10 @@ Schedule::command('trading:multi-coin')
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();
+
+// Update open positions every minute
+Schedule::command('positions:update')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->runInBackground();

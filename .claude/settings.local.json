@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(php artisan make:migration add_notional_usd_to_positions_table)"
+      "Bash(php artisan make:migration add_notional_usd_to_positions_table)",
+      "Bash(php artisan:*)"
     ],
     "deny": [],
     "ask": []
