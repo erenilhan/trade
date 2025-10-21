@@ -50,11 +50,6 @@
             </div>
             
             <div class="flex items-center space-x-4">
-                <!-- Theme Toggle -->
-                <button id="theme-toggle" class="p-2 rounded-full hover:bg-dark-700 focus:outline-none">
-                    <span id="theme-icon" class="text-xl">🌙</span>
-                </button>
-                
                 <!-- Bot Status with Tooltip -->
                 <div class="relative group">
                     <div class="status-badge inactive inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-red-900/50 text-red-300" id="bot-status">
@@ -128,12 +123,7 @@
             </div>
         </div>
 
-        <!-- Refresh Button -->
-        <div class="flex justify-center mb-8">
-            <button id="refresh-btn" class="btn-primary px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200">
-                Refresh Data
-            </button>
-        </div>
+
 
         <!-- AI Decision Detail Modal -->
         <div id="ai-modal" class="modal fixed inset-0 z-50 hidden bg-black/50">
@@ -389,14 +379,11 @@
         
         // Set up event listeners after a short delay to ensure DOM is loaded
         setTimeout(function() {
-            // Refresh button
-            document.getElementById('refresh-btn').addEventListener('click', loadData);
-
-            // Auto refresh every 30 seconds
-            setInterval(loadData, 30000);
-
             // Initial load
             loadData();
+            
+            // Auto refresh every 60 seconds
+            setInterval(loadData, 60000);
             
             // AI decision click handlers
             document.addEventListener('click', function(e) {
@@ -422,36 +409,7 @@
                 }
             });
             
-            // Theme toggle functionality
-            const themeToggle = document.getElementById('theme-toggle');
-            const themeIcon = document.getElementById('theme-icon');
-            const body = document.body;
-            
-            // Check for saved theme preference or respect OS preference
-            const savedTheme = localStorage.getItem('theme');
-            const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
-            
-            if (savedTheme === 'light' || (!savedTheme && !prefersDarkScheme.matches)) {
-                body.classList.remove('dark');
-                themeIcon.textContent = '☀️'; // Sun icon for light theme
-            } else {
-                body.classList.add('dark');
-                themeIcon.textContent = '🌙'; // Moon icon for dark theme
-            }
-            
-            if (themeToggle) {
-                themeToggle.addEventListener('click', function() {
-                    if (body.classList.contains('dark')) {
-                        body.classList.remove('dark');
-                        themeIcon.textContent = '☀️'; // Sun icon for light theme
-                        localStorage.setItem('theme', 'light');
-                    } else {
-                        body.classList.add('dark');
-                        themeIcon.textContent = '🌙'; // Moon icon for dark theme
-                        localStorage.setItem('theme', 'dark');
-                    }
-                });
-            }
+
             
             // Menu toggle functionality
             const menuToggle = document.getElementById('menu-toggle');
