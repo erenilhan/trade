@@ -120,21 +120,43 @@ class ExecuteMultiCoinTrading extends Command
         // Calculate quantity
         $quantity = ($positionSize * $leverage) / $entryPrice;
 
-        // Create position record
+        // Set leverage on Binance
+        try {
+            $this->binance->getExchange()->setLeverage($leverage, $symbol);
+            $this->line("  📊 Leverage set to {$leverage}x");
+        } catch (\Exception $e) {
+            $this->warn("  ⚠️ Leverage setting failed: " . $e->getMessage());
+        }
+
+        // Send MARKET order to Binance
+        $this->line("  📤 Sending BUY order to Binance...");
+        $order = $this->binance->getExchange()->createMarketOrder(
+            $symbol,
+            'buy',
+            $quantity
+        );
+
+        $this->info("  ✅ Binance order executed: ID {$order['id']}");
+
+        // Get actual fill price
+        $actualEntryPrice = $order['average'] ?? $order['price'] ?? $entryPrice;
+
+        // Create position record with Binance order info
         $position = Position::create([
             'symbol' => $symbol,
             'side' => 'long',
-            'quantity' => $quantity,
-            'entry_price' => $entryPrice,
-            'current_price' => $entryPrice,
+            'quantity' => $order['filled'] ?? $quantity,
+            'entry_price' => $actualEntryPrice,
+            'current_price' => $actualEntryPrice,
             'liquidation_price' => $liqPrice,
             'leverage' => $leverage,
             'notional_value' => $positionSize * $leverage,
             'notional_usd' => $positionSize * $leverage,
+            'entry_order_id' => $order['id'],
             'exit_plan' => [
                 'profit_target' => $targetPrice,
                 'stop_loss' => $stopPrice,
-                'invalidation_condition' => $decision['invalidation'] ?? "Price closes below " . ($entryPrice * 0.95),
+                'invalidation_condition' => $decision['invalidation'] ?? "Price closes below " . ($actualEntryPrice * 0.95),
             ],
             'confidence' => $decision['confidence'],
             'risk_usd' => $positionSize * ($leverage / 100) * 3, // 3% risk
@@ -162,17 +184,39 @@ class ExecuteMultiCoinTrading extends Command
             return;
         }
 
-        // Update position
-        $position->update([
-            'is_open' => false,
-            'closed_at' => now(),
-            'realized_pnl' => $position->unrealized_pnl,
-        ]);
+        // Send MARKET SELL order to Binance
+        $this->line("  📤 Sending SELL order to Binance...");
+        try {
+            $order = $this->binance->getExchange()->createMarketOrder(
+                $symbol,
+                'sell',
+                $position->quantity
+            );
 
-        $pnl = $position->unrealized_pnl;
-        $pnlColor = $pnl >= 0 ? '🟢' : '🔴';
+            $exitPrice = $order['average'] ?? $order['price'] ?? $position->current_price;
+            $realizedPnl = ($exitPrice - $position->entry_price) * $position->quantity * $position->leverage;
 
-        $this->info("  {$pnlColor} Position closed: PNL \${$pnl} ({$action})");
-        Log::info("✅ {$symbol}: Position closed ({$action})", ['pnl' => $pnl]);
+            $this->info("  ✅ Binance SELL order executed: ID {$order['id']}");
+
+            // Update position
+            $position->update([
+                'is_open' => false,
+                'closed_at' => now(),
+                'current_price' => $exitPrice,
+                'realized_pnl' => $realizedPnl,
+            ]);
+
+            $pnlColor = $realizedPnl >= 0 ? '🟢' : '🔴';
+            $this->info("  {$pnlColor} Position closed: PNL \${$realizedPnl} ({$action})");
+            Log::info("✅ {$symbol}: Position closed ({$action})", [
+                'pnl' => $realizedPnl,
+                'exit_price' => $exitPrice,
+                'order_id' => $order['id'],
+            ]);
+
+        } catch (\Exception $e) {
+            $this->error("  ❌ Failed to close position: " . $e->getMessage());
+            throw $e;
+        }
     }
 }
