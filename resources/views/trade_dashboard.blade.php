@@ -181,14 +181,10 @@
                 botStatus.innerHTML = '<span class="status-dot w-2 h-2 rounded-full bg-red-500 animate-pulse"></span><span>Bot Offline</span>';
             }
 
-            // Update AI provider and model info
+            // Update AI provider info
             if (ai_logs && ai_logs.length > 0) {
                 const firstLog = ai_logs[0];
                 document.getElementById('ai-provider').textContent = firstLog.provider || 'N/A';
-                
-                // If model information is available in the response data, use it
-                // This assumes the API might include model info - if not available, we'll show N/A
-                document.getElementById('ai-model').textContent = data.model || firstLog.provider || 'N/A';
             }
 
             // Render open positions
