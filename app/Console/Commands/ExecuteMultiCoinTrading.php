@@ -130,6 +130,7 @@ class ExecuteMultiCoinTrading extends Command
             'liquidation_price' => $liqPrice,
             'leverage' => $leverage,
             'notional_value' => $positionSize * $leverage,
+            'notional_usd' => $positionSize * $leverage,
             'exit_plan' => [
                 'profit_target' => $targetPrice,
                 'stop_loss' => $stopPrice,
