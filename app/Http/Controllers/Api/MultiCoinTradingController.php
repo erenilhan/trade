@@ -39,6 +39,19 @@ class MultiCoinTradingController extends Controller
                 'return_percent' => (($totalValue - $initialInvestment) / ($initialInvestment ?: 1)) * 100,
             ];
 
+            // Skip AI if cash is below $1
+            if ($cash < 1) {
+                Log::warning('⚠️ Cash below $1, skipping AI call');
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'results' => [],
+                        'message' => 'Cash below $1, no trades executed',
+                        'account' => $account
+                    ]
+                ]);
+            }
+
             // Get AI decision for all coins
             $aiDecision = $this->ai->makeDecision($account);
 

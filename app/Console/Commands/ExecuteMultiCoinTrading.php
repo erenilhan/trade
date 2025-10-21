@@ -48,6 +48,13 @@ class ExecuteMultiCoinTrading extends Command
 
             $this->info("💰 Cash: \${$cash}, Total: \${$totalValue}");
 
+            // Skip AI if cash is below $1
+            if ($cash < 1) {
+                $this->warn('⚠️ Cash below $1, skipping AI call');
+                $this->info('✅ Trading cycle complete (no trades)');
+                return self::SUCCESS;
+            }
+
             // Get AI decision
             $aiDecision = $this->ai->makeDecision($account);
 
