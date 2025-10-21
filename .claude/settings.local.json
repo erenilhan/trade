@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php artisan make:filament-page ManageBotSettings)",
+      "Bash(php artisan make:filament-resource AiLog --generate)",
+      "Bash(php artisan migrate:status)",
+      "Bash(php artisan trading:multi-coin)",
+      "Bash(php artisan tinker --execute=\"\nuse App\\Models\\BotSetting;\nBotSetting::updateOrCreate(\n    [''key'' => ''ai_provider''],\n    [''value'' => ''openrouter'', ''type'' => ''string'', ''description'' => ''AI provider selection'']\n);\necho ''AI Provider changed to: '' . BotSetting::get(''ai_provider'') . PHP_EOL;\n\")",
+      "Bash(php artisan tinker --execute=\"\nuse App\\Models\\AiLog;\necho ''Total AI Logs: '' . AiLog::count() . PHP_EOL;\n$latest = AiLog::latest()->first();\nif ($latest) {\n    echo ''Provider: '' . $latest->provider . PHP_EOL;\n    echo ''Created: '' . $latest->created_at . PHP_EOL;\n    echo ''Decision count: '' . count($latest->decision[''decisions''] ?? []) . PHP_EOL;\n    echo ''Prompt length: '' . strlen($latest->prompt) . '' chars'' . PHP_EOL;\n} else {\n    echo ''No logs found!'' . PHP_EOL;\n}\n\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
