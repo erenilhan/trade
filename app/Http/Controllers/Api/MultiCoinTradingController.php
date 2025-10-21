@@ -53,7 +53,7 @@ class MultiCoinTradingController extends Controller
                 Log::info("🎯 Decision for {$symbol}", ['action' => $action, 'confidence' => $confidence]);
 
                 // Skip if confidence too low
-                if ($confidence < 0.7 && $action !== 'hold') {
+                if ($confidence < 0.60 && $action !== 'hold') {
                     Log::warning("⚠️ {$symbol}: Confidence too low ({$confidence}), overriding to hold");
                     $results[$symbol] = ['action' => 'hold', 'reason' => 'Low confidence'];
                     continue;

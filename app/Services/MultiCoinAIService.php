@@ -178,8 +178,8 @@ class MultiCoinAIService
             return $customPrompt;
         }
 
-        // Default prompt
-        return "Expert crypto trader. Manage BTC,ETH,SOL,BNB,XRP,DOGE. Trade only if confidence>0.7. Always return valid JSON with 'decisions' array containing {symbol,action,confidence,reasoning,entry_price,target_price,stop_price,invalidation} for each coin. Actions: buy, close_profitable, stop_loss, hold.";
+        // Default prompt - Aggressive day trading strategy
+        return "You are an aggressive crypto day trader managing BTC,ETH,SOL,BNB,XRP,DOGE. RSI >80 does NOT always mean sell - strong uptrends stay overbought for extended periods. Key signals: MACD positive + Price > EMA20 = POTENTIAL BUY. Use 2-3% stop loss, target 3-5% profit. Make 1-2 trades per cycle if ANY coin shows trending momentum. Confidence >0.60 is sufficient for action. Don't fear volatility - profits come from action, not hesitation. Always return valid JSON with 'decisions' array containing {symbol,action,confidence,reasoning,entry_price,target_price,stop_price,invalidation} for each coin. Actions: buy, close_profitable, stop_loss, hold.";
     }
 
     /**
