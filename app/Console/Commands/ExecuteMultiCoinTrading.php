@@ -78,7 +78,7 @@ class ExecuteMultiCoinTrading extends Command
                 try {
                     match($action) {
                         'buy' => $this->executeBuy($symbol, $decision, $cash),
-                        'close_profitable', 'stop_loss' => $this->executeClose($symbol, $action),
+                        'close_profitable', 'stop_loss' => $this->executeClose($symbol, $action, $decision),
                         'hold' => null,
                         default => $this->warn("Unknown action: {$action}")
                     };
@@ -188,7 +188,7 @@ class ExecuteMultiCoinTrading extends Command
     /**
      * Execute close for a position
      */
-    private function executeClose(string $symbol, string $action): void
+    private function executeClose(string $symbol, string $action, array $decision): void
     {
         $position = Position::active()->bySymbol($symbol)->first();
 
@@ -197,8 +197,12 @@ class ExecuteMultiCoinTrading extends Command
             return;
         }
 
-        // Send MARKET SELL order to Binance
+        $reasoning = $decision['reasoning'] ?? 'AI decision';
+        $confidence = $decision['confidence'] ?? 0;
+
+        $this->line("  🧠 AI Reasoning: {$reasoning}");
         $this->line("  📤 Sending SELL order to Binance...");
+
         try {
             $order = $this->binance->getExchange()->createMarketOrder(
                 $symbol,
@@ -221,10 +225,12 @@ class ExecuteMultiCoinTrading extends Command
 
             $pnlColor = $realizedPnl >= 0 ? '🟢' : '🔴';
             $this->info("  {$pnlColor} Position closed: PNL \${$realizedPnl} ({$action})");
-            Log::info("✅ {$symbol}: Position closed ({$action})", [
+            Log::info("✅ {$symbol}: AI-supervised close ({$action})", [
                 'pnl' => $realizedPnl,
                 'exit_price' => $exitPrice,
                 'order_id' => $order['id'],
+                'reasoning' => $reasoning,
+                'confidence' => $confidence,
             ]);
 
         } catch (\Exception $e) {

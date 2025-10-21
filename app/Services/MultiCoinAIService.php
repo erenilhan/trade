@@ -122,23 +122,42 @@ class MultiCoinAIService
         }
 
         // Account information
-        $prompt .= "ACCOUNT: Cash={$account['cash']}, Value={$account['total_value']}, Return={$account['return_percent']}%\n";
+        $prompt .= "ACCOUNT INFORMATION:\n";
+        $prompt .= "Cash: \${$account['cash']}\n";
+        $prompt .= "Total Value: \${$account['total_value']}\n";
+        $prompt .= "Return: {$account['return_percent']}%\n\n";
 
-        // Current positions
+        // Current open positions (DETAILED)
         $positions = Position::active()->get();
         if ($positions->isNotEmpty()) {
-            $prompt .= "Positions: ";
+            $prompt .= "OPEN POSITIONS (Analyze if trend changed, should close early?):\n";
             foreach ($positions as $pos) {
-                $prompt .= "{$pos->symbol}({$pos->side},entry={$pos->entry_price},pnl={$pos->unrealized_pnl}) ";
+                $exitPlan = $pos->exit_plan ?? [];
+                $currentPrice = $pos->current_price;
+                $entryPrice = $pos->entry_price;
+                $pnlPercent = (($currentPrice - $entryPrice) / $entryPrice) * 100 * $pos->leverage;
+
+                $prompt .= "- {$pos->symbol}: ";
+                $prompt .= "Entry=\${$entryPrice}, Current=\${$currentPrice}, ";
+                $prompt .= "PNL={$pnlPercent}%, ";
+                $prompt .= "Target=\$" . ($exitPlan['profit_target'] ?? 'N/A') . ", ";
+                $prompt .= "Stop=\$" . ($exitPlan['stop_loss'] ?? 'N/A') . ", ";
+                $prompt .= "Leverage={$pos->leverage}x, ";
+                $prompt .= "Opened={$pos->opened_at->diffForHumans()}\n";
             }
-            $prompt .= "\n\n";
+            $prompt .= "\n";
         } else {
-            $prompt .= "No positions.\n\n";
+            $prompt .= "OPEN POSITIONS: None\n\n";
         }
 
-        // Task
-        $prompt .= "Decide: buy/close_profitable/stop_loss/hold for each coin.\n";
-        $prompt .= "JSON format: {\"decisions\":[{\"symbol\":\"BTC/USDT\",\"action\":\"hold\",\"reasoning\":\"...\",\"confidence\":0.75},...],\"chain_of_thought\":\"...\"}\n";
+        // Task instructions
+        $prompt .= "YOUR TASK:\n";
+        $prompt .= "1. For coins WITHOUT positions: Decide BUY or HOLD based on technical indicators.\n";
+        $prompt .= "2. For coins WITH positions: Decide CLOSE_PROFITABLE (if trend changed/weakened) or HOLD (if still strong).\n";
+        $prompt .= "3. Always include: action, reasoning, confidence (0-1), entry_price, target_price, stop_price, invalidation.\n\n";
+
+        $prompt .= "RESPONSE FORMAT (strict JSON):\n";
+        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"hold|buy|close_profitable|stop_loss","reasoning":"...","confidence":0.75,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
 
         return $prompt;
     }

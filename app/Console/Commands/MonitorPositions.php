@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Position;
 use App\Services\BinanceService;
+use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -14,7 +15,8 @@ class MonitorPositions extends Command
 
     public function __construct(
         private readonly BinanceService $binance
-    ) {
+    )
+    {
         parent::__construct();
     }
 
@@ -32,7 +34,7 @@ class MonitorPositions extends Command
         foreach ($openPositions as $position) {
             try {
                 $this->checkPosition($position);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $this->error("  ❌ {$position->symbol}: {$e->getMessage()}");
                 Log::error("Position monitoring failed for {$position->id}", [
                     'error' => $e->getMessage(),
@@ -142,7 +144,7 @@ class MonitorPositions extends Command
                 'order_id' => $order['id'] ?? null,
             ]);
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $this->error("    ❌ Failed to close: {$e->getMessage()}");
             throw $e;
         }
