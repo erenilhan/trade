@@ -17,7 +17,14 @@ Schedule::command('trading:multi-coin')
 
 // Update open positions every minute
 Schedule::command('positions:update')
-    ->everyFiveMinutes()
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->runInBackground();
+
+// Monitor positions for auto-close every minute
+Schedule::command('positions:monitor')
+    ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();
