@@ -350,6 +350,42 @@ class MarketDataService
 
 
     /**
+     * Check if overall market volatility is too low (skip AI call if true)
+     * Returns true if market is too quiet to trade
+     */
+    public function isMarketTooQuiet(array $allMarketData): bool
+    {
+        $quietCoins = 0;
+        $totalCoins = 0;
+
+        foreach ($allMarketData as $symbol => $data) {
+            if (!$data || !isset($data['4h']['atr14'])) {
+                continue;
+            }
+
+            $totalCoins++;
+            $atr = $data['4h']['atr14'];
+            $currentPrice = $data['3m']['price'];
+
+            // ATR as percentage of price
+            $atrPercent = ($atr / $currentPrice) * 100;
+
+            // If ATR is less than 1% of price, consider it "quiet"
+            if ($atrPercent < 1.0) {
+                $quietCoins++;
+            }
+        }
+
+        // If 70% or more coins are quiet, skip AI
+        if ($totalCoins > 0 && ($quietCoins / $totalCoins) >= 0.7) {
+            Log::info("🔇 Market too quiet: {$quietCoins}/{$totalCoins} coins have low volatility");
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Get latest market data for all coins from database
      */
     public function getLatestDataAllCoins(string $timeframe = '3m'): array

@@ -55,6 +55,19 @@ class ExecuteMultiCoinTrading extends Command
                 return self::SUCCESS;
             }
 
+            // Check if there are any coins without open positions
+            $openPositionsCount = Position::active()->count();
+            $totalCoins = 10; // BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, LINK, DOT
+            $coinsAvailableForTrading = $totalCoins - $openPositionsCount;
+
+            if ($coinsAvailableForTrading === 0) {
+                $this->warn("⚠️ All {$totalCoins} coins have open positions, skipping AI call");
+                $this->info('✅ Trading cycle complete (all positions open)');
+                return self::SUCCESS;
+            }
+
+            $this->info("📊 {$coinsAvailableForTrading}/{$totalCoins} coins available for trading");
+
             // Get AI decision
             $aiDecision = $this->ai->makeDecision($account);
 
@@ -78,9 +91,8 @@ class ExecuteMultiCoinTrading extends Command
                 try {
                     match($action) {
                         'buy' => $this->executeBuy($symbol, $decision, $cash),
-                        'close_profitable', 'stop_loss' => $this->executeClose($symbol, $action, $decision),
                         'hold' => null,
-                        default => $this->warn("Unknown action: {$action}")
+                        default => $this->warn("⚠️ Unknown action: {$action} (AI should only return 'buy' or 'hold')")
                     };
                 } catch (Exception $e) {
                     $this->error("❌ {$symbol}: {$e->getMessage()}");
@@ -185,57 +197,4 @@ class ExecuteMultiCoinTrading extends Command
         ]);
     }
 
-    /**
-     * Execute close for a position
-     */
-    private function executeClose(string $symbol, string $action, array $decision): void
-    {
-        $position = Position::active()->bySymbol($symbol)->first();
-
-        if (!$position) {
-            $this->warn("  ⚠️ No position to close for {$symbol}");
-            return;
-        }
-
-        $reasoning = $decision['reasoning'] ?? 'AI decision';
-        $confidence = $decision['confidence'] ?? 0;
-
-        $this->line("  🧠 AI Reasoning: {$reasoning}");
-        $this->line("  📤 Sending SELL order to Binance...");
-
-        try {
-            $order = $this->binance->getExchange()->createMarketOrder(
-                $symbol,
-                'sell',
-                $position->quantity
-            );
-
-            $exitPrice = $order['average'] ?? $order['price'] ?? $position->current_price;
-            $realizedPnl = ($exitPrice - $position->entry_price) * $position->quantity * $position->leverage;
-
-            $this->info("  ✅ Binance SELL order executed: ID {$order['id']}");
-
-            // Update position
-            $position->update([
-                'is_open' => false,
-                'closed_at' => now(),
-                'current_price' => $exitPrice,
-                'realized_pnl' => $realizedPnl,
-            ]);
-
-            $pnlColor = $realizedPnl >= 0 ? '🟢' : '🔴';
-            $this->info("  {$pnlColor} Position closed: PNL \${$realizedPnl} ({$action})");
-            Log::info("✅ {$symbol}: AI-supervised close ({$action})", [
-                'pnl' => $realizedPnl,
-                'exit_price' => $exitPrice,
-                'order_id' => $order['id'],
-                'reasoning' => $reasoning,
-                'confidence' => $confidence,
-            ]);
-
-        } catch (\Exception $e) {
-            $this->error("  ❌ Failed to close position: " . $e->getMessage());
-            throw $e;
-        }
-    }
 }

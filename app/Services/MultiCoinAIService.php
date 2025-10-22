@@ -41,6 +41,15 @@ class MultiCoinAIService
             // Collect all market data
             $allMarketData = $this->marketData->collectAllMarketData();
 
+            // Check if market is too quiet (low volatility = skip AI)
+            if ($this->marketData->isMarketTooQuiet($allMarketData)) {
+                Log::info("🔇 Skipping AI call - market volatility too low");
+                return [
+                    'decisions' => [],
+                    'reasoning' => 'Market volatility too low - no trading opportunities',
+                ];
+            }
+
             // Build advanced multi-coin prompt
             $prompt = $this->buildMultiCoinPrompt($account, $allMarketData);
 
@@ -86,9 +95,18 @@ class MultiCoinAIService
         // Skip BTC and ETH if cash is below $10
         $skipExpensiveCoins = $account['cash'] < 10;
 
+        // Get all open positions to skip them in market data collection
+        $openPositionSymbols = Position::active()->pluck('symbol')->toArray();
+
         // Add each coin's data
         foreach ($allMarketData as $symbol => $data) {
             if (!$data) continue;
+
+            // Skip coins with open positions (they're already being monitored)
+            if (in_array($symbol, $openPositionSymbols)) {
+                Log::info("⏭️ Skipping {$symbol} - already has open position");
+                continue;
+            }
 
             // Skip BTC, ETH, and BNB if cash is low
             if ($skipExpensiveCoins && in_array($symbol, ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'])) {
@@ -112,11 +130,11 @@ class MultiCoinAIService
             $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'], 10) . "\n";
             $prompt .= "Open Interest: Latest: " . number_format($data3m['open_interest'], 2) . "\n\n";
 
-            $prompt .= "Intraday series (3-minute intervals, last 5 candles):\n";
-            $prompt .= "Prices: [" . implode(', ', array_map(fn($p) => number_format($p, 2), array_slice($data3m['price_series'], -5))) . "]\n";
-            $prompt .= "EMA20: [" . implode(', ', array_map(fn($e) => number_format($e, 2), array_slice($data3m['indicators']['ema_series'], -5))) . "]\n";
-            $prompt .= "MACD: [" . implode(', ', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -5))) . "]\n";
-            $prompt .= "RSI7: [" . implode(', ', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -5))) . "]\n\n";
+            $prompt .= "Intraday series (3-minute intervals, last 10 candles = 30min context):\n";
+            $prompt .= "Prices: [" . implode(', ', array_map(fn($p) => number_format($p, 2), array_slice($data3m['price_series'], -10))) . "]\n";
+            $prompt .= "EMA20: [" . implode(', ', array_map(fn($e) => number_format($e, 2), array_slice($data3m['indicators']['ema_series'], -10))) . "]\n";
+            $prompt .= "MACD: [" . implode(', ', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -10))) . "]\n";
+            $prompt .= "RSI7: [" . implode(', ', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -10))) . "]\n\n";
 
             $prompt .= "4H: EMA20={$data4h['ema20']}, EMA50={$data4h['ema50']}, ATR={$data4h['atr14']}\n\n";
         }
@@ -127,37 +145,20 @@ class MultiCoinAIService
         $prompt .= "Total Value: \${$account['total_value']}\n";
         $prompt .= "Return: {$account['return_percent']}%\n\n";
 
-        // Current open positions (DETAILED)
-        $positions = Position::active()->get();
-        if ($positions->isNotEmpty()) {
-            $prompt .= "OPEN POSITIONS (Analyze if trend changed, should close early?):\n";
-            foreach ($positions as $pos) {
-                $exitPlan = $pos->exit_plan ?? [];
-                $currentPrice = $pos->current_price;
-                $entryPrice = $pos->entry_price;
-                $pnlPercent = (($currentPrice - $entryPrice) / $entryPrice) * 100 * $pos->leverage;
-
-                $prompt .= "- {$pos->symbol}: ";
-                $prompt .= "Entry=\${$entryPrice}, Current=\${$currentPrice}, ";
-                $prompt .= "PNL={$pnlPercent}%, ";
-                $prompt .= "Target=\$" . ($exitPlan['profit_target'] ?? 'N/A') . ", ";
-                $prompt .= "Stop=\$" . ($exitPlan['stop_loss'] ?? 'N/A') . ", ";
-                $prompt .= "Leverage={$pos->leverage}x, ";
-                $prompt .= "Opened={$pos->opened_at->diffForHumans()}\n";
-            }
-            $prompt .= "\n";
-        } else {
-            $prompt .= "OPEN POSITIONS: None\n\n";
+        // Mention open positions count (but don't include details since they're skipped)
+        $openPositionsCount = Position::active()->count();
+        if ($openPositionsCount > 0) {
+            $openPositionsList = Position::active()->pluck('symbol')->implode(', ');
+            $prompt .= "NOTE: {$openPositionsCount} coins already have open positions ({$openPositionsList}) - they are excluded from analysis.\n\n";
         }
 
         // Task instructions
         $prompt .= "YOUR TASK:\n";
-        $prompt .= "1. For coins WITHOUT positions: Decide BUY or HOLD based on technical indicators.\n";
-        $prompt .= "2. For coins WITH positions: Decide CLOSE_PROFITABLE (if trend changed/weakened) or HOLD (if still strong).\n";
-        $prompt .= "3. Always include: action, reasoning, confidence (0-1), entry_price, target_price, stop_price, invalidation.\n\n";
+        $prompt .= "Analyze ONLY the coins shown above (coins without open positions). Decide BUY or HOLD for each based on technical indicators.\n";
+        $prompt .= "Always include: action, reasoning, confidence (0-1), entry_price, target_price, stop_price, invalidation.\n\n";
 
         $prompt .= "RESPONSE FORMAT (strict JSON):\n";
-        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"hold|buy|close_profitable|stop_loss","reasoning":"...","confidence":0.75,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
+        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"hold|buy","reasoning":"...","confidence":0.75,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
 
         return $prompt;
     }

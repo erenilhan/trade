@@ -8,9 +8,9 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Multi-coin trading scheduler
+// Multi-coin trading scheduler (10 minutes to reduce AI costs)
 Schedule::command('trading:multi-coin')
-    ->everyFiveMinutes()
+    ->everyTenMinutes()
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();
