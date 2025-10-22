@@ -145,6 +145,10 @@ class TradeDashboardController extends Controller
                     $stopDistance = $currentPrice - $stopLoss;
                 }
 
+                // Calculate position size (how much $ invested)
+                $positionSize = $pos->quantity * $entryPrice;
+                $notionalSize = $pos->notional_usd ?? ($positionSize * $pos->leverage);
+
                 return [
                     'symbol' => $pos->symbol,
                     'side' => $pos->side,
@@ -152,6 +156,8 @@ class TradeDashboardController extends Controller
                     'current_price' => $currentPrice,
                     'quantity' => $pos->quantity,
                     'leverage' => $pos->leverage,
+                    'position_size' => $positionSize,
+                    'notional_size' => $notionalSize,
                     'pnl' => $pnl,
                     'pnl_percent' => $pnlPercent,
                     'unrealized_pnl' => $pos->unrealized_pnl ?? $pnl,
@@ -185,13 +191,20 @@ class TradeDashboardController extends Controller
                         $pnlPercent = ($priceDiff / $entryPrice) * 100 * ($pos->leverage ?? 1);
                     }
 
+                    // Calculate position size (how much $ invested)
+                    $positionSize = $pos->quantity * $entryPrice;
+                    $notionalSize = $pos->notional_usd ?? ($positionSize * ($pos->leverage ?? 1));
+
                     return [
                         'symbol' => $pos->symbol,
                         'side' => $pos->side,
                         'entry_price' => $entryPrice,
+                        'quantity' => $pos->quantity,
+                        'leverage' => $pos->leverage ?? 1,
+                        'position_size' => $positionSize,
+                        'notional_size' => $notionalSize,
                         'pnl' => $pnl,
                         'pnl_percent' => $pnlPercent,
-                        'leverage' => $pos->leverage ?? 1,
                         'closed_at' => $pos->closed_at?->diffForHumans(),
                     ];
                 });
