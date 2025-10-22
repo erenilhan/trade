@@ -141,10 +141,11 @@ class MultiCoinAIService
             $prompt .= "Prices: [" . implode(', ', array_map(fn($p) => number_format($p, 2), array_slice($data3m['price_series'], -10))) . "]\n";
             $prompt .= "EMA20: [" . implode(', ', array_map(fn($e) => number_format($e, 2), array_slice($data3m['indicators']['ema_series'], -10))) . "]\n";
             $prompt .= "MACD: [" . implode(', ', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -10))) . "]\n";
+            $prompt .= "MACD Signal: [" . implode(', ', array_map(fn($s) => number_format($s, 3), array_slice($data3m['indicators']['signal_series'], -10))) . "]\n";
             $prompt .= "RSI7: [" . implode(', ', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -10))) . "]\n\n";
 
             // Volume info
-            $currentVolume = $data3m['indicators']['volume'] ?? 0;
+            $currentVolume = $data3m['volume'] ?? 0;
             $prompt .= sprintf(
                 "Volume: current=%.2f\n\n",
                 $currentVolume
