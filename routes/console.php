@@ -10,7 +10,7 @@ Artisan::command('inspire', function () {
 
 // Multi-coin trading scheduler
 Schedule::command('trading:multi-coin')
-    ->everyThreeMinutes()
+    ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();

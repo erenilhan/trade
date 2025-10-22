@@ -198,7 +198,17 @@ class TradeDashboardController extends Controller
 
             // Calculate stats
             $totalPnl = $positions->sum('pnl');
-            $totalRealizedPnl = Position::where('is_open', false)->sum('realized_pnl');
+
+            // Detailed closed positions stats
+            $closedPositionsAll = Position::where('is_open', false)->get();
+            $totalRealizedPnl = $closedPositionsAll->sum('realized_pnl');
+            $totalWins = $closedPositionsAll->where('realized_pnl', '>', 0)->count();
+            $totalLosses = $closedPositionsAll->where('realized_pnl', '<', 0)->count();
+            $totalWinAmount = $closedPositionsAll->where('realized_pnl', '>', 0)->sum('realized_pnl');
+            $totalLossAmount = abs($closedPositionsAll->where('realized_pnl', '<', 0)->sum('realized_pnl'));
+            $avgWin = $totalWins > 0 ? $totalWinAmount / $totalWins : 0;
+            $avgLoss = $totalLosses > 0 ? $totalLossAmount / $totalLosses : 0;
+            $profitFactor = $totalLossAmount > 0 ? $totalWinAmount / $totalLossAmount : 0;
 
             // Get AI logs
             $aiLogs = AiLog::orderBy('created_at', 'desc')
@@ -241,7 +251,16 @@ class TradeDashboardController extends Controller
                     'model' => $aiModel,
                     'stats' => [
                         'open_positions' => $positions->count(),
+                        'total_trades' => $totalWins + $totalLosses,
+                        'wins' => $totalWins,
+                        'losses' => $totalLosses,
                         'win_rate' => $this->calculateWinRate(),
+                        'total_win_amount' => $totalWinAmount,
+                        'total_loss_amount' => $totalLossAmount,
+                        'avg_win' => $avgWin,
+                        'avg_loss' => $avgLoss,
+                        'profit_factor' => $profitFactor,
+                        'net_profit' => $totalRealizedPnl,
                         'bot_enabled' => BotSetting::get('bot_enabled', false),
                     ],
                 ],
