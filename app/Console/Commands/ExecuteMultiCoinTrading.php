@@ -79,9 +79,9 @@ class ExecuteMultiCoinTrading extends Command
                 $action = $decision['action'];
                 $confidence = $decision['confidence'] ?? 0;
 
-                // Skip if confidence too low
-                if ($confidence < 0.60 && $action !== 'hold') {
-                    $this->warn("⚠️ {$symbol}: Low confidence ({$confidence}), holding");
+                // Skip if confidence too low (balanced threshold)
+                if ($confidence < 0.70 && $action !== 'hold') {
+                    $this->warn("⚠️ {$symbol}: Low confidence ({$confidence}), holding (minimum: 0.70)");
                     continue;
                 }
 
@@ -127,14 +127,15 @@ class ExecuteMultiCoinTrading extends Command
             return;
         }
 
-        // DIVERSIFICATION CHECK: Don't trade same coin if recently traded (last 3 hours)
-        $recentTrades = Position::where('opened_at', '>', now()->subHours(3))
-            ->where('symbol', $symbol)
-            ->count();
+        // COOLDOWN CHECK: Don't trade same coin if recently traded (last 1 hour minimum)
+        $lastTrade = Position::where('symbol', $symbol)
+            ->orderBy('opened_at', 'desc')
+            ->first();
 
-        if ($recentTrades > 0) {
-            $this->warn("  ⚠️ Skipping {$symbol}: Recently traded (diversification rule)");
-            Log::info("🔀 Diversification: Skipping {$symbol} - traded in last 3 hours");
+        if ($lastTrade && $lastTrade->opened_at->diffInMinutes(now()) < 60) {
+            $minutesAgo = $lastTrade->opened_at->diffInMinutes(now());
+            $this->warn("  ⚠️ Skipping {$symbol}: Cooldown active ({$minutesAgo}min ago, need 60min)");
+            Log::info("⏱️ Cooldown: Skipping {$symbol} - last trade {$minutesAgo}min ago");
             return;
         }
 

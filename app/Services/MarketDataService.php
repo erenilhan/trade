@@ -146,18 +146,31 @@ class MarketDataService
         $lows = array_column($ohlcv, 3);   // Low prices
         $volumes = array_column($ohlcv, 5); // Volumes
 
+        // Calculate MACD with signal line
+        $macdData = $this->calculateMACDSeries($closes);
+        $macdValue = end($macdData['macd']);
+        $signalValue = end($macdData['signal']);
+
+        // Calculate ADX
+        $adxData = $this->calculateADX($highs, $lows, $closes, 14);
+
         return [
             'ema20' => $this->calculateEMA($closes, 20),
             'ema50' => $this->calculateEMA($closes, 50),
             'ema20_series' => $this->calculateEMASeries($closes, 20),
-            'macd' => $this->calculateMACD($closes)['macd'],
-            'macd_series' => $this->calculateMACDSeries($closes),
+            'macd' => $macdValue,
+            'macd_signal' => $signalValue,
+            'macd_series' => $macdData['macd'],
+            'signal_series' => $macdData['signal'],
             'rsi7' => $this->calculateRSI($closes, 7),
             'rsi14' => $this->calculateRSI($closes, 14),
             'rsi7_series' => $this->calculateRSISeries($closes, 7),
             'rsi14_series' => $this->calculateRSISeries($closes, 14),
             'atr3' => $this->calculateATR($highs, $lows, $closes, 3),
             'atr14' => $this->calculateATR($highs, $lows, $closes, 14),
+            'adx' => $adxData['adx'],
+            'plus_di' => $adxData['plus_di'],
+            'minus_di' => $adxData['minus_di'],
             'volume' => end($volumes),
         ];
     }
@@ -221,7 +234,7 @@ class MarketDataService
     }
 
     /**
-     * Calculate MACD series
+     * Calculate MACD series with signal line
      */
     private function calculateMACDSeries(array $prices): array
     {
@@ -235,7 +248,13 @@ class MarketDataService
             $macdSeries[] = round($ema12Series[$i] - $ema26Series[$i], 8);
         }
 
-        return $macdSeries;
+        // Calculate signal line (9-period EMA of MACD)
+        $signalSeries = $this->calculateEMASeries($macdSeries, 9);
+
+        return [
+            'macd' => $macdSeries,
+            'signal' => $signalSeries,
+        ];
     }
 
     /**
@@ -307,6 +326,84 @@ class MarketDataService
         $atr = array_sum(array_slice($trueRanges, -$period)) / $period;
 
         return round($atr, 8);
+    }
+
+    /**
+     * Calculate ADX (Average Directional Index) with proper Wilder's smoothing
+     * Returns ADX value and +DI, -DI
+     */
+    private function calculateADX(array $highs, array $lows, array $closes, int $period = 14): array
+    {
+        if (count($highs) < $period + 1) {
+            return ['adx' => 0, 'plus_di' => 0, 'minus_di' => 0];
+        }
+
+        $plusDM = [];
+        $minusDM = [];
+        $tr = [];
+
+        // Calculate raw +DM, -DM, and TR
+        for ($i = 1; $i < count($highs); $i++) {
+            $highDiff = $highs[$i] - $highs[$i - 1];
+            $lowDiff = $lows[$i - 1] - $lows[$i];
+
+            $plusDM[] = ($highDiff > $lowDiff && $highDiff > 0) ? $highDiff : 0;
+            $minusDM[] = ($lowDiff > $highDiff && $lowDiff > 0) ? $lowDiff : 0;
+
+            $tr[] = max(
+                $highs[$i] - $lows[$i],
+                abs($highs[$i] - $closes[$i - 1]),
+                abs($lows[$i] - $closes[$i - 1])
+            );
+        }
+
+        // Iterative Wilder's smoothing
+        $smoothedPlusDM = 0;
+        $smoothedMinusDM = 0;
+        $smoothedTR = 0;
+        $smoothedDX = 0;
+        $plusDI = 0;
+        $minusDI = 0;
+
+        // Initial SMA for first 14 periods
+        if (count($plusDM) >= $period) {
+            $smoothedPlusDM = array_sum(array_slice($plusDM, 0, $period)) / $period;
+            $smoothedMinusDM = array_sum(array_slice($minusDM, 0, $period)) / $period;
+            $smoothedTR = array_sum(array_slice($tr, 0, $period)) / $period;
+
+            // Calculate initial DI and DX
+            $plusDI = $smoothedTR > 0 ? ($smoothedPlusDM / $smoothedTR) * 100 : 0;
+            $minusDI = $smoothedTR > 0 ? ($smoothedMinusDM / $smoothedTR) * 100 : 0;
+            $diSum = $plusDI + $minusDI;
+            $dx = $diSum > 0 ? (abs($plusDI - $minusDI) / $diSum) * 100 : 0;
+            $smoothedDX = $dx; // Initial ADX = first DX
+        }
+
+        // Continue with Wilder's smoothing for remaining bars
+        $dmStart = min($period, count($plusDM));
+        for ($i = $dmStart; $i < count($plusDM); $i++) {
+            // Wilder's smoothing: (prev * (n-1) + current) / n
+            $smoothedPlusDM = ($smoothedPlusDM * ($period - 1) + $plusDM[$i]) / $period;
+            $smoothedMinusDM = ($smoothedMinusDM * ($period - 1) + $minusDM[$i]) / $period;
+            $smoothedTR = ($smoothedTR * ($period - 1) + $tr[$i]) / $period;
+
+            // Calculate DI
+            $plusDI = $smoothedTR > 0 ? ($smoothedPlusDM / $smoothedTR) * 100 : 0;
+            $minusDI = $smoothedTR > 0 ? ($smoothedMinusDM / $smoothedTR) * 100 : 0;
+
+            // Calculate DX
+            $diSum = $plusDI + $minusDI;
+            $dx = $diSum > 0 ? (abs($plusDI - $minusDI) / $diSum) * 100 : 0;
+
+            // Smooth ADX with same Wilder's method
+            $smoothedDX = ($smoothedDX * ($period - 1) + $dx) / $period;
+        }
+
+        return [
+            'adx' => round($smoothedDX, 4),
+            'plus_di' => round($plusDI, 4),
+            'minus_di' => round($minusDI, 4),
+        ];
     }
 
     /**

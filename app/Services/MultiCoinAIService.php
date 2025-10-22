@@ -120,11 +120,18 @@ class MultiCoinAIService
 
             $prompt .= "ALL {$cleanSymbol} DATA\n";
             $prompt .= sprintf(
-                "current_price = %.2f, current_ema20 = %.2f, current_macd = %.3f, current_rsi (7 period) = %.2f\n\n",
+                "current_price = %.2f, current_ema20 = %.2f, current_macd = %.3f, macd_signal = %.3f, current_rsi (7 period) = %.2f\n",
                 $data3m['price'],
                 $data3m['ema20'],
                 $data3m['macd'],
+                $data3m['macd_signal'] ?? 0,
                 $data3m['rsi7']
+            );
+
+            $prompt .= sprintf(
+                "MACD > Signal? %s, MACD > (price * 0.0001)? %s\n\n",
+                ($data3m['macd'] > ($data3m['macd_signal'] ?? 0)) ? 'YES' : 'NO',
+                ($data3m['macd'] > ($data3m['price'] * 0.0001)) ? 'YES' : 'NO'
             );
 
             $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'], 10) . "\n";
@@ -136,7 +143,26 @@ class MultiCoinAIService
             $prompt .= "MACD: [" . implode(', ', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -10))) . "]\n";
             $prompt .= "RSI7: [" . implode(', ', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -10))) . "]\n\n";
 
-            $prompt .= "4H: EMA20={$data4h['ema20']}, EMA50={$data4h['ema50']}, ATR={$data4h['atr14']}\n\n";
+            // Volume info
+            $currentVolume = $data3m['indicators']['volume'] ?? 0;
+            $prompt .= sprintf(
+                "Volume: current=%.2f\n\n",
+                $currentVolume
+            );
+
+            $prompt .= sprintf(
+                "4H: EMA20=%.2f, EMA50=%.2f, ATR=%.2f, ADX(14)=%.2f (Moderate trend if >20, Strong if >25)\n",
+                $data4h['ema20'],
+                $data4h['ema50'],
+                $data4h['atr14'],
+                $data4h['adx'] ?? 0
+            );
+
+            $prompt .= sprintf(
+                "4H Trend: EMA20 > EMA50*0.999? %s, ADX > 20? %s\n\n",
+                ($data4h['ema20'] > ($data4h['ema50'] * 0.999)) ? 'YES (bullish)' : 'NO (bearish)',
+                (($data4h['adx'] ?? 0) > 20) ? 'YES (moderate+)' : 'NO (weak)'
+            );
         }
 
         // Account information
@@ -207,8 +233,32 @@ class MultiCoinAIService
             return $customPrompt;
         }
 
-        // Default prompt - Aggressive day trading strategy with diversification
-        return "You are an aggressive crypto day trader managing BTC,ETH,SOL,BNB,XRP,DOGE,ADA,AVAX,LINK,DOT. RSI >80 does NOT always mean sell - strong uptrends stay overbought for extended periods. Key signals: MACD positive + Price > EMA20 = POTENTIAL BUY. Use 2-3% stop loss, target 3-5% profit. Make 1-2 trades per cycle if ANY coin shows trending momentum. IMPORTANT: Diversify across different coins - prefer variety over concentration. Mix large cap (BTC/ETH/BNB), mid cap (SOL/ADA/AVAX), and small cap (XRP/DOGE/LINK/DOT) for risk management. Confidence >0.60 is sufficient for action. Don't fear volatility - profits come from action, not hesitation. Always return valid JSON with 'decisions' array containing {symbol,action,confidence,reasoning,entry_price,target_price,stop_price,invalidation} for each coin. Actions: buy, hold.";
+        // Default prompt - STRICT day trading strategy with quality over quantity
+        return "You are a disciplined crypto day trader managing BTC,ETH,SOL,BNB,XRP,DOGE,ADA,AVAX,LINK,DOT. QUALITY over QUANTITY - only trade when signals are crystal clear.
+
+BUY CRITERIA (ALL must be true):
+1. Price > EMA20 by at least 0.3% (early entry, slight buffer for whipsaw protection)
+2. MACD > MACD_signal (signal line crossover) AND MACD > close * 0.00005 (looser dynamic threshold for early momentum)
+3. RSI between 35-75 (allow slight oversold/overbought - catches rally starts/continuations)
+4. 4H timeframe bullish: EMA20 > EMA50*0.999 (near crossover OK) AND ADX(14) > 20 (moderate trend strength)
+5. Volume > 20MA*0.9 AND > previous_bar*1.05 (moderate volume confirmation)
+6. Confidence must be >70% (balanced quality threshold)
+
+If ANY condition fails → HOLD. Better to miss a trade than take a bad one.
+
+RSI RULES:
+- RSI >75 = EXTREME OVERBOUGHT = DO NOT BUY (correction likely)
+- RSI <35 = EXTREME OVERSOLD = WAIT for bounce confirmation
+- RSI 45-70 = OPTIMAL ZONE for entries
+- RSI 35-45 = ACCEPTABLE if other signals strong (rally starting)
+- RSI 70-75 = ACCEPTABLE if momentum strong (rally continuation)
+
+DIVERSIFICATION:
+- Mix large cap (BTC/ETH/BNB), mid cap (SOL/ADA/AVAX), small cap (XRP/DOGE/LINK/DOT)
+- Maximum 1-2 BUY per cycle across ALL coins
+- Prefer different market cap segments
+
+Use 2-3% stop loss, target 3-5% profit. Always return valid JSON with 'decisions' array containing {symbol,action,confidence,reasoning,entry_price,target_price,stop_price,invalidation} for each coin. Actions: buy, hold.";
     }
 
     /**
