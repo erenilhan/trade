@@ -127,6 +127,43 @@ class ExecuteMultiCoinTrading extends Command
             return;
         }
 
+        // DIVERSIFICATION CHECK: Don't trade same coin if recently traded (last 3 hours)
+        $recentTrades = Position::where('opened_at', '>', now()->subHours(3))
+            ->where('symbol', $symbol)
+            ->count();
+
+        if ($recentTrades > 0) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Recently traded (diversification rule)");
+            Log::info("🔀 Diversification: Skipping {$symbol} - traded in last 3 hours");
+            return;
+        }
+
+        // MARKET CAP DIVERSIFICATION: Limit positions per market cap segment
+        $openPositions = Position::active()->get();
+        $largeCap = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'];
+        $midCap = ['SOL/USDT', 'ADA/USDT', 'AVAX/USDT'];
+        $smallCap = ['XRP/USDT', 'DOGE/USDT', 'LINK/USDT', 'DOT/USDT'];
+
+        $largeCapCount = $openPositions->whereIn('symbol', $largeCap)->count();
+        $midCapCount = $openPositions->whereIn('symbol', $midCap)->count();
+        $smallCapCount = $openPositions->whereIn('symbol', $smallCap)->count();
+
+        // Max 3 large cap, 3 mid cap, 4 small cap
+        if (in_array($symbol, $largeCap) && $largeCapCount >= 3) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Max large cap positions reached (3/3)");
+            return;
+        }
+
+        if (in_array($symbol, $midCap) && $midCapCount >= 3) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Max mid cap positions reached (3/3)");
+            return;
+        }
+
+        if (in_array($symbol, $smallCap) && $smallCapCount >= 4) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Max small cap positions reached (4/4)");
+            return;
+        }
+
         // Calculate position size
         $positionSize = BotSetting::get('position_size_usdt', 100);
         if ($availableCash < $positionSize) {
