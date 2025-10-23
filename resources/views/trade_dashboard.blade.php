@@ -224,11 +224,17 @@
                         }
                     }
 
+                    const invested = pos.position_size || (pos.quantity * pos.entry_price);
+
                     return `
                         <div class="position-card bg-dark-800 border border-dark-700 rounded-lg p-4 hover:shadow-lg transition-shadow">
                             <div class="position-header flex justify-between items-center pb-2 mb-2 border-b border-dark-700">
                                 <div class="symbol font-semibold text-lg text-white">${pos.symbol}</div>
                                 <div class="leverage-badge bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
+                            </div>
+                            <div class="position-row flex justify-between py-1">
+                                <span class="position-label text-gray-400">💵 Invested</span>
+                                <span class="position-value text-yellow-400 font-semibold">${formatMoney(invested)}</span>
                             </div>
                             <div class="position-row flex justify-between py-1">
                                 <span class="position-label text-gray-400">Entry</span>
