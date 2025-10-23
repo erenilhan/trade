@@ -52,12 +52,13 @@ class AIService
 
             $decision = $aiResponse['decision'];
             $rawResponse = $aiResponse['raw_response'];
+            $model = $aiResponse['model'];
 
             // Validate and sanitize decision
             $decision = $this->validateDecision($decision, $account);
 
             // Log the AI call
-            $this->logAiCall($this->provider, $prompt, $rawResponse, $decision);
+            $this->logAiCall($this->provider, $model, $prompt, $rawResponse, $decision);
 
             Log::info("🤖 AI Decision ({$this->provider})", [
                 'action' => $decision['action'],
@@ -92,9 +93,10 @@ class AIService
     private function callDeepSeekAPI(string $prompt): array
     {
         $client = DeepSeekClient::make(config('deepseek.api_key'));
+        $model = config('deepseek.model', 'deepseek-chat');
 
         $response = $client->chat()->create([
-            'model' => config('deepseek.model', 'deepseek-chat'),
+            'model' => $model,
             'messages' => [
                 [
                     'role' => 'system',
@@ -121,6 +123,7 @@ class AIService
         return [
             'decision' => $decision,
             'raw_response' => $response->toArray(),
+            'model' => $model,
         ];
     }
 
@@ -129,6 +132,8 @@ class AIService
      */
     private function callOpenRouter(string $prompt): array
     {
+        $model = config('openrouter.model', 'deepseek/deepseek-chat');
+
         $response = Openrouter::chatRequest(
             new ChatData(
                 messages: [
@@ -141,7 +146,7 @@ class AIService
                         content: $prompt
                     ),
                 ],
-                model: config('openrouter.model', 'deepseek/deepseek-chat'),
+                model: $model,
                 temperature: 0.3,
                 max_tokens: 1000,
                 response_format: ['type' => 'json_object']
@@ -159,6 +164,7 @@ class AIService
         return [
             'decision' => $decision,
             'raw_response' => $response->toArray(),
+            'model' => $model,
         ];
     }
 
@@ -167,8 +173,10 @@ class AIService
      */
     private function callOpenAI(string $prompt): array
     {
+        $model = 'gpt-4-turbo-preview';
+
         $response = OpenAI::chat()->create([
-            'model' => 'gpt-4-turbo-preview',
+            'model' => $model,
             'messages' => [
                 [
                     'role' => 'system',
@@ -195,16 +203,18 @@ class AIService
         return [
             'decision' => $decision,
             'raw_response' => $response->toArray(),
+            'model' => $model,
         ];
     }
 
     /**
      * Log AI call details
      */
-    private function logAiCall(string $provider, string $prompt, array $response, array $decision): void
+    private function logAiCall(string $provider, string $model, string $prompt, array $response, array $decision): void
     {
         AiLog::create([
             'provider' => $provider,
+            'model' => $model,
             'prompt' => $prompt,
             'response' => json_encode($response),
             'decision' => $decision,

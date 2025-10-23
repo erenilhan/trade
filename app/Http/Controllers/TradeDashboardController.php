@@ -231,6 +231,7 @@ class TradeDashboardController extends Controller
                     $decisions = $log->decision['decisions'] ?? [];
                     return [
                         'provider' => $log->provider,
+                        'model' => $log->model,
                         'decisions_count' => count($decisions),
                         'decisions' => $decisions,
                         'created_at' => $log->created_at->diffForHumans(),
@@ -239,12 +240,9 @@ class TradeDashboardController extends Controller
 
             $lastAiRun = AiLog::latest()->first();
 
-            // Get AI model information from settings
-            $aiModel = BotSetting::get('ai_model') 
-                        ?? config('services.openrouter.model') 
-                        ?? config('deepseek.model') 
-                        ?? config('openai.model')
-                        ?? 'unknown';
+            // Get AI model information from latest log or config
+            $aiProvider = $lastAiRun?->provider ?? config('app.ai_provider', 'openrouter');
+            $aiModel = $lastAiRun?->model ?? config('openrouter.model', 'deepseek/deepseek-chat-v3.1');
             
             return response()->json([
                 'success' => true,
@@ -261,7 +259,8 @@ class TradeDashboardController extends Controller
                     'closed_positions' => $closedPositions,
                     'ai_logs' => $aiLogs,
                     'last_ai_run' => $lastAiRun ? $lastAiRun->created_at->diffForHumans() : 'Never',
-                    'model' => $aiModel,
+                    'ai_provider' => $aiProvider,
+                    'ai_model' => $aiModel,
                     'stats' => [
                         'open_positions' => $positions->count(),
                         'total_trades' => $totalWins + $totalLosses,

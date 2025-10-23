@@ -19,7 +19,7 @@ return [
     | The default AI model to use (DeepSeek for trading)
     |
     */
-    'model' => env('OPENROUTER_MODEL', 'deepseek/deepseek-chat'),
+    'model' => env('OPENROUTER_MODEL', 'deepseek/deepseek-chat-v3.1'),
 
     /*
     |--------------------------------------------------------------------------

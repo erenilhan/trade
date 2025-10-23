@@ -50,6 +50,14 @@
             </div>
             
             <div class="flex items-center space-x-4">
+                <!-- AI Model Badge -->
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-indigo-900/50 text-indigo-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span id="ai-model-text">Loading...</span>
+                </div>
+
                 <!-- Current Strategy Button -->
                 <button id="strategy-btn" class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-purple-900/50 text-purple-300 hover:bg-purple-900/70 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -270,7 +278,7 @@
         }
 
         function renderDashboard(data) {
-            const { account, positions, closed_positions, ai_logs, last_ai_run, stats } = data;
+            const { account, positions, closed_positions, ai_logs, last_ai_run, ai_provider, ai_model, stats } = data;
 
             // Update account stats
             document.getElementById('total-value').textContent = formatMoney(account.total_value);
@@ -285,12 +293,20 @@
             totalPnlEl.className = `stat-value text-2xl font-bold ${pnlColor}`;
             totalPnlEl.textContent = (totalPnl >= 0 ? '+' : '') + formatMoney(totalPnl);
 
+            // Update AI Model display
+            const aiModelText = document.getElementById('ai-model-text');
+            if (ai_model) {
+                aiModelText.textContent = ai_model;
+            } else {
+                aiModelText.textContent = 'No model';
+            }
+
             // Update bot status
             const botStatus = document.getElementById('bot-status');
             const botStatusTooltip = document.getElementById('bot-status-tooltip');
-            
+
             botStatusTooltip.textContent = `Last run: ${last_ai_run || 'Not available'}`;
-            
+
             if (stats.bot_enabled) {
                 botStatus.className = 'status-badge active inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-green-900/50 text-green-300';
                 botStatus.innerHTML = '<span class="status-dot w-2 h-2 rounded-full bg-green-500 animate-pulse"></span><span>Bot Active</span>';

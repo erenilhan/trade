@@ -62,14 +62,12 @@ class MultiCoinAIService
                 default => throw new Exception("Invalid AI provider: {$this->provider}")
             };
 
-            // Log AI call to database
-//            $this->logAICall($prompt, $aiResponse);
-
             $decision = $aiResponse['decision'];
             $rawResponse = $aiResponse['raw_response'];
+            $model = $aiResponse['model'];
 
             // Log the AI call
-            $this->logAiCall($this->provider, $prompt, $rawResponse, $decision);
+            $this->logAiCall($this->provider, $model, $prompt, $rawResponse, $decision);
 
             Log::info("🤖 Multi-Coin Decision", ['decision' => $decision]);
 
@@ -196,10 +194,11 @@ class MultiCoinAIService
     private function callDeepSeekAPI(string $prompt): array
     {
         $client = DeepSeekClient::build(config('deepseek.api_key'));
+        $model = config('deepseek.model', 'deepseek-chat');
 
         $fullPrompt = $this->getSystemPrompt() . "\n\n" . $prompt;
         $response = $client
-            ->withModel(config('deepseek.model', 'deepseek-chat'))
+            ->withModel($model)
             ->setTemperature(0.3)
             ->setMaxTokens(2000)
             ->setResponseFormat('json_object')
@@ -219,6 +218,7 @@ class MultiCoinAIService
         return [
             'decision' => $decision,
             'raw_response' => json_decode($response, true),
+            'model' => $model,
         ];
     }
 
@@ -268,6 +268,8 @@ Use 2-3% stop loss, target 3-5% profit. Always return valid JSON with 'decisions
      */
     private function callOpenRouter(string $prompt): array
     {
+        $model = config('openrouter.model', 'deepseek/deepseek-chat');
+
         $messages = [
             new MessageData(
                 content: $this->getSystemPrompt(),
@@ -281,7 +283,7 @@ Use 2-3% stop loss, target 3-5% profit. Always return valid JSON with 'decisions
 
         $chatData = new ChatData(
             messages: $messages,
-            model: config('openrouter.model', 'deepseek/deepseek-chat'),
+            model: $model,
             response_format: new ResponseFormatData(
                 type: 'json_object'
             ),
@@ -304,16 +306,18 @@ Use 2-3% stop loss, target 3-5% profit. Always return valid JSON with 'decisions
         return [
             'decision' => $decision,
             'raw_response' => $responseDTO->toArray(),
+            'model' => $model,
         ];
     }
 
     /**
      * Log AI call details
      */
-    private function logAiCall(string $provider, string $prompt, array $response, array $decision): void
+    private function logAiCall(string $provider, string $model, string $prompt, array $response, array $decision): void
     {
         AiLog::create([
             'provider' => $provider,
+            'model' => $model,
             'prompt' => $prompt,
             'response' => json_encode($response),
             'decision' => $decision,

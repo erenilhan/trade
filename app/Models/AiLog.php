@@ -10,6 +10,7 @@ class AiLog extends Model
 
     protected $fillable = [
         'provider',
+        'model',
         'prompt',
         'response',
         'decision',
