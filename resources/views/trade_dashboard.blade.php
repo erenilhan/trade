@@ -50,6 +50,14 @@
             </div>
             
             <div class="flex items-center space-x-4">
+                <!-- Current Strategy Button -->
+                <button id="strategy-btn" class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-purple-900/50 text-purple-300 hover:bg-purple-900/70 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Strategy</span>
+                </button>
+
                 <!-- Bot Status with Tooltip -->
                 <div class="relative group">
                     <div class="status-badge inactive inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-red-900/50 text-red-300" id="bot-status">
@@ -65,7 +73,7 @@
         </header>
 
         <!-- Stats Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
             <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
                 <div class="stat-value text-3xl font-bold text-green-400" id="total-value">$0.00</div>
                 <div class="stat-label text-sm text-gray-400 mt-1">Total Value</div>
@@ -75,8 +83,12 @@
                 <div class="stat-label text-sm text-gray-400 mt-1">Cash</div>
             </div>
             <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
-                <div class="stat-value text-3xl font-bold text-yellow-400" id="pnl-value">0%</div>
+                <div class="stat-value text-3xl font-bold text-yellow-400" id="roi-value">0%</div>
                 <div class="stat-label text-sm text-gray-400 mt-1">ROI</div>
+            </div>
+            <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
+                <div class="stat-value text-2xl font-bold" id="total-pnl-value">$0.00</div>
+                <div class="stat-label text-sm text-gray-400 mt-1">Total P&L</div>
             </div>
             <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
                 <div class="stat-value text-3xl font-bold text-purple-400" id="win-rate">0%</div>
@@ -131,7 +143,106 @@
                 </div>
             </div>
         </div>
-        
+
+        <!-- Strategy Modal -->
+        <div id="strategy-modal" class="modal fixed inset-0 z-50 hidden bg-black/50">
+            <div class="modal-content bg-dark-800 rounded-lg mx-auto my-20 p-6 w-11/12 max-w-3xl relative max-h-[80vh] overflow-y-auto">
+                <button id="close-strategy-modal" class="close absolute top-4 right-4 text-2xl text-white hover:text-gray-300">&times;</button>
+                <h2 class="text-2xl font-bold text-white mb-4">📋 Current Trading Strategy</h2>
+                <div class="bg-dark-700 rounded-lg p-6 space-y-6">
+                    <div class="strategy-section">
+                        <h3 class="text-lg font-semibold text-purple-400 mb-3">BUY Criteria (ALL must be true)</h3>
+                        <ul class="space-y-2 text-gray-300">
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <span><strong>Price > EMA20</strong> by at least 0.3% (early entry)</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <span><strong>MACD > Signal</strong> AND MACD > price × 0.00005 (looser momentum)</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <span><strong>RSI between 35-75</strong> (catches rally starts, was 40-70)</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <span><strong>4H Trend:</strong> EMA20 > EMA50 × 0.999 AND ADX(14) > 20 (moderate trend, was >25)</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <span><strong>Volume Confirmation:</strong> Volume > 20MA × 0.9 AND > previous bar × 1.05</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-green-400 mt-1">✓</span>
+                                <span><strong>AI Confidence > 70%</strong> (balanced threshold)</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="strategy-section border-t border-dark-600 pt-6">
+                        <h3 class="text-lg font-semibold text-red-400 mb-3">EXIT Strategy</h3>
+                        <ul class="space-y-2 text-gray-300">
+                            <li class="flex items-start gap-2">
+                                <span class="text-yellow-400 mt-1">🎯</span>
+                                <span><strong>Take Profit:</strong> +5% gain target</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-red-400 mt-1">🛑</span>
+                                <span><strong>Stop Loss:</strong> -3% maximum loss</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-orange-400 mt-1">⚠️</span>
+                                <span><strong>Trend Invalidation:</strong> Close if 2+ signals (Price < EMA20, MACD < 0, 4H ADX < 20, 4H trend reversed) AND P&L < 2%</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-blue-400 mt-1">🔒</span>
+                                <span><strong>Trailing Stop:</strong> Move stop to breakeven at +5% profit</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="strategy-section border-t border-dark-600 pt-6">
+                        <h3 class="text-lg font-semibold text-blue-400 mb-3">Risk Management</h3>
+                        <ul class="space-y-2 text-gray-300">
+                            <li class="flex items-start gap-2">
+                                <span class="text-blue-400 mt-1">📊</span>
+                                <span><strong>Leverage:</strong> Fixed 2x (safe leverage)</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-blue-400 mt-1">💰</span>
+                                <span><strong>Position Size:</strong> ~$20 per trade</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-blue-400 mt-1">⏰</span>
+                                <span><strong>Trading Frequency:</strong> Every 10 minutes (AI analysis)</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-blue-400 mt-1">🔄</span>
+                                <span><strong>Monitoring:</strong> Every 1 minute (price updates, position monitoring)</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-blue-400 mt-1">🎲</span>
+                                <span><strong>Max Positions:</strong> One position per coin (10 coins max)</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="strategy-section border-t border-dark-600 pt-6">
+                        <h3 class="text-lg font-semibold text-green-400 mb-3">Technical Indicators</h3>
+                        <ul class="space-y-2 text-gray-300 text-sm">
+                            <li><strong>EMA 20/50:</strong> Trend direction (3m and 4H timeframes)</li>
+                            <li><strong>MACD (12,26,9):</strong> Momentum with signal line crossover</li>
+                            <li><strong>RSI (7,14):</strong> Overbought/oversold conditions</li>
+                            <li><strong>ATR (3,14):</strong> Volatility measurement</li>
+                            <li><strong>ADX (14):</strong> Trend strength (Wilder's smoothing)</li>
+                            <li><strong>Volume:</strong> 20-period MA confirmation</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Menu Modal -->
         <div id="menu-modal" class="menu-modal fixed inset-0 z-[60] hidden bg-black/50">
             <div class="menu-modal-content bg-dark-800 rounded-lg mx-auto my-20 p-6 w-11/12 max-w-md relative">
@@ -164,8 +275,15 @@
             // Update account stats
             document.getElementById('total-value').textContent = formatMoney(account.total_value);
             document.getElementById('cash-value').textContent = formatMoney(account.cash);
-            document.getElementById('pnl-value').textContent = formatPercent(account.roi);
+            document.getElementById('roi-value').textContent = formatPercent(account.roi);
             document.getElementById('win-rate').textContent = formatPercent(stats.win_rate);
+
+            // Update Total P&L
+            const totalPnl = account.realized_pnl || 0;
+            const totalPnlEl = document.getElementById('total-pnl-value');
+            const pnlColor = totalPnl >= 0 ? 'text-green-400' : 'text-red-400';
+            totalPnlEl.className = `stat-value text-2xl font-bold ${pnlColor}`;
+            totalPnlEl.textContent = (totalPnl >= 0 ? '+' : '') + formatMoney(totalPnl);
 
             // Update bot status
             const botStatus = document.getElementById('bot-status');
@@ -314,11 +432,17 @@
             if (ai_logs.length === 0) {
                 aiLogsEl.innerHTML = '<div class="empty-state text-center py-8 text-gray-400">No AI logs available</div>';
             } else {
-                // Process all decisions from all AI logs
+                // Process decisions from AI logs (limit to 10 total decisions)
                 let aiLogItems = [];
-                ai_logs.forEach(log => {
+                let decisionCount = 0;
+                const maxDecisions = 10;
+
+                for (const log of ai_logs) {
+                    if (decisionCount >= maxDecisions) break;
+
                     if (log.decisions && log.decisions.length > 0) {
-                        log.decisions.forEach(decision => {
+                        for (const decision of log.decisions) {
+                            if (decisionCount >= maxDecisions) break;
                             // Color code actions
                             let actionClass = 'text-gray-400';
                             let actionBadge = decision.action.toUpperCase();
@@ -348,9 +472,10 @@
                                     <div class="text-gray-400 truncate text-sm" title="${decision.reasoning}">${decision.reasoning.substring(0, 50)}...</div>
                                 </div>
                             `);
-                        });
+                            decisionCount++;
+                        }
                     }
-                });
+                }
                 
                 aiLogsEl.innerHTML = `
                     <div class="grid grid-cols-5 bg-dark-700 text-gray-300 font-semibold p-3">
@@ -483,9 +608,24 @@
                     this.classList.add('hidden');
                 }
             });
-            
 
-            
+            // Strategy button click handler
+            document.getElementById('strategy-btn').addEventListener('click', function() {
+                document.getElementById('strategy-modal').classList.remove('hidden');
+            });
+
+            // Close strategy modal
+            document.getElementById('close-strategy-modal').addEventListener('click', function() {
+                document.getElementById('strategy-modal').classList.add('hidden');
+            });
+
+            // Close strategy modal when clicking outside
+            document.getElementById('strategy-modal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.add('hidden');
+                }
+            });
+
             // Menu toggle functionality
             const menuToggle = document.getElementById('menu-toggle');
             const menuModal = document.getElementById('menu-modal');
