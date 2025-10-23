@@ -224,7 +224,8 @@
                         }
                     }
 
-                    const invested = pos.position_size || (pos.quantity * pos.entry_price);
+                    const positionSize = pos.position_size || (pos.quantity * pos.entry_price);
+                    const invested = positionSize / pos.leverage; // Real capital used (with leverage)
 
                     return `
                         <div class="position-card bg-dark-800 border border-dark-700 rounded-lg p-4 hover:shadow-lg transition-shadow">
@@ -233,7 +234,7 @@
                                 <div class="leverage-badge bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
                             </div>
                             <div class="position-row flex justify-between py-1">
-                                <span class="position-label text-gray-400">💵 Invested</span>
+                                <span class="position-label text-gray-400">💵 Capital</span>
                                 <span class="position-value text-yellow-400 font-semibold">${formatMoney(invested)}</span>
                             </div>
                             <div class="position-row flex justify-between py-1">
@@ -285,7 +286,8 @@
                     ${closed_positions.map(pos => {
                         const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
                         const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
-                        const invested = pos.position_size || (pos.quantity * pos.entry_price);
+                        const positionSize = pos.position_size || (pos.quantity * pos.entry_price);
+                        const invested = positionSize / pos.leverage; // Real capital used (with leverage)
                         const closeReason = pos.pnl >= 0 ? '🎯 Take Profit' : '🛑 Stop Loss';
 
                         return `
