@@ -268,25 +268,33 @@
                 closedPositionsEl.innerHTML = '<div class="empty-state text-center py-8 text-gray-400">No closed positions</div>';
             } else {
                 closedPositionsEl.innerHTML = `
-                    <div class="grid grid-cols-5 bg-dark-700 text-gray-300 font-semibold p-3">
+                    <div class="grid grid-cols-6 bg-dark-700 text-gray-300 font-semibold p-3 text-sm">
                         <div>Symbol</div>
-                        <div>Entry Price</div>
+                        <div>💵 Invested</div>
+                        <div>Entry</div>
                         <div>Leverage</div>
-                        <div>P&L</div>
-                        <div>Closed</div>
+                        <div>💸 P&L</div>
+                        <div>📅 Closed</div>
                     </div>
                     ${closed_positions.map(pos => {
                         const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
                         const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
+                        const invested = pos.position_size || (pos.quantity * pos.entry_price);
+                        const closeReason = pos.pnl >= 0 ? '🎯 Take Profit' : '🛑 Stop Loss';
+
                         return `
-                            <div class="grid grid-cols-5 p-3 border-b border-dark-700 hover:bg-dark-700/30">
+                            <div class="grid grid-cols-6 p-3 border-b border-dark-700 hover:bg-dark-700/30 text-sm">
                                 <div class="font-medium text-white">${pos.symbol}</div>
+                                <div class="text-yellow-400 font-semibold">${formatMoney(invested)}</div>
                                 <div class="text-gray-300">${formatMoney(pos.entry_price)}</div>
                                 <div class="text-blue-400">${pos.leverage}x</div>
                                 <div class="${pnlColor} font-semibold">
                                     ${pnlEmoji} ${formatMoney(pos.pnl)} (${formatPercent(pos.pnl_percent)})
                                 </div>
-                                <div class="text-gray-400 text-sm">${pos.closed_at || 'N/A'}</div>
+                                <div>
+                                    <div class="text-gray-400 text-xs">${pos.closed_at || 'N/A'}</div>
+                                    <div class="text-gray-500 text-xs mt-1">${closeReason}</div>
+                                </div>
                             </div>
                         `;
                     }).join('')}

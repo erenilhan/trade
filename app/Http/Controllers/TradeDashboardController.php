@@ -181,8 +181,8 @@ class TradeDashboardController extends Controller
                 ->limit(10)
                 ->get()
                 ->map(function ($pos) {
-                    $pnl = $pos->realized_pnl ?? 0;
-                    $entryPrice = $pos->entry_price;
+                    $pnl = (float) ($pos->realized_pnl ?? 0);
+                    $entryPrice = (float) $pos->entry_price;
 
                     // Calculate PNL percentage with leverage
                     $pnlPercent = 0;
