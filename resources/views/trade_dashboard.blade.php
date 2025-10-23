@@ -319,24 +319,42 @@
                         if (pos.targets.profit_target) {
                             const distPct = pos.targets.distance_to_profit_pct?.toFixed(2) || '0.00';
                             const priceNeeded = pos.targets.profit_needed?.toFixed(2) || '0.00';
+                            const priceNeededAbs = Math.abs(parseFloat(priceNeeded));
+                            const distanceText = parseFloat(distPct) > 0
+                                ? `${distPct}% to go ($${priceNeededAbs})`
+                                : `Target reached!`;
+
                             targetsHtml += `
                                 <div class="position-row flex justify-between py-1 bg-green-900/20 px-2 rounded mt-2">
                                     <span class="position-label text-green-400 text-sm">🎯 Target</span>
                                     <span class="position-value text-green-300 text-sm">
-                                        $${pos.targets.profit_target.toFixed(2)} (${distPct}% / +$${priceNeeded})
+                                        $${pos.targets.profit_target.toFixed(2)}
                                     </span>
+                                </div>
+                                <div class="position-row flex justify-between py-1 px-2 text-xs">
+                                    <span class="text-gray-500">Distance:</span>
+                                    <span class="text-green-400 font-semibold">${distanceText}</span>
                                 </div>
                             `;
                         }
                         if (pos.targets.stop_loss) {
                             const stopPct = pos.targets.distance_to_stop_pct?.toFixed(2) || '0.00';
                             const stopDist = pos.targets.stop_distance?.toFixed(2) || '0.00';
+                            const stopDistAbs = Math.abs(parseFloat(stopDist));
+                            const bufferText = parseFloat(stopPct) > 0
+                                ? `${stopPct}% buffer ($${stopDistAbs})`
+                                : `⚠️ At stop level!`;
+
                             targetsHtml += `
                                 <div class="position-row flex justify-between py-1 bg-red-900/20 px-2 rounded mt-1">
                                     <span class="position-label text-red-400 text-sm">🛑 Stop</span>
                                     <span class="position-value text-red-300 text-sm">
-                                        $${pos.targets.stop_loss.toFixed(2)} (${stopPct}% buffer / $${stopDist})
+                                        $${pos.targets.stop_loss.toFixed(2)}
                                     </span>
+                                </div>
+                                <div class="position-row flex justify-between py-1 px-2 text-xs">
+                                    <span class="text-gray-500">Buffer:</span>
+                                    <span class="text-red-400 font-semibold">${bufferText}</span>
                                 </div>
                             `;
                         }
