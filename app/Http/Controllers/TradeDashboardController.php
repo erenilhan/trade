@@ -113,8 +113,8 @@ class TradeDashboardController extends Controller
 
             // Get active positions
             $positions = Position::active()->get()->map(function ($pos) {
-                $currentPrice = $pos->current_price;
-                $entryPrice = $pos->entry_price;
+                $currentPrice = (float) $pos->current_price;
+                $entryPrice = (float) $pos->entry_price;
 
                 // Calculate PNL
                 $priceDiff = $currentPrice - $entryPrice;
@@ -126,8 +126,8 @@ class TradeDashboardController extends Controller
 
                 // Get exit plan targets
                 $exitPlan = $pos->exit_plan ?? [];
-                $profitTarget = $exitPlan['profit_target'] ?? null;
-                $stopLoss = $exitPlan['stop_loss'] ?? null;
+                $profitTarget = isset($exitPlan['profit_target']) ? (float) $exitPlan['profit_target'] : null;
+                $stopLoss = isset($exitPlan['stop_loss']) ? (float) $exitPlan['stop_loss'] : null;
 
                 // Calculate distance to targets
                 $distanceToProfit = null;
