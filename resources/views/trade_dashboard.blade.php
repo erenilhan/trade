@@ -81,7 +81,7 @@
         </header>
 
         <!-- Stats Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
             <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
                 <div class="stat-value text-3xl font-bold text-green-400" id="total-value">$0.00</div>
                 <div class="stat-label text-sm text-gray-400 mt-1">Total Value</div>
@@ -101,6 +101,23 @@
             <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
                 <div class="stat-value text-3xl font-bold text-purple-400" id="win-rate">0%</div>
                 <div class="stat-label text-sm text-gray-400 mt-1">Win Rate</div>
+            </div>
+            <div class="stat-card bg-dark-800 rounded-lg p-6 text-center relative group cursor-help">
+                <div class="stat-value text-2xl font-bold text-emerald-400" id="trailing-stops">0</div>
+                <div class="stat-label text-sm text-gray-400 mt-1">🛡️ Protected</div>
+                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-dark-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-72 shadow-xl">
+                    <div class="font-bold mb-2 text-emerald-400">🛡️ Trailing Stop Protection</div>
+                    <div class="text-gray-300 text-xs space-y-1">
+                        <div><span class="text-yellow-400">🛡️ L1:</span> Position hit +3%, max loss -1%</div>
+                        <div><span class="text-green-400">✅ L2:</span> Position hit +5%, breakeven (no loss possible)</div>
+                        <div><span class="text-emerald-400">🔒 L3:</span> Position hit +8%, +3% profit locked</div>
+                        <div><span class="text-teal-400">💎 L4:</span> Position hit +12%, +6% profit locked</div>
+                    </div>
+                    <div class="text-gray-400 text-xs mt-2 pt-2 border-t border-dark-700">
+                        Positions with active trailing stop protection
+                    </div>
+                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-dark-900"></div>
+                </div>
             </div>
         </div>
 
@@ -292,6 +309,10 @@
             document.getElementById('roi-value').textContent = formatPercent(account.roi);
             document.getElementById('win-rate').textContent = formatPercent(stats.win_rate);
 
+            // Count positions with trailing stops
+            const protectedCount = positions.filter(p => p.trailing_level).length;
+            document.getElementById('trailing-stops').textContent = protectedCount;
+
             // Update Total P&L
             const totalPnl = account.realized_pnl || 0;
             const totalPnlEl = document.getElementById('total-pnl-value');
@@ -385,17 +406,53 @@
                     const positionSize = pos.position_size || (pos.quantity * pos.entry_price);
                     const invested = positionSize / pos.leverage; // Real capital used (with leverage)
 
-                    // Trailing stop badge
+                    // Trailing stop badge with detailed tooltip
                     let trailingBadge = '';
                     if (pos.trailing_level) {
-                        const trailingLabels = {
-                            1: { text: 'T-Stop L1', color: 'bg-yellow-600', desc: 'Risk -1%' },
-                            2: { text: 'T-Stop L2', color: 'bg-green-600', desc: 'Breakeven' },
-                            3: { text: 'T-Stop L3', color: 'bg-emerald-600', desc: 'Locked +3%' },
-                            4: { text: 'T-Stop L4', color: 'bg-teal-600', desc: 'Locked +6%' }
+                        const trailingInfo = {
+                            1: {
+                                text: 'T-Stop L1',
+                                color: 'bg-yellow-600',
+                                emoji: '🛡️',
+                                title: 'Level 1 Protection Active',
+                                desc: 'Position reached +3% profit. Stop loss moved to -1% (entry price - 1%). Max loss now limited to $' + (pos.entry_price * 0.01 * pos.quantity * pos.leverage).toFixed(2)
+                            },
+                            2: {
+                                text: 'T-Stop L2',
+                                color: 'bg-green-600',
+                                emoji: '✅',
+                                title: 'Breakeven Protection',
+                                desc: 'Position reached +5% profit. Stop loss at entry price (0%). You cannot lose money anymore!'
+                            },
+                            3: {
+                                text: 'T-Stop L3',
+                                color: 'bg-emerald-600',
+                                emoji: '🔒',
+                                title: 'Profit Locked +3%',
+                                desc: 'Position reached +8% profit. Stop loss moved to +3%. Minimum profit guaranteed: $' + (pos.entry_price * 0.03 * pos.quantity * pos.leverage).toFixed(2)
+                            },
+                            4: {
+                                text: 'T-Stop L4',
+                                color: 'bg-teal-600',
+                                emoji: '💎',
+                                title: 'Big Profit Locked +6%',
+                                desc: 'Position reached +12% profit. Stop loss moved to +6%. Minimum profit guaranteed: $' + (pos.entry_price * 0.06 * pos.quantity * pos.leverage).toFixed(2)
+                            }
                         };
-                        const badge = trailingLabels[pos.trailing_level];
-                        trailingBadge = `<div class="${badge.color} text-white px-2 py-1 rounded-full text-xs" title="${badge.desc}">${badge.text}</div>`;
+                        const badge = trailingInfo[pos.trailing_level];
+                        trailingBadge = `
+                            <div class="relative group inline-block">
+                                <div class="${badge.color} text-white px-2 py-1 rounded-full text-xs font-semibold cursor-help flex items-center gap-1">
+                                    <span>${badge.emoji}</span>
+                                    <span>${badge.text}</span>
+                                </div>
+                                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-dark-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-64 shadow-xl">
+                                    <div class="font-bold mb-1 text-yellow-400">${badge.title}</div>
+                                    <div class="text-gray-300">${badge.desc}</div>
+                                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-dark-900"></div>
+                                </div>
+                            </div>
+                        `;
                     }
 
                     return `
