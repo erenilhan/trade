@@ -96,6 +96,10 @@ class MultiCoinAIService
         // Get all open positions to skip them in market data collection
         $openPositionSymbols = Position::active()->pluck('symbol')->toArray();
 
+        // PRE-FILTER: Only send "interesting" coins to AI (saves tokens!)
+        $enablePreFiltering = BotSetting::get('enable_pre_filtering', true);
+        $filteredCoins = [];
+
         // Add each coin's data
         foreach ($allMarketData as $symbol => $data) {
             if (!$data) continue;
@@ -109,6 +113,32 @@ class MultiCoinAIService
             // Skip BTC, ETH, and BNB if cash is low
             if ($skipExpensiveCoins && in_array($symbol, ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'])) {
                 continue;
+            }
+
+            // PRE-FILTERING: Check if coin has potential setup (save AI tokens)
+            if ($enablePreFiltering) {
+                $data3m = $data['3m'];
+                $data4h = $data['4h'];
+
+                // Quick basic checks - if ALL fail, skip this coin
+                $priceAboveEma = $data3m['price'] > ($data3m['ema20'] * 1.003); // Price > EMA20 by 0.3%
+                $macdPositive = ($data3m['macd'] ?? 0) > ($data3m['macd_signal'] ?? 0);
+                $rsiOk = ($data3m['rsi7'] ?? 0) >= 35 && ($data3m['rsi7'] ?? 0) <= 75;
+                $trendOk = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0) * 0.999;
+
+                $passedChecks = 0;
+                if ($priceAboveEma) $passedChecks++;
+                if ($macdPositive) $passedChecks++;
+                if ($rsiOk) $passedChecks++;
+                if ($trendOk) $passedChecks++;
+
+                // Need at least 2 out of 4 criteria to send to AI
+                if ($passedChecks < 2) {
+                    Log::info("⏭️ Pre-filtered {$symbol} - only {$passedChecks}/4 criteria met");
+                    continue;
+                }
+
+                Log::info("✅ {$symbol} passed pre-filter ({$passedChecks}/4 criteria)");
             }
 
             $data3m = $data['3m'];

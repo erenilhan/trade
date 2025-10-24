@@ -9,31 +9,18 @@ class MarketDataService
 {
     private BinanceService $binance;
 
-    // Default supported coins (fallback) - Top 10
-    private const array DEFAULT_SUPPORTED_COINS = [
-        'BTC/USDT',
-        'ETH/USDT',
-        'SOL/USDT',
-        'BNB/USDT',
-        'XRP/USDT',
-        'DOGE/USDT',
-        'ADA/USDT',   // Cardano
-        'AVAX/USDT',  // Avalanche
-        'LINK/USDT',  // Chainlink
-        'DOT/USDT',   // Polkadot
-    ];
-
     public function __construct(BinanceService $binance)
     {
         $this->binance = $binance;
     }
 
     /**
-     * Get supported coins from BotSetting or default
+     * Get supported coins from BotSetting or config default
      */
     public static function getSupportedCoins(): array
     {
-        return \App\Models\BotSetting::get('supported_coins', self::DEFAULT_SUPPORTED_COINS);
+        $defaultCoins = config('trading.default_active_pairs', array_keys(config('trading.supported_pairs', [])));
+        return \App\Models\BotSetting::get('supported_coins', $defaultCoins);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\BotSetting;
 use App\Models\Position;
 use App\Services\BinanceService;
 use App\Services\MarketDataService;
@@ -144,17 +145,63 @@ class MonitorPositions extends Command
             $this->warn("    ⚠️ Could not check trend: " . $e->getMessage());
         }
 
-        // 5. TRAILING STOP (Move stop loss to breakeven if +5% profit)
+        // 5. MULTI-LEVEL TRAILING STOP (Protect profits as position grows)
         $pnlPercent = (($currentPrice - $entryPrice) / $entryPrice) * 100 * $position->leverage;
+        $originalStopLoss = $exitPlan['stop_loss'] ?? null;
+        $trailingUpdated = false;
 
-        if ($pnlPercent >= 5 && $stopLoss && $stopLoss < $entryPrice) {
-            // Move stop to entry (risk-free)
-            $exitPlan['stop_loss'] = $entryPrice;
-            $position->update(['exit_plan' => $exitPlan]);
-            $this->info("    🔒 Trailing Stop: Stop moved to breakeven (\${$entryPrice})");
+        // Get trailing stop settings from BotSetting (dynamic!)
+        $l4Trigger = BotSetting::get('trailing_stop_l4_trigger', 12);
+        $l4Target = BotSetting::get('trailing_stop_l4_target', 6);
+        $l3Trigger = BotSetting::get('trailing_stop_l3_trigger', 8);
+        $l3Target = BotSetting::get('trailing_stop_l3_target', 3);
+        $l2Trigger = BotSetting::get('trailing_stop_l2_trigger', 5);
+        $l2Target = BotSetting::get('trailing_stop_l2_target', 0);
+        $l1Trigger = BotSetting::get('trailing_stop_l1_trigger', 3);
+        $l1Target = BotSetting::get('trailing_stop_l1_target', -1);
+
+        if ($pnlPercent >= $l4Trigger) {
+            // Level 4: Lock in big profit
+            $newStop = $entryPrice * (1 + ($l4Target / 100));
+            if (!$stopLoss || $newStop > $stopLoss) {
+                $exitPlan['stop_loss'] = $newStop;
+                $position->update(['exit_plan' => $exitPlan]);
+                $this->info("    🔒🔒🔒 Trailing Stop L4: Stop moved to +{$l4Target}% (\${$newStop})");
+                $trailingUpdated = true;
+            }
+        } elseif ($pnlPercent >= $l3Trigger) {
+            // Level 3: Lock in profit
+            $newStop = $entryPrice * (1 + ($l3Target / 100));
+            if (!$stopLoss || $newStop > $stopLoss) {
+                $exitPlan['stop_loss'] = $newStop;
+                $position->update(['exit_plan' => $exitPlan]);
+                $this->info("    🔒🔒 Trailing Stop L3: Stop moved to +{$l3Target}% (\${$newStop})");
+                $trailingUpdated = true;
+            }
+        } elseif ($pnlPercent >= $l2Trigger) {
+            // Level 2: Move to breakeven or custom target
+            $newStop = $entryPrice * (1 + ($l2Target / 100));
+            if (!$stopLoss || $newStop > $stopLoss) {
+                $exitPlan['stop_loss'] = $newStop;
+                $position->update(['exit_plan' => $exitPlan]);
+                $targetLabel = $l2Target == 0 ? "breakeven" : "{$l2Target}%";
+                $this->info("    🔒 Trailing Stop L2: Stop moved to {$targetLabel} (\${$newStop})");
+                $trailingUpdated = true;
+            }
+        } elseif ($pnlPercent >= $l1Trigger) {
+            // Level 1: Reduce risk
+            $newStop = $entryPrice * (1 + ($l1Target / 100));
+            if (!$stopLoss || $newStop > $stopLoss) {
+                $exitPlan['stop_loss'] = $newStop;
+                $position->update(['exit_plan' => $exitPlan]);
+                $this->info("    🔒 Trailing Stop L1: Stop moved to {$l1Target}% (\${$newStop})");
+                $trailingUpdated = true;
+            }
         }
 
-        $this->line("    ✓ Position OK (PNL: {$pnlPercent}%)");
+        if (!$trailingUpdated) {
+            $this->line("    ✓ Position OK (PNL: " . number_format($pnlPercent, 2) . "%)");
+        }
     }
 
     private function closePosition(Position $position, string $reason, float $exitPrice): void

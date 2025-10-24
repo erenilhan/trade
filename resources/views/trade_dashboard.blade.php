@@ -205,7 +205,13 @@
                             </li>
                             <li class="flex items-start gap-2">
                                 <span class="text-blue-400 mt-1">🔒</span>
-                                <span><strong>Trailing Stop:</strong> Move stop to breakeven at +5% profit</span>
+                                <span><strong>Multi-Level Trailing Stop:</strong> Automatically protect profits as position grows</span>
+                            </li>
+                            <li class="ml-8 text-sm text-gray-400">
+                                Level 1 @ +3% profit → Stop moves to -1% (reduce risk)<br>
+                                Level 2 @ +5% profit → Stop moves to breakeven (0%)<br>
+                                Level 3 @ +8% profit → Stop moves to +3% (lock profit)<br>
+                                Level 4 @ +12% profit → Stop moves to +6% (lock big profit)
                             </li>
                         </ul>
                     </div>
@@ -379,11 +385,27 @@
                     const positionSize = pos.position_size || (pos.quantity * pos.entry_price);
                     const invested = positionSize / pos.leverage; // Real capital used (with leverage)
 
+                    // Trailing stop badge
+                    let trailingBadge = '';
+                    if (pos.trailing_level) {
+                        const trailingLabels = {
+                            1: { text: 'T-Stop L1', color: 'bg-yellow-600', desc: 'Risk -1%' },
+                            2: { text: 'T-Stop L2', color: 'bg-green-600', desc: 'Breakeven' },
+                            3: { text: 'T-Stop L3', color: 'bg-emerald-600', desc: 'Locked +3%' },
+                            4: { text: 'T-Stop L4', color: 'bg-teal-600', desc: 'Locked +6%' }
+                        };
+                        const badge = trailingLabels[pos.trailing_level];
+                        trailingBadge = `<div class="${badge.color} text-white px-2 py-1 rounded-full text-xs" title="${badge.desc}">${badge.text}</div>`;
+                    }
+
                     return `
                         <div class="position-card bg-dark-800 border border-dark-700 rounded-lg p-4 hover:shadow-lg transition-shadow">
                             <div class="position-header flex justify-between items-center pb-2 mb-2 border-b border-dark-700">
                                 <div class="symbol font-semibold text-lg text-white">${pos.symbol}</div>
-                                <div class="leverage-badge bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
+                                <div class="flex gap-2">
+                                    ${trailingBadge}
+                                    <div class="leverage-badge bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
+                                </div>
                             </div>
                             <div class="position-row flex justify-between py-1">
                                 <span class="position-label text-gray-400">💵 Capital</span>

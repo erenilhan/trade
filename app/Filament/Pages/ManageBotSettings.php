@@ -52,7 +52,16 @@ class ManageBotSettings extends Page implements HasForms
             'max_leverage' => BotSetting::get('max_leverage', 2),
             'take_profit_percent' => BotSetting::get('take_profit_percent', 5),
             'stop_loss_percent' => BotSetting::get('stop_loss_percent', 3),
-            'supported_coins' => BotSetting::get('supported_coins', ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT']),
+            'supported_coins' => BotSetting::get('supported_coins', config('trading.default_active_pairs', [])),
+            // Trailing stops
+            'trailing_stop_l1_trigger' => BotSetting::get('trailing_stop_l1_trigger', 3),
+            'trailing_stop_l1_target' => BotSetting::get('trailing_stop_l1_target', -1),
+            'trailing_stop_l2_trigger' => BotSetting::get('trailing_stop_l2_trigger', 5),
+            'trailing_stop_l2_target' => BotSetting::get('trailing_stop_l2_target', 0),
+            'trailing_stop_l3_trigger' => BotSetting::get('trailing_stop_l3_trigger', 8),
+            'trailing_stop_l3_target' => BotSetting::get('trailing_stop_l3_target', 3),
+            'trailing_stop_l4_trigger' => BotSetting::get('trailing_stop_l4_trigger', 12),
+            'trailing_stop_l4_target' => BotSetting::get('trailing_stop_l4_target', 6),
         ];
     }
 
@@ -171,25 +180,95 @@ class ManageBotSettings extends Page implements HasForms
                         Select::make('supported_coins')
                             ->label('Active Trading Pairs')
                             ->multiple()
-                            ->options([
-                                'BTC/USDT' => 'Bitcoin (BTC/USDT)',
-                                'ETH/USDT' => 'Ethereum (ETH/USDT)',
-                                'SOL/USDT' => 'Solana (SOL/USDT)',
-                                'BNB/USDT' => 'BNB (BNB/USDT)',
-                                'XRP/USDT' => 'Ripple (XRP/USDT)',
-                                'BTC/USDT',
-                                'DOGE/USDT' => 'Dogecoin (DOGE/USDT)',
-                                'ADA/USDT' => 'Cardano (ADA/USDT)',
-                                'AVAX/USDT' => 'Avalanche (AVAX/USDT)',
-                                'LINK/USDT' => 'Chainlink (LINK/USDT)',
-                                'DOT/USDT' => 'Polkadot (DOT/USDT)',
-                            ])
-                            ->default(['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT'])
-                            ->helperText('Select which coins to trade (multi-coin system only)')
+                            ->options(function () {
+                                $pairs = config('trading.supported_pairs', []);
+                                return collect($pairs)->mapWithKeys(fn($name, $pair) => [$pair => "$name ($pair)"])->toArray();
+                            })
+                            ->default(config('trading.default_active_pairs', []))
+                            ->helperText('Select which coins to trade (' . count(config('trading.supported_pairs', [])) . ' coins available, pre-filtering enabled to save AI tokens)')
+                            ->searchable()
                             ->live()
                             ->afterStateUpdated(fn($state) => $this->saveSetting('supported_coins', $state)),
                     ])
                     ->columns(1),
+
+                Section::make('Trailing Stop Levels')
+                    ->description('Multi-level trailing stop configuration - automatically protect profits as positions grow')
+                    ->schema([
+                        TextInput::make('trailing_stop_l1_trigger')
+                            ->label('Level 1 Trigger (% profit)')
+                            ->numeric()
+                            ->default(3)
+                            ->suffix('%')
+                            ->helperText('Activate Level 1 when profit reaches this %')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_trigger', $state)),
+
+                        TextInput::make('trailing_stop_l1_target')
+                            ->label('Level 1 Target (% from entry)')
+                            ->numeric()
+                            ->default(-1)
+                            ->suffix('%')
+                            ->helperText('Move stop loss to this % from entry (negative = loss, 0 = breakeven, positive = profit)')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_target', $state)),
+
+                        TextInput::make('trailing_stop_l2_trigger')
+                            ->label('Level 2 Trigger (% profit)')
+                            ->numeric()
+                            ->default(5)
+                            ->suffix('%')
+                            ->helperText('Activate Level 2 when profit reaches this %')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_trigger', $state)),
+
+                        TextInput::make('trailing_stop_l2_target')
+                            ->label('Level 2 Target (% from entry)')
+                            ->numeric()
+                            ->default(0)
+                            ->suffix('%')
+                            ->helperText('Typically breakeven (0%)')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_target', $state)),
+
+                        TextInput::make('trailing_stop_l3_trigger')
+                            ->label('Level 3 Trigger (% profit)')
+                            ->numeric()
+                            ->default(8)
+                            ->suffix('%')
+                            ->helperText('Activate Level 3 when profit reaches this %')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_trigger', $state)),
+
+                        TextInput::make('trailing_stop_l3_target')
+                            ->label('Level 3 Target (% from entry)')
+                            ->numeric()
+                            ->default(3)
+                            ->suffix('%')
+                            ->helperText('Lock in profit at this %')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_target', $state)),
+
+                        TextInput::make('trailing_stop_l4_trigger')
+                            ->label('Level 4 Trigger (% profit)')
+                            ->numeric()
+                            ->default(12)
+                            ->suffix('%')
+                            ->helperText('Activate Level 4 when profit reaches this %')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_trigger', $state)),
+
+                        TextInput::make('trailing_stop_l4_target')
+                            ->label('Level 4 Target (% from entry)')
+                            ->numeric()
+                            ->default(6)
+                            ->suffix('%')
+                            ->helperText('Lock in big profit at this %')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_target', $state)),
+                    ])
+                    ->columns(2)
+                    ->collapsible(),
             ])
             ->statePath('data');
     }

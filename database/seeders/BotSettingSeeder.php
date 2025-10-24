@@ -13,6 +13,7 @@ class BotSettingSeeder extends Seeder
     public function run(): void
     {
         $settings = [
+            // Bot Control
             [
                 'key' => 'bot_enabled',
                 'value' => true,
@@ -20,16 +21,44 @@ class BotSettingSeeder extends Seeder
                 'description' => 'Enable/disable auto trading',
             ],
             [
+                'key' => 'use_ai',
+                'value' => true,
+                'type' => 'bool',
+                'description' => 'Use AI for trading decisions',
+            ],
+
+            // AI Configuration
+            [
+                'key' => 'ai_provider',
+                'value' => 'openrouter',
+                'type' => 'string',
+                'description' => 'AI provider (openrouter/deepseek/openai)',
+            ],
+            [
+                'key' => 'ai_model',
+                'value' => 'deepseek/deepseek-chat-v3.1',
+                'type' => 'string',
+                'description' => 'AI model name',
+            ],
+
+            // Trading Parameters
+            [
                 'key' => 'initial_capital',
                 'value' => 9.0,
                 'type' => 'float',
                 'description' => 'Starting capital for ROI calculation (USDT)',
             ],
             [
+                'key' => 'position_size_usdt',
+                'value' => 100,
+                'type' => 'int',
+                'description' => 'Position size in USDT',
+            ],
+            [
                 'key' => 'max_leverage',
                 'value' => 2,
                 'type' => 'int',
-                'description' => 'Maximum leverage (1–20)',
+                'description' => 'Maximum leverage (1-125)',
             ],
             [
                 'key' => 'take_profit_percent',
@@ -43,29 +72,79 @@ class BotSettingSeeder extends Seeder
                 'type' => 'int',
                 'description' => 'Stop loss threshold %',
             ],
+
+            // Multi-Coin Settings (using config default)
             [
-                'key' => 'position_size_usdt',
-                'value' => 100,
-                'type' => 'int',
-                'description' => 'Position size in USDT',
+                'key' => 'supported_coins',
+                'value' => json_encode(config('trading.default_active_pairs', [
+                    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT'
+                ])),
+                'type' => 'json',
+                'description' => 'Active trading pairs for multi-coin system',
             ],
+
+            // Pre-Filtering
             [
-                'key' => 'use_ai',
+                'key' => 'enable_pre_filtering',
                 'value' => true,
                 'type' => 'bool',
-                'description' => 'Use AI for decisions',
+                'description' => 'Enable pre-filtering to reduce AI token usage',
+            ],
+
+            // Trailing Stop Level 1
+            [
+                'key' => 'trailing_stop_l1_trigger',
+                'value' => 3,
+                'type' => 'int',
+                'description' => 'Level 1: Activate at +3% profit',
             ],
             [
-                'key' => 'symbols',
-                'value' => json_encode(['BTC/USDT', 'ETH/USDT', 'SOL/USDT']),
-                'type' => 'json',
-                'description' => 'Trading symbols',
+                'key' => 'trailing_stop_l1_target',
+                'value' => -1,
+                'type' => 'int',
+                'description' => 'Level 1: Move stop to -1%',
+            ],
+
+            // Trailing Stop Level 2
+            [
+                'key' => 'trailing_stop_l2_trigger',
+                'value' => 5,
+                'type' => 'int',
+                'description' => 'Level 2: Activate at +5% profit',
             ],
             [
-                'key' => 'ai_provider',
-                'value' => 'openrouter',
-                'type' => 'string',
-                'description' => 'AI provider',
+                'key' => 'trailing_stop_l2_target',
+                'value' => 0,
+                'type' => 'int',
+                'description' => 'Level 2: Move stop to breakeven (0%)',
+            ],
+
+            // Trailing Stop Level 3
+            [
+                'key' => 'trailing_stop_l3_trigger',
+                'value' => 8,
+                'type' => 'int',
+                'description' => 'Level 3: Activate at +8% profit',
+            ],
+            [
+                'key' => 'trailing_stop_l3_target',
+                'value' => 3,
+                'type' => 'int',
+                'description' => 'Level 3: Move stop to +3% (lock profit)',
+            ],
+
+            // Trailing Stop Level 4
+            [
+                'key' => 'trailing_stop_l4_trigger',
+                'value' => 12,
+                'type' => 'int',
+                'description' => 'Level 4: Activate at +12% profit',
+            ],
+            [
+                'key' => 'trailing_stop_l4_target',
+                'value' => 6,
+                'type' => 'int',
+                'description' => 'Level 4: Move stop to +6% (lock big profit)',
             ],
         ];
 
@@ -79,5 +158,9 @@ class BotSettingSeeder extends Seeder
                 ]
             );
         }
+
+        $this->command->info('✅ Bot settings seeded successfully!');
+        $this->command->info('📊 Default coins: ' . implode(', ', config('trading.default_active_pairs', [])));
+        $this->command->info('🔒 Trailing stops: 4 levels configured');
     }
 }

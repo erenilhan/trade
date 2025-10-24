@@ -149,6 +149,22 @@ class TradeDashboardController extends Controller
                 $positionSize = $pos->quantity * $entryPrice;
                 $notionalSize = $pos->notional_usd ?? ($positionSize * $pos->leverage);
 
+                // Detect trailing stop level
+                $trailingLevel = null;
+                if ($stopLoss && $entryPrice > 0) {
+                    $stopDiff = (($stopLoss - $entryPrice) / $entryPrice) * 100;
+
+                    if ($stopDiff >= 5.5) {
+                        $trailingLevel = 4; // Level 4: Stop at +6%
+                    } elseif ($stopDiff >= 2.5) {
+                        $trailingLevel = 3; // Level 3: Stop at +3%
+                    } elseif ($stopDiff >= -0.5 && $stopDiff <= 0.5) {
+                        $trailingLevel = 2; // Level 2: Breakeven
+                    } elseif ($stopDiff >= -1.5 && $stopDiff < -0.5) {
+                        $trailingLevel = 1; // Level 1: -1%
+                    }
+                }
+
                 return [
                     'symbol' => $pos->symbol,
                     'side' => $pos->side,
@@ -164,6 +180,7 @@ class TradeDashboardController extends Controller
                     'opened_at' => $pos->opened_at?->diffForHumans(),
                     'price_updated_at' => $pos->price_updated_at?->diffForHumans() ?? 'Never',
                     'liquidation_price' => $pos->liquidation_price,
+                    'trailing_level' => $trailingLevel,
                     'targets' => [
                         'profit_target' => $profitTarget,
                         'stop_loss' => $stopLoss,
