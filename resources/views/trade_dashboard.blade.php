@@ -105,7 +105,8 @@
             <div class="stat-card bg-dark-800 rounded-lg p-6 text-center relative group cursor-help">
                 <div class="stat-value text-2xl font-bold text-emerald-400" id="trailing-stops">0</div>
                 <div class="stat-label text-sm text-gray-400 mt-1">🛡️ Protected</div>
-                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-dark-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-72 shadow-xl">
+                <div class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-4 py-3 bg-dark-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-72 shadow-xl">
+                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-dark-900"></div>
                     <div class="font-bold mb-2 text-emerald-400">🛡️ Trailing Stop Protection</div>
                     <div class="text-gray-300 text-xs space-y-1">
                         <div><span class="text-yellow-400">🛡️ L1:</span> Position hit +3%, max loss -1%</div>
@@ -116,7 +117,6 @@
                     <div class="text-gray-400 text-xs mt-2 pt-2 border-t border-dark-700">
                         Positions with active trailing stop protection
                     </div>
-                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-dark-900"></div>
                 </div>
             </div>
         </div>
@@ -446,10 +446,10 @@
                                     <span>${badge.emoji}</span>
                                     <span>${badge.text}</span>
                                 </div>
-                                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-dark-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-64 shadow-xl">
+                                <div class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-dark-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-64 shadow-xl">
+                                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-dark-900"></div>
                                     <div class="font-bold mb-1 text-yellow-400">${badge.title}</div>
                                     <div class="text-gray-300">${badge.desc}</div>
-                                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-dark-900"></div>
                                 </div>
                             </div>
                         `;
@@ -548,49 +548,89 @@
                 // Process decisions from AI logs (limit to 10 total decisions)
                 let aiLogItems = [];
                 let decisionCount = 0;
+                let totalCoinsAnalyzed = 0;
+                let preFilteredCount = 0;
                 const maxDecisions = 10;
 
                 for (const log of ai_logs) {
                     if (decisionCount >= maxDecisions) break;
 
-                    if (log.decisions && log.decisions.length > 0) {
-                        for (const decision of log.decisions) {
-                            if (decisionCount >= maxDecisions) break;
-                            // Color code actions
-                            let actionClass = 'text-gray-400';
-                            let actionBadge = decision.action.toUpperCase();
-                            if (decision.action === 'buy') {
-                                actionClass = 'text-green-400 font-bold';
-                                actionBadge = '🟢 BUY';
-                            } else if (decision.action === 'close_profitable') {
-                                actionClass = 'text-blue-400 font-bold';
-                                actionBadge = '🔵 CLOSE';
-                            } else if (decision.action === 'stop_loss') {
-                                actionClass = 'text-red-400 font-bold';
-                                actionBadge = '🔴 STOP';
-                            } else if (decision.action === 'hold') {
-                                actionClass = 'text-yellow-400';
-                                actionBadge = '⚪ HOLD';
-                            }
-
-                            aiLogItems.push(`
-                                <div class="history-item grid grid-cols-5 p-3 border-b border-dark-700 hover:bg-dark-700/50 cursor-pointer ai-decision"
-                                     data-provider="${log.provider.replace(/"/g, '&quot;')}"
-                                     data-decision="${encodeURIComponent(JSON.stringify(decision))}"
-                                     data-created-at="${log.created_at.replace(/"/g, '&quot;')}">
-                                    <div class="font-medium text-white">${decision.symbol}</div>
-                                    <div class="${actionClass}">${actionBadge}</div>
-                                    <div class="text-gray-300">${(decision.confidence * 100).toFixed(0)}%</div>
-                                    <div class="text-gray-400 text-sm">${log.created_at}</div>
-                                    <div class="text-gray-400 truncate text-sm" title="${decision.reasoning}">${decision.reasoning.substring(0, 50)}...</div>
+                    // Check if this run had no decisions (pre-filtered or market too quiet)
+                    if (!log.decisions || log.decisions.length === 0) {
+                        // AI ran but made no decisions - show info message
+                        aiLogItems.push(`
+                            <div class="col-span-5 bg-dark-700/50 p-4 border-b border-dark-700 rounded">
+                                <div class="flex items-center gap-3">
+                                    <div class="text-blue-400 text-2xl">ℹ️</div>
+                                    <div>
+                                        <div class="text-gray-300 font-semibold">AI Analysis Completed - No Trades</div>
+                                        <div class="text-gray-400 text-sm mt-1">
+                                            ${log.created_at} - All coins filtered out (low confidence setups) or market volatility too low
+                                        </div>
+                                        <div class="text-yellow-400 text-xs mt-2">
+                                            ✅ Pre-filtering active: Only quality setups sent to AI
+                                        </div>
+                                    </div>
                                 </div>
-                            `);
-                            decisionCount++;
+                            </div>
+                        `);
+                        decisionCount++; // Count as one "item" in display
+                        continue;
+                    }
+
+                    totalCoinsAnalyzed += log.decisions.length;
+
+                    for (const decision of log.decisions) {
+                        if (decisionCount >= maxDecisions) break;
+                        // Color code actions
+                        let actionClass = 'text-gray-400';
+                        let actionBadge = decision.action.toUpperCase();
+                        if (decision.action === 'buy') {
+                            actionClass = 'text-green-400 font-bold';
+                            actionBadge = '🟢 BUY';
+                        } else if (decision.action === 'close_profitable') {
+                            actionClass = 'text-blue-400 font-bold';
+                            actionBadge = '🔵 CLOSE';
+                        } else if (decision.action === 'stop_loss') {
+                            actionClass = 'text-red-400 font-bold';
+                            actionBadge = '🔴 STOP';
+                        } else if (decision.action === 'hold') {
+                            actionClass = 'text-yellow-400';
+                            actionBadge = '⚪ HOLD';
                         }
+
+                        aiLogItems.push(`
+                            <div class="history-item grid grid-cols-5 p-3 border-b border-dark-700 hover:bg-dark-700/50 cursor-pointer ai-decision"
+                                 data-provider="${log.provider.replace(/"/g, '&quot;')}"
+                                 data-decision="${encodeURIComponent(JSON.stringify(decision))}"
+                                 data-created-at="${log.created_at.replace(/"/g, '&quot;')}">
+                                <div class="font-medium text-white">${decision.symbol}</div>
+                                <div class="${actionClass}">${actionBadge}</div>
+                                <div class="text-gray-300">${(decision.confidence * 100).toFixed(0)}%</div>
+                                <div class="text-gray-400 text-sm">${log.created_at}</div>
+                                <div class="text-gray-400 truncate text-sm" title="${decision.reasoning}">${decision.reasoning.substring(0, 50)}...</div>
+                            </div>
+                        `);
+                        decisionCount++;
                     }
                 }
-                
+
+                // Add info banner at the top if we have decisions
+                let infoBanner = '';
+                if (totalCoinsAnalyzed > 0 && totalCoinsAnalyzed < 15) {
+                    preFilteredCount = 15 - totalCoinsAnalyzed;
+                    infoBanner = `
+                        <div class="bg-blue-900/20 border border-blue-800 p-3 mb-3 rounded">
+                            <div class="flex items-center gap-2 text-blue-300 text-sm">
+                                <span>⚡</span>
+                                <span><strong>Pre-filtering active:</strong> ${totalCoinsAnalyzed} coins analyzed, ${preFilteredCount} filtered out (saved ~${Math.round((preFilteredCount / 15) * 100)}% AI tokens)</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 aiLogsEl.innerHTML = `
+                    ${infoBanner}
                     <div class="grid grid-cols-5 bg-dark-700 text-gray-300 font-semibold p-3">
                         <div>Symbol</div>
                         <div>Action</div>
