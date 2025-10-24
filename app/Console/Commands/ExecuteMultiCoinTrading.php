@@ -127,52 +127,66 @@ class ExecuteMultiCoinTrading extends Command
             return;
         }
 
-        // COOLDOWN CHECK: Don't trade same coin if recently traded (last 1 hour minimum)
+        // DYNAMIC COOLDOWN CHECK: Calculate based on volatility
+        $requiredCooldown = $this->calculateDynamicCooldown($symbol);
         $lastTrade = Position::where('symbol', $symbol)
             ->orderBy('opened_at', 'desc')
             ->first();
 
-        if ($lastTrade && $lastTrade->opened_at->diffInMinutes(now()) < 60) {
+        if ($lastTrade && $lastTrade->opened_at->diffInMinutes(now()) < $requiredCooldown) {
             $minutesAgo = $lastTrade->opened_at->diffInMinutes(now());
-            $this->warn("  ⚠️ Skipping {$symbol}: Cooldown active ({$minutesAgo}min ago, need 60min)");
-            Log::info("⏱️ Cooldown: Skipping {$symbol} - last trade {$minutesAgo}min ago");
+            $this->warn("  ⚠️ Skipping {$symbol}: Cooldown active ({$minutesAgo}min ago, need {$requiredCooldown}min)");
+            Log::info("⏱️ Cooldown: Skipping {$symbol} - last trade {$minutesAgo}min ago, need {$requiredCooldown}min");
             return;
         }
 
-        // MARKET CAP DIVERSIFICATION: Limit positions per market cap segment
+        // DYNAMIC MARKET CAP DIVERSIFICATION: Limit positions per market cap segment
         $openPositions = Position::active()->get();
-        $largeCap = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'];
-        $midCap = ['SOL/USDT', 'ADA/USDT', 'AVAX/USDT'];
-        $smallCap = ['XRP/USDT', 'DOGE/USDT', 'LINK/USDT', 'DOT/USDT'];
+        $marketCapConfig = config('trading.market_cap_limits');
+        $largeCap = $marketCapConfig['large_cap'];
+        $midCap = $marketCapConfig['mid_cap'];
+        $smallCap = $marketCapConfig['small_cap'];
+
+        // Get volatility-adjusted limits
+        $volatilityLevel = $this->getVolatilityLevel($symbol);
+        $limits = $volatilityLevel === 'high'
+            ? $marketCapConfig['high_volatility']
+            : $marketCapConfig['normal'];
 
         $largeCapCount = $openPositions->whereIn('symbol', $largeCap)->count();
         $midCapCount = $openPositions->whereIn('symbol', $midCap)->count();
         $smallCapCount = $openPositions->whereIn('symbol', $smallCap)->count();
 
-        // Max 3 large cap, 3 mid cap, 4 small cap
-        if (in_array($symbol, $largeCap) && $largeCapCount >= 3) {
-            $this->warn("  ⚠️ Skipping {$symbol}: Max large cap positions reached (3/3)");
+        // Check limits based on volatility
+        if (in_array($symbol, $largeCap) && $largeCapCount >= $limits['max_large_cap']) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Max large cap positions reached ({$largeCapCount}/{$limits['max_large_cap']})");
             return;
         }
 
-        if (in_array($symbol, $midCap) && $midCapCount >= 3) {
-            $this->warn("  ⚠️ Skipping {$symbol}: Max mid cap positions reached (3/3)");
+        if (in_array($symbol, $midCap) && $midCapCount >= $limits['max_mid_cap']) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Max mid cap positions reached ({$midCapCount}/{$limits['max_mid_cap']})");
             return;
         }
 
-        if (in_array($symbol, $smallCap) && $smallCapCount >= 4) {
-            $this->warn("  ⚠️ Skipping {$symbol}: Max small cap positions reached (4/4)");
+        if (in_array($symbol, $smallCap) && $smallCapCount >= $limits['max_small_cap']) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Max small cap positions reached ({$smallCapCount}/{$limits['max_small_cap']})");
             return;
         }
 
-        // Calculate position size
-        $positionSize = BotSetting::get('position_size_usdt', 100);
+        // DYNAMIC POSITION SIZE: Calculate based on account balance
+        $positionSize = $this->calculateDynamicPositionSize($availableCash);
         if ($availableCash < $positionSize) {
             $this->warn("  ⚠️ Insufficient cash (need \${$positionSize}, have \${$availableCash})");
             return;
         }
 
-        $leverage = BotSetting::get('max_leverage', 2);
+        // LEVERAGE: Use AI's recommendation if available, otherwise use dynamic calculation
+        $leverage = $decision['leverage'] ?? $this->calculateDynamicLeverage($symbol);
+
+        // Validate leverage (2-10x range)
+        $maxLeverage = BotSetting::get('max_leverage', 10);
+        $leverage = max(2, min($maxLeverage, $leverage));
+
         $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
         $targetPrice = $decision['target_price'] ?? $entryPrice * 1.05;
         $stopPrice = $decision['stop_price'] ?? $entryPrice * 0.97;
@@ -233,6 +247,103 @@ class ExecuteMultiCoinTrading extends Command
             'entry_price' => $entryPrice,
             'leverage' => $leverage,
         ]);
+    }
+
+    /**
+     * Calculate dynamic position size based on account balance
+     */
+    private function calculateDynamicPositionSize(float $availableCash): float
+    {
+        if (!config('trading.dynamic_position_sizing.enabled', true)) {
+            return BotSetting::get('position_size_usdt', 100);
+        }
+
+        $riskPercent = config('trading.dynamic_position_sizing.risk_percent', 2.5);
+        $minSize = config('trading.dynamic_position_sizing.min_position_size', 10);
+        $maxSize = config('trading.dynamic_position_sizing.max_position_size', 500);
+
+        $positionSize = $availableCash * ($riskPercent / 100);
+        $positionSize = max($minSize, min($maxSize, $positionSize));
+
+        return round($positionSize, 2);
+    }
+
+    /**
+     * Calculate dynamic leverage based on volatility
+     */
+    private function calculateDynamicLeverage(string $symbol): int
+    {
+        if (!config('trading.dynamic_leverage.enabled', true)) {
+            return BotSetting::get('max_leverage', 2);
+        }
+
+        $volatilityLevel = $this->getVolatilityLevel($symbol);
+
+        return match($volatilityLevel) {
+            'low' => config('trading.dynamic_leverage.low_volatility_leverage', 5),
+            'high' => config('trading.dynamic_leverage.high_volatility_leverage', 2),
+            default => config('trading.dynamic_leverage.medium_volatility_leverage', 3),
+        };
+    }
+
+    /**
+     * Calculate dynamic cooldown based on volatility
+     */
+    private function calculateDynamicCooldown(string $symbol): int
+    {
+        if (!config('trading.dynamic_cooldown.enabled', true)) {
+            return 60; // Default 1 hour
+        }
+
+        $volatilityLevel = $this->getVolatilityLevel($symbol);
+
+        return match($volatilityLevel) {
+            'low' => config('trading.dynamic_cooldown.low_volatility_minutes', 120),
+            'high' => config('trading.dynamic_cooldown.high_volatility_minutes', 30),
+            default => config('trading.dynamic_cooldown.medium_volatility_minutes', 60),
+        };
+    }
+
+    /**
+     * Get volatility level for a symbol
+     * Returns: 'low', 'medium', or 'high'
+     */
+    private function getVolatilityLevel(string $symbol): string
+    {
+        try {
+            // Get recent ATR data from market_data table
+            $recentData = \App\Models\MarketData::where('symbol', $symbol)
+                ->where('timeframe', '3m')
+                ->orderBy('timestamp', 'desc')
+                ->limit(100)
+                ->get();
+
+            if ($recentData->isEmpty()) {
+                return 'medium'; // Default to medium if no data
+            }
+
+            // Get current ATR
+            $currentAtr = $recentData->first()->atr14 ?? 0;
+
+            // Calculate average ATR over last 100 periods
+            $avgAtr = $recentData->avg('atr14') ?: 1;
+
+            // Calculate ratio
+            $atrRatio = $currentAtr / $avgAtr;
+
+            // Classify volatility
+            if ($atrRatio < 0.70) {
+                return 'low';
+            } elseif ($atrRatio > 1.30) {
+                return 'high';
+            } else {
+                return 'medium';
+            }
+
+        } catch (Exception $e) {
+            Log::warning("Failed to calculate volatility for {$symbol}: " . $e->getMessage());
+            return 'medium'; // Fallback to medium on error
+        }
     }
 
 }

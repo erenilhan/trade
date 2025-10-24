@@ -260,7 +260,10 @@ class TradeDashboardController extends Controller
             // Get AI model information from latest log or config
             $aiProvider = $lastAiRun?->provider ?? config('app.ai_provider', 'openrouter');
             $aiModel = $lastAiRun?->model ?? config('openrouter.model', 'deepseek/deepseek-chat-v3.1');
-            
+
+            // Calculate AI performance metrics
+            $aiPerformance = $this->calculateAiPerformance();
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -278,6 +281,7 @@ class TradeDashboardController extends Controller
                     'last_ai_run' => $lastAiRun ? $lastAiRun->created_at->diffForHumans() : 'Never',
                     'ai_provider' => $aiProvider,
                     'ai_model' => $aiModel,
+                    'ai_performance' => $aiPerformance,
                     'stats' => [
                         'open_positions' => $positions->count(),
                         'total_trades' => $totalWins + $totalLosses,
@@ -732,6 +736,84 @@ class TradeDashboardController extends Controller
         return [
             'last_ten_logs' => $lastTenAiLogs,
             'last_run_at' => $lastAiRun ? $lastAiRun->created_at->diffForHumans() : 'Never',
+        ];
+    }
+
+    /**
+     * Calculate AI performance metrics
+     */
+    private function calculateAiPerformance(): array
+    {
+        // Get all closed positions with AI confidence scores
+        $aiTrades = Position::where('is_open', false)
+            ->whereNotNull('confidence')
+            ->get();
+
+        if ($aiTrades->isEmpty()) {
+            return [
+                'total_ai_trades' => 0,
+                'avg_confidence' => 0,
+                'high_confidence_win_rate' => 0,
+                'medium_confidence_win_rate' => 0,
+                'low_confidence_win_rate' => 0,
+                'avg_confidence_wins' => 0,
+                'avg_confidence_losses' => 0,
+                'best_performing_confidence_range' => 'N/A',
+            ];
+        }
+
+        // Split by confidence levels
+        $highConfidence = $aiTrades->where('confidence', '>=', 0.80);
+        $mediumConfidence = $aiTrades->where('confidence', '>=', 0.70)->where('confidence', '<', 0.80);
+        $lowConfidence = $aiTrades->where('confidence', '<', 0.70);
+
+        // Calculate win rates per confidence level
+        $highConfWinRate = $highConfidence->count() > 0
+            ? ($highConfidence->where('realized_pnl', '>', 0)->count() / $highConfidence->count()) * 100
+            : 0;
+
+        $mediumConfWinRate = $mediumConfidence->count() > 0
+            ? ($mediumConfidence->where('realized_pnl', '>', 0)->count() / $mediumConfidence->count()) * 100
+            : 0;
+
+        $lowConfWinRate = $lowConfidence->count() > 0
+            ? ($lowConfidence->where('realized_pnl', '>', 0)->count() / $lowConfidence->count()) * 100
+            : 0;
+
+        // Average confidence for wins vs losses
+        $wins = $aiTrades->where('realized_pnl', '>', 0);
+        $losses = $aiTrades->where('realized_pnl', '<', 0);
+
+        $avgConfidenceWins = $wins->count() > 0 ? $wins->avg('confidence') : 0;
+        $avgConfidenceLosses = $losses->count() > 0 ? $losses->avg('confidence') : 0;
+
+        // Determine best performing confidence range
+        $bestRange = 'N/A';
+        $maxWinRate = max($highConfWinRate, $mediumConfWinRate, $lowConfWinRate);
+
+        if ($maxWinRate > 0) {
+            if ($highConfWinRate === $maxWinRate) {
+                $bestRange = 'High (≥80%)';
+            } elseif ($mediumConfWinRate === $maxWinRate) {
+                $bestRange = 'Medium (70-79%)';
+            } else {
+                $bestRange = 'Low (<70%)';
+            }
+        }
+
+        return [
+            'total_ai_trades' => $aiTrades->count(),
+            'avg_confidence' => round($aiTrades->avg('confidence') * 100, 2),
+            'high_confidence_win_rate' => round($highConfWinRate, 2),
+            'high_confidence_trades' => $highConfidence->count(),
+            'medium_confidence_win_rate' => round($mediumConfWinRate, 2),
+            'medium_confidence_trades' => $mediumConfidence->count(),
+            'low_confidence_win_rate' => round($lowConfWinRate, 2),
+            'low_confidence_trades' => $lowConfidence->count(),
+            'avg_confidence_wins' => round($avgConfidenceWins * 100, 2),
+            'avg_confidence_losses' => round($avgConfidenceLosses * 100, 2),
+            'best_performing_confidence_range' => $bestRange,
+            'confidence_correlation' => round(($avgConfidenceWins - $avgConfidenceLosses) * 100, 2),
         ];
     }
 }

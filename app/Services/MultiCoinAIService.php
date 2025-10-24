@@ -210,10 +210,19 @@ class MultiCoinAIService
         // Task instructions
         $prompt .= "YOUR TASK:\n";
         $prompt .= "Analyze ONLY the coins shown above (coins without open positions). Decide BUY or HOLD for each based on technical indicators.\n";
-        $prompt .= "Always include: action, reasoning, confidence (0-1), entry_price, target_price, stop_price, invalidation.\n\n";
+        $prompt .= "Always include: action, reasoning, confidence (0-1), entry_price, target_price, stop_price, invalidation, leverage.\n\n";
+
+        $prompt .= "LEVERAGE SELECTION:\n";
+        $prompt .= "Choose leverage (2-10x) based on:\n";
+        $prompt .= "- Signal strength: Strong signals = higher leverage (up to 10x)\n";
+        $prompt .= "- Volatility: High ATR = lower leverage (2-3x), Low ATR = higher leverage (5-10x)\n";
+        $prompt .= "- Trend strength: Strong ADX (>25) = can use higher leverage (7-10x)\n";
+        $prompt .= "- Risk level: Conservative = 2-3x, Moderate = 3-5x, Aggressive = 5-10x\n";
+        $prompt .= "Example: Strong uptrend + low volatility + ADX>30 + high confidence = 8-10x leverage\n";
+        $prompt .= "Example: Weak signal + high volatility + low ADX = 2-3x leverage\n\n";
 
         $prompt .= "RESPONSE FORMAT (strict JSON):\n";
-        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"hold|buy","reasoning":"...","confidence":0.75,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
+        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"hold|buy","reasoning":"...","confidence":0.75,"leverage":5,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
 
         return $prompt;
     }
