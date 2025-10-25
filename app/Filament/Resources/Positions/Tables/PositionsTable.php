@@ -2,12 +2,15 @@
 
 namespace App\Filament\Resources\Positions\Tables;
 
+use App\Models\Position;
+use App\Services\TradingService;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\BadgeColumn;
-use Filament\Tables\Columns\IconColumn;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
 class PositionsTable
@@ -17,101 +20,98 @@ class PositionsTable
         return $table
             ->columns([
                 TextColumn::make('symbol')
-                    ->searchable(),
+                    ->label('Symbol')
+                    ->searchable()
+                    ->sortable(),
+
                 TextColumn::make('side')
                     ->badge(),
-                TextColumn::make('quantity')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('entry_price')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('current_price')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('liquidation_price')
-                    ->numeric()
-                    ->sortable(),
+
                 TextColumn::make('unrealized_pnl')
+                    ->label('PNL')
                     ->numeric()
-                    ->sortable(),
-                TextColumn::make('realized_pnl')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('leverage')
-                    ->numeric()
-                    ->sortable(),
+                    ->money('USD')
+                    ->sortable()
+                    ->color(fn ($state) => $state > 0 ? 'success' : 'danger'),
+
                 TextColumn::make('notional_usd')
+                    ->label('Size (USD)')
                     ->numeric()
+                    ->money('USD')
                     ->sortable(),
-                TextColumn::make('sl_order_id')
+
+                TextColumn::make('entry_price')
+                    ->label('Entry')
                     ->numeric()
+                    ->money('USD')
                     ->sortable(),
-                TextColumn::make('tp_order_id')
+
+                TextColumn::make('current_price')
+                    ->label('Current')
                     ->numeric()
+                    ->money('USD')
                     ->sortable(),
-                IconColumn::make('is_open')
-                    ->boolean(),
+
+                TextColumn::make('leverage')
+                    ->label('Lev')
+                    ->numeric()
+                    ->formatStateUsing(fn ($state) => $state . 'x')
+                    ->sortable(),
+
                 TextColumn::make('opened_at')
+                    ->label('Opened')
                     ->dateTime()
+                    ->since()
                     ->sortable(),
-                TextColumn::make('closed_at')
-                    ->dateTime()
-                    ->sortable(),
-                BadgeColumn::make('close_reason')
-                    ->label('Exit Reason')
-                    ->colors([
-                        'success' => 'take_profit',
-                        'danger' => 'stop_loss',
-                        'warning' => ['trailing_stop_l1', 'trailing_stop_l2'],
-                        'info' => ['trailing_stop_l3', 'trailing_stop_l4'],
-                        'gray' => ['manual', 'other'],
-                        'danger' => 'liquidated',
-                    ])
-                    ->icons([
-                        'take_profit' => 'heroicon-o-check-circle',
-                        'stop_loss' => 'heroicon-o-x-circle',
-                        'trailing_stop_l1' => 'heroicon-o-arrow-trending-down',
-                        'trailing_stop_l2' => 'heroicon-o-arrow-trending-down',
-                        'trailing_stop_l3' => 'heroicon-o-arrow-trending-up',
-                        'trailing_stop_l4' => 'heroicon-o-arrow-trending-up',
-                        'manual' => 'heroicon-o-hand-raised',
-                        'liquidated' => 'heroicon-o-exclamation-triangle',
-                        'other' => 'heroicon-o-question-mark-circle',
-                    ])
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'take_profit' => 'Take Profit',
-                        'stop_loss' => 'Stop Loss',
-                        'trailing_stop_l1' => 'Trailing Stop L1',
-                        'trailing_stop_l2' => 'Trailing Stop L2',
-                        'trailing_stop_l3' => 'Trailing Stop L3',
-                        'trailing_stop_l4' => 'Trailing Stop L4',
-                        'manual' => 'Manual',
-                        'liquidated' => 'Liquidated',
-                        'other' => 'Other',
-                        default => '-',
-                    })
-                    ->placeholder('-')
-                    ->sortable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+
+                // Hidden by default
+                TextColumn::make('quantity')->numeric()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('liquidation_price')->numeric()->money('USD')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('realized_pnl')->numeric()->money('USD')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('closed_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                TernaryFilter::make('is_open')
+                    ->label('Status')
+                    ->boolean()
+                    ->trueLabel('Open')
+                    ->falseLabel('Closed')
+                    ->placeholder('All')
+                    ->default(true),
             ])
             ->recordActions([
                 EditAction::make(),
+                Action::make('close')
+                    ->label('Close Position')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn (Position $record) => $record->is_open)
+                    ->action(function (Position $record) {
+                        try {
+                            app(TradingService::class)->closePositionManually($record->symbol, 'Manual closure from admin panel');
+                            Notification::make()
+                                ->title('Position Closed')
+                                ->body("The position for {$record->symbol} has been queued for closure.")
+                                ->success()
+                                ->send();
+                        } catch (\Exception $e) {
+                            Notification::make()
+                                ->title('Closure Failed')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
             ])
-            ->toolbarActions([
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->defaultSort('opened_at', 'desc');
     }
 }
+

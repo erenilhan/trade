@@ -194,6 +194,23 @@ class TradingService
         ];
     }
 
+    public function closePositionManually(string $symbol, string $closeReason = 'Manual closure'): array
+    {
+        $position = Position::where('symbol', $symbol)->where('is_open', true)->first();
+
+        if (!$position) {
+            throw new \Exception("No open position found for {$symbol} to close.");
+        }
+
+        $decision = [
+            'action' => 'close_manual',
+            'symbol' => $symbol,
+            'reasoning' => $closeReason,
+        ];
+
+        return $this->executeClose($decision);
+    }
+
     private function executeClose(array $decision): array
     {
         $symbol = $decision['symbol'];
@@ -221,7 +238,7 @@ class TradingService
             'is_open' => false,
             'closed_at' => now(),
             'realized_pnl' => $position->unrealized_pnl,
-            'close_reason' => 'manual',
+            'close_reason' => $decision['reasoning'] ?? 'manual',
             'close_metadata' => [
                 'profit_pct' => round($pnlPercent, 2),
                 'exit_price' => $exitPrice,

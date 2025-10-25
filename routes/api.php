@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\PositionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\TradingController;
 use App\Http\Controllers\Api\MultiCoinTradingController;
 use App\Http\Controllers\TradeDashboardController;
+
+Route::post('positions/close', [PositionController::class, 'close']);
 
 Route::prefix('trade')->group(function () {
     // Execute auto trade
