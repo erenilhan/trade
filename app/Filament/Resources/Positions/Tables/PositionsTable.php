@@ -8,6 +8,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
@@ -82,7 +83,34 @@ class PositionsTable
                     ->default(true),
             ])
             ->recordActions([
-                EditAction::make(),
+                Action::make('set_sl_tp')
+                    ->label('Set SL/TP')
+                    ->icon('heroicon-o-cog')
+                    ->form([
+                        TextInput::make('stop_loss')
+                            ->label('Stop Loss')
+                            ->numeric()
+                            ->required()
+                            ->default(fn (Position $record) => $record->exit_plan['stop_loss'] ?? null),
+                        TextInput::make('profit_target')
+                            ->label('Take Profit')
+                            ->numeric()
+                            ->required()
+                            ->default(fn (Position $record) => $record->exit_plan['profit_target'] ?? null),
+                    ])
+                    ->action(function (Position $record, array $data) {
+                        $record->update([
+                            'exit_plan' => array_merge($record->exit_plan, [
+                                'stop_loss' => $data['stop_loss'],
+                                'profit_target' => $data['profit_target'],
+                            ]),
+                        ]);
+                        Notification::make()
+                            ->title('Exit Plan Updated')
+                            ->body("Stop-loss and take-profit for {$record->symbol} have been updated.")
+                            ->success()
+                            ->send();
+                    }),
                 Action::make('close')
                     ->label('Close Position')
                     ->icon('heroicon-o-x-circle')
