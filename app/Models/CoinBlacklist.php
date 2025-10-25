@@ -92,10 +92,7 @@ class CoinBlacklist extends Model
             ->where('is_open', false)
             ->get();
 
-        if ($positions->count() < 3) {
-            return; // Need at least 3 trades to analyze
-        }
-
+        // Calculate stats even for coins with < 3 trades
         $wins = $positions->where('realized_pnl', '>', 0)->count();
         $losses = $positions->where('realized_pnl', '<', 0)->count();
         $winRate = $positions->count() > 0 ? ($wins / $positions->count()) * 100 : 0;
@@ -117,8 +114,13 @@ class CoinBlacklist extends Model
         $minConfidence = 0.70;
         $reason = null;
 
+        if ($positions->count() < 3) {
+            // Not enough data to make restrictions
+            $status = 'active';
+            $reason = "Insufficient data ({$positions->count()} trades) - normal trading";
+        }
         // BLACKLIST if: Win rate < 30% AND 5+ trades AND negative P&L
-        if ($winRate < 30 && $positions->count() >= 5 && $totalPnl < 0) {
+        elseif ($winRate < 30 && $positions->count() >= 5 && $totalPnl < 0) {
             $status = 'blacklisted';
             $reason = "Very poor performance: {$winRate}% WR, \${$totalPnl} P&L ({$positions->count()} trades)";
         }
@@ -127,6 +129,12 @@ class CoinBlacklist extends Model
             $status = 'high_confidence_only';
             $minConfidence = 0.80;
             $reason = "Low win rate: {$winRate}% WR ({$positions->count()} trades) - requires 80%+ confidence";
+        }
+        // ACTIVE - Good performance
+        else {
+            $status = 'active';
+            $pnlSign = $totalPnl >= 0 ? '+' : '';
+            $reason = "Good performance: {$winRate}% WR, {$pnlSign}\${$totalPnl} P&L ({$positions->count()} trades)";
         }
 
         // Update or create entry

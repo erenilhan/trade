@@ -20,26 +20,21 @@ class ListCoinBlacklists extends ListRecords
                 ->icon('heroicon-o-cpu-chip')
                 ->color('info')
                 ->action(function () {
-                    $results = CoinBlacklist::analyzeAllCoins();
+                    CoinBlacklist::analyzeAllCoins();
 
-                    if (empty($results)) {
-                        Notification::make()
-                            ->title('Analysis Complete')
-                            ->body('All coins performing well - no restrictions needed')
-                            ->success()
-                            ->send();
-                    } else {
-                        Notification::make()
-                            ->title('Analysis Complete')
-                            ->body(count($results) . ' coins with restrictions found')
-                            ->warning()
-                            ->send();
-                    }
+                    $all = CoinBlacklist::count();
+                    $restricted = CoinBlacklist::whereIn('status', ['high_confidence_only', 'blacklisted'])->count();
+                    $active = CoinBlacklist::where('status', 'active')->count();
 
+                    Notification::make()
+                        ->title('Analysis Complete')
+                        ->body("Analyzed {$all} coins: {$active} active, {$restricted} restricted")
+                        ->success()
+                        ->send();
                 })
                 ->requiresConfirmation()
                 ->modalHeading('Analyze Coin Performance')
-                ->modalDescription('This will analyze all coins and automatically update blacklist based on performance.'),
+                ->modalDescription('This will analyze all coins with closed positions and update their status automatically.'),
 
             Actions\CreateAction::make()
                 ->label('Add Coin Manually'),

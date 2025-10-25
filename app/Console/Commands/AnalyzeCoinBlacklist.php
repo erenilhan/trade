@@ -14,35 +14,71 @@ class AnalyzeCoinBlacklist extends Command
     {
         $this->info('🔍 Analyzing coin performance...');
 
-        $results = CoinBlacklist::analyzeAllCoins();
+        CoinBlacklist::analyzeAllCoins();
 
-        if (empty($results)) {
-            $this->info('✅ All coins performing well - no restrictions needed');
+        // Get all entries
+        $allEntries = CoinBlacklist::orderBy('status', 'desc')->orderBy('symbol')->get();
+
+        if ($allEntries->isEmpty()) {
+            $this->info('✅ No coins found');
             return self::SUCCESS;
         }
 
-        $this->warn('⚠️  Found ' . count($results) . ' coins with restrictions:');
+        // Group by status
+        $restricted = $allEntries->whereIn('status', ['blacklisted', 'high_confidence_only']);
+        $active = $allEntries->where('status', 'active');
+
+        // Show summary
+        $this->info(sprintf('📊 Analyzed %d coins:', $allEntries->count()));
+        $this->line(sprintf('   ✅ Active: %d', $active->count()));
+        $this->line(sprintf('   ⚠️  Restricted: %d', $restricted->count()));
         $this->newLine();
 
-        foreach ($results as $entry) {
-            $stats = $entry->performance_stats;
-            $emoji = $entry->status === 'blacklisted' ? '🚫' : '⚠️';
+        // Show restricted coins first
+        if ($restricted->isNotEmpty()) {
+            $this->warn('⚠️  Restricted Coins:');
+            foreach ($restricted as $entry) {
+                $stats = $entry->performance_stats;
+                $emoji = $entry->status === 'blacklisted' ? '🚫' : '⚠️';
 
-            $this->line(sprintf(
-                '%s %s [%s]',
-                $emoji,
-                $entry->symbol,
-                $entry->status === 'blacklisted' ? 'BLACKLISTED' : 'HIGH CONFIDENCE REQUIRED'
-            ));
+                $this->line(sprintf(
+                    '%s %s [%s]',
+                    $emoji,
+                    $entry->symbol,
+                    $entry->status === 'blacklisted' ? 'BLACKLISTED' : 'HIGH CONFIDENCE ONLY'
+                ));
 
-            $this->line("   Reason: {$entry->reason}");
-            $this->line(sprintf(
-                "   Stats: %d trades, %.1f%% WR, $%.2f P&L",
-                $stats['total_trades'] ?? 0,
-                $stats['win_rate'] ?? 0,
-                $stats['total_pnl'] ?? 0
-            ));
-            $this->newLine();
+                $this->line("   Reason: {$entry->reason}");
+                $this->line(sprintf(
+                    "   Stats: %d trades, %.1f%% WR, $%.2f P&L",
+                    $stats['total_trades'] ?? 0,
+                    $stats['win_rate'] ?? 0,
+                    $stats['total_pnl'] ?? 0
+                ));
+                $this->newLine();
+            }
+        }
+
+        // Show active coins
+        if ($active->isNotEmpty()) {
+            $this->info('✅ Active Coins:');
+            foreach ($active as $entry) {
+                $stats = $entry->performance_stats;
+
+                $this->line(sprintf(
+                    '✅ %s [ACTIVE]',
+                    $entry->symbol
+                ));
+
+                $this->line("   {$entry->reason}");
+                $this->line(sprintf(
+                    "   Stats: %d trades, %.1f%% WR, $%.2f P&L",
+                    $stats['total_trades'] ?? 0,
+                    $stats['win_rate'] ?? 0,
+                    $stats['total_pnl'] ?? 0
+                ));
+                $this->newLine();
+            }
         }
 
         return self::SUCCESS;

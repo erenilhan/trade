@@ -183,7 +183,13 @@ class CoinBlacklistResource extends Resource
                         'active' => 'Active',
                         'high_confidence_only' => 'High Confidence Only',
                         'blacklisted' => 'Blacklisted',
-                    ]),
+                    ])
+                    ->label('Filter by Status'),
+
+                Tables\Filters\Filter::make('restricted_only')
+                    ->label('Show Restricted Only')
+                    ->query(fn ($query) => $query->whereIn('status', ['high_confidence_only', 'blacklisted']))
+                    ->toggle(),
             ])
             ->recordActions([
                 EditAction::make(),
@@ -192,7 +198,17 @@ class CoinBlacklistResource extends Resource
             ->toolbarActions([
                 DeleteBulkAction::make(),
             ])
-            ->defaultSort('updated_at', 'desc');
+            ->modifyQueryUsing(function ($query) {
+                // Custom sorting: restricted first, then by updated_at
+                return $query->orderByRaw("
+                    CASE status
+                        WHEN 'blacklisted' THEN 1
+                        WHEN 'high_confidence_only' THEN 2
+                        WHEN 'active' THEN 3
+                        ELSE 4
+                    END
+                ")->orderBy('updated_at', 'desc');
+            });
     }
 
     public static function getRelations(): array
