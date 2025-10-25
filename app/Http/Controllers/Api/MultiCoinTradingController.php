@@ -129,7 +129,16 @@ class MultiCoinTradingController extends Controller
         }
 
         try {
-            $leverage = BotSetting::get('max_leverage', 2);
+            // Use AI recommended leverage if available, otherwise use max_leverage setting
+            $leverage = $decision['leverage'] ?? BotSetting::get('max_leverage', 2);
+            $maxLeverage = BotSetting::get('max_leverage', 10);
+
+            // Safety cap: don't exceed max_leverage
+            if ($leverage > $maxLeverage) {
+                Log::warning("AI suggested {$leverage}x but max is {$maxLeverage}x, capping");
+                $leverage = $maxLeverage;
+            }
+
             $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
             $targetPrice = $decision['target_price'] ?? $entryPrice * 1.05;
             $stopPrice = $decision['stop_price'] ?? $entryPrice * 0.97;
