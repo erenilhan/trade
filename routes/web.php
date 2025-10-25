@@ -16,4 +16,8 @@ Route::middleware('dashboard.password')->group(function () {
     Route::get('/api/dashboard/data', [TradeDashboardController::class, 'getData'])->name('dashboard.data');
     Route::get('/documentation', [TradeDashboardController::class, 'documentation'])->name('documentation');
     Route::get('/about', [TradeDashboardController::class, 'about'])->name('about');
+
+    // Performance Analytics
+    Route::get('/analytics', [\App\Http\Controllers\PerformanceAnalyticsController::class, 'index'])->name('analytics');
+    Route::get('/api/analytics/data', [\App\Http\Controllers\PerformanceAnalyticsController::class, 'getData'])->name('analytics.data');
 });
