@@ -208,11 +208,26 @@ class TradingService
             'reduceOnly' => true,
         ]);
 
-        // Update position
+        // Calculate PNL percentage
+        $exitPrice = $order['price'] ?? $position->current_price;
+        $priceDiff = $exitPrice - $position->entry_price;
+        if ($position->side === 'short') {
+            $priceDiff = -$priceDiff;
+        }
+        $pnlPercent = ($priceDiff / $position->entry_price) * 100 * $position->leverage;
+
+        // Update position with close reason
         $position->update([
             'is_open' => false,
             'closed_at' => now(),
             'realized_pnl' => $position->unrealized_pnl,
+            'close_reason' => 'manual',
+            'close_metadata' => [
+                'profit_pct' => round($pnlPercent, 2),
+                'exit_price' => $exitPrice,
+                'order_id' => $order['id'] ?? null,
+                'reason_detail' => 'Manually closed via API',
+            ],
         ]);
 
         // Save trade

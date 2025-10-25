@@ -165,6 +165,8 @@ class MonitorPositions extends Command
             $newStop = $entryPrice * (1 + ($l4Target / 100));
             if (!$stopLoss || $newStop > $stopLoss) {
                 $exitPlan['stop_loss'] = $newStop;
+                $exitPlan['trailing_level'] = 4;
+                $exitPlan['max_profit_reached'] = $pnlPercent;
                 $position->update(['exit_plan' => $exitPlan]);
                 $this->info("    🔒🔒🔒 Trailing Stop L4: Stop moved to +{$l4Target}% (\${$newStop})");
                 $trailingUpdated = true;
@@ -174,6 +176,8 @@ class MonitorPositions extends Command
             $newStop = $entryPrice * (1 + ($l3Target / 100));
             if (!$stopLoss || $newStop > $stopLoss) {
                 $exitPlan['stop_loss'] = $newStop;
+                $exitPlan['trailing_level'] = 3;
+                $exitPlan['max_profit_reached'] = $pnlPercent;
                 $position->update(['exit_plan' => $exitPlan]);
                 $this->info("    🔒🔒 Trailing Stop L3: Stop moved to +{$l3Target}% (\${$newStop})");
                 $trailingUpdated = true;
@@ -183,6 +187,8 @@ class MonitorPositions extends Command
             $newStop = $entryPrice * (1 + ($l2Target / 100));
             if (!$stopLoss || $newStop > $stopLoss) {
                 $exitPlan['stop_loss'] = $newStop;
+                $exitPlan['trailing_level'] = 2;
+                $exitPlan['max_profit_reached'] = $pnlPercent;
                 $position->update(['exit_plan' => $exitPlan]);
                 $targetLabel = $l2Target == 0 ? "breakeven" : "{$l2Target}%";
                 $this->info("    🔒 Trailing Stop L2: Stop moved to {$targetLabel} (\${$newStop})");
@@ -193,6 +199,8 @@ class MonitorPositions extends Command
             $newStop = $entryPrice * (1 + ($l1Target / 100));
             if (!$stopLoss || $newStop > $stopLoss) {
                 $exitPlan['stop_loss'] = $newStop;
+                $exitPlan['trailing_level'] = 1;
+                $exitPlan['max_profit_reached'] = $pnlPercent;
                 $position->update(['exit_plan' => $exitPlan]);
                 $this->info("    🔒 Trailing Stop L1: Stop moved to {$l1Target}% (\${$newStop})");
                 $trailingUpdated = true;
@@ -226,6 +234,38 @@ class MonitorPositions extends Command
                 $priceDiff = -$priceDiff;
             }
             $realizedPnl = $priceDiff * $position->quantity * $position->leverage;
+            $pnlPercent = ($priceDiff / $position->entry_price) * 100 * $position->leverage;
+
+            // Determine close reason and metadata
+            $exitPlan = $position->exit_plan ?? [];
+            $trailingLevel = $exitPlan['trailing_level'] ?? null;
+            $maxProfitReached = $exitPlan['max_profit_reached'] ?? null;
+
+            // Map internal reason to enum close_reason
+            $closeReason = match($reason) {
+                'take_profit' => 'take_profit',
+                'stop_loss' => $trailingLevel ? "trailing_stop_l{$trailingLevel}" : 'stop_loss',
+                'liquidation_protection' => 'liquidated',
+                'trend_invalidation' => 'other',
+                default => 'other',
+            };
+
+            // Build close metadata
+            $closeMetadata = [
+                'profit_pct' => round($pnlPercent, 2),
+                'exit_price' => $actualExitPrice,
+                'order_id' => $order['id'] ?? null,
+            ];
+
+            if ($trailingLevel) {
+                $closeMetadata['trailing_level'] = $trailingLevel;
+                $closeMetadata['max_profit_reached'] = $maxProfitReached;
+                $closeMetadata['locked_profit_pct'] = $pnlPercent;
+            }
+
+            if ($reason === 'trend_invalidation') {
+                $closeMetadata['reason_detail'] = 'Trend invalidation detected';
+            }
 
             // Update position
             $position->update([
@@ -233,17 +273,20 @@ class MonitorPositions extends Command
                 'closed_at' => now(),
                 'current_price' => $actualExitPrice,
                 'realized_pnl' => $realizedPnl,
+                'close_reason' => $closeReason,
+                'close_metadata' => $closeMetadata,
             ]);
 
             $pnlEmoji = $realizedPnl >= 0 ? '🟢' : '🔴';
-            $this->info("    {$pnlEmoji} CLOSED ({$reason}): PNL \${$realizedPnl}");
+            $this->info("    {$pnlEmoji} CLOSED ({$closeReason}): PNL \${$realizedPnl} ({$pnlPercent}%)");
 
             Log::info("✅ Position auto-closed", [
                 'symbol' => $symbol,
-                'reason' => $reason,
+                'close_reason' => $closeReason,
                 'exit_price' => $actualExitPrice,
                 'pnl' => $realizedPnl,
-                'order_id' => $order['id'] ?? null,
+                'pnl_percent' => $pnlPercent,
+                'metadata' => $closeMetadata,
             ]);
 
         } catch (Exception $e) {

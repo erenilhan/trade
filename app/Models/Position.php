@@ -28,6 +28,8 @@ class Position extends Model
         'is_open',
         'opened_at',
         'closed_at',
+        'close_reason',
+        'close_metadata',
         'price_updated_at',
     ];
 
@@ -47,6 +49,7 @@ class Position extends Model
         'is_open' => 'boolean',
         'opened_at' => 'datetime',
         'closed_at' => 'datetime',
+        'close_metadata' => 'array',
         'price_updated_at' => 'datetime',
     ];
 

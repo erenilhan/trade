@@ -39,14 +39,14 @@ class MultiCoinTradingController extends Controller
                 'return_percent' => (($totalValue - $initialInvestment) / ($initialInvestment ?: 1)) * 100,
             ];
 
-            // Skip AI if cash is below $1
-            if ($cash < 1) {
-                Log::warning('⚠️ Cash below $1, skipping AI call');
+            // Skip AI if cash is below $10
+            if ($cash < 10) {
+                Log::warning('⚠️ Cash below $10, skipping AI call');
                 return response()->json([
                     'success' => true,
                     'data' => [
                         'results' => [],
-                        'message' => 'Cash below $1, no trades executed',
+                        'message' => 'Cash below $10, no trades executed',
                         'account' => $account
                     ]
                 ]);
@@ -227,8 +227,24 @@ class MultiCoinTradingController extends Controller
 
             $exitPrice = $order['average'] ?? $order['price'] ?? $position->current_price;
             $realizedPnl = ($exitPrice - $position->entry_price) * $position->quantity * $position->leverage;
+            $pnlPercent = (($exitPrice - $position->entry_price) / $position->entry_price) * 100 * $position->leverage;
 
             Log::info("✅ Binance SELL order executed: ID {$order['id']}");
+
+            // Determine close reason based on AI action
+            $closeReason = match($action) {
+                'close_profitable' => 'take_profit',
+                'stop_loss' => 'stop_loss',
+                default => 'manual',
+            };
+
+            $closeMetadata = [
+                'profit_pct' => round($pnlPercent, 2),
+                'exit_price' => $exitPrice,
+                'order_id' => $order['id'] ?? null,
+                'ai_decision' => true,
+                'reason_detail' => $action === 'close_profitable' ? 'AI decided to take profit' : 'AI decided to cut losses',
+            ];
 
             // Update position
             $position->update([
@@ -236,6 +252,8 @@ class MultiCoinTradingController extends Controller
                 'closed_at' => now(),
                 'current_price' => $exitPrice,
                 'realized_pnl' => $realizedPnl,
+                'close_reason' => $closeReason,
+                'close_metadata' => $closeMetadata,
             ]);
 
             Log::info("✅ {$symbol}: Position closed ({$action})", [

@@ -27,6 +27,39 @@ class TradeDashboardController extends Controller
     }
 
     /**
+     * Show password entry page
+     */
+    public function showPasswordForm()
+    {
+        return view('dashboard_password');
+    }
+
+    /**
+     * Verify dashboard password
+     */
+    public function verifyPassword(\Illuminate\Http\Request $request)
+    {
+        $password = $request->input('password');
+        $correctPassword = env('DASHBOARD_PASSWORD', 'trading123');
+
+        if ($password === $correctPassword) {
+            session()->put('dashboard_authenticated', true);
+            return redirect()->route('dashboard');
+        }
+
+        return redirect()->route('dashboard.password')->with('error', 'Incorrect password. Please try again.');
+    }
+
+    /**
+     * Logout from dashboard
+     */
+    public function logout()
+    {
+        session()->forget('dashboard_authenticated');
+        return redirect()->route('dashboard.password')->with('error', 'You have been logged out.');
+    }
+
+    /**
      * Show the documentation page
      */
     public function documentation()
@@ -223,6 +256,8 @@ class TradeDashboardController extends Controller
                         'pnl' => $pnl,
                         'pnl_percent' => $pnlPercent,
                         'closed_at' => $pos->closed_at?->diffForHumans(),
+                        'close_reason' => $pos->close_reason,
+                        'close_metadata' => $pos->close_metadata,
                     ];
                 });
 

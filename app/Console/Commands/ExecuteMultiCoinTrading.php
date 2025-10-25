@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\BotSetting;
+use App\Models\CoinBlacklist;
 use App\Models\Position;
 use App\Services\BinanceService;
 use App\Services\MultiCoinAIService;
@@ -79,9 +80,18 @@ class ExecuteMultiCoinTrading extends Command
                 $action = $decision['action'];
                 $confidence = $decision['confidence'] ?? 0;
 
-                // Skip if confidence too low (balanced threshold)
-                if ($confidence < 0.70 && $action !== 'hold') {
-                    $this->warn("⚠️ {$symbol}: Low confidence ({$confidence}), holding (minimum: 0.70)");
+                // Check if coin is blacklisted
+                if (CoinBlacklist::isBlacklisted($symbol) && $action === 'buy') {
+                    $this->warn("🚫 {$symbol}: Blacklisted (poor performance history), skipping");
+                    Log::info("🚫 Blacklist: Skipping {$symbol} - coin is blacklisted");
+                    continue;
+                }
+
+                // Check minimum confidence requirement
+                $minConfidence = CoinBlacklist::getMinConfidence($symbol);
+                if ($confidence < $minConfidence && $action !== 'hold') {
+                    $this->warn("⚠️ {$symbol}: Confidence ({$confidence}) below minimum ({$minConfidence}), holding");
+                    Log::info("⚠️ Confidence: Skipping {$symbol} - requires {$minConfidence}, got {$confidence}");
                     continue;
                 }
 

@@ -77,6 +77,14 @@
                         <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-dark-800"></div>
                     </div>
                 </div>
+
+                <!-- Logout Button -->
+                <a href="{{ route('dashboard.logout') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Logout</span>
+                </a>
             </div>
         </header>
 
@@ -519,7 +527,57 @@
                         const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
                         const positionSize = pos.position_size || (pos.quantity * pos.entry_price);
                         const invested = positionSize / pos.leverage; // Real capital used (with leverage)
-                        const closeReason = pos.pnl >= 0 ? '🎯 Take Profit' : '🛑 Stop Loss';
+
+                        // Determine close reason with proper icons
+                        let closeReason = '-';
+                        let reasonColor = 'text-gray-500';
+                        if (pos.close_reason) {
+                            switch (pos.close_reason) {
+                                case 'take_profit':
+                                    closeReason = '🎯 Take Profit';
+                                    reasonColor = 'text-green-400';
+                                    break;
+                                case 'stop_loss':
+                                    closeReason = '🛑 Stop Loss';
+                                    reasonColor = 'text-red-400';
+                                    break;
+                                case 'trailing_stop_l1':
+                                    closeReason = '🔒 Trailing L1';
+                                    reasonColor = 'text-yellow-400';
+                                    break;
+                                case 'trailing_stop_l2':
+                                    closeReason = '🔒 Trailing L2';
+                                    reasonColor = 'text-yellow-400';
+                                    break;
+                                case 'trailing_stop_l3':
+                                    closeReason = '🔒🔒 Trailing L3';
+                                    reasonColor = 'text-blue-400';
+                                    break;
+                                case 'trailing_stop_l4':
+                                    closeReason = '🔒🔒🔒 Trailing L4';
+                                    reasonColor = 'text-blue-400';
+                                    break;
+                                case 'manual':
+                                    closeReason = '👤 Manual';
+                                    reasonColor = 'text-gray-400';
+                                    break;
+                                case 'liquidated':
+                                    closeReason = '⚠️ Liquidated';
+                                    reasonColor = 'text-red-600';
+                                    break;
+                                case 'other':
+                                    closeReason = '❓ Other';
+                                    reasonColor = 'text-gray-400';
+                                    break;
+                                default:
+                                    closeReason = pos.pnl >= 0 ? '🎯 Take Profit' : '🛑 Stop Loss';
+                                    reasonColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
+                            }
+                        } else {
+                            // Fallback for old positions without close_reason
+                            closeReason = pos.pnl >= 0 ? '🎯 Take Profit' : '🛑 Stop Loss';
+                            reasonColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
+                        }
 
                         return `
                             <div class="grid grid-cols-6 p-3 border-b border-dark-700 hover:bg-dark-700/30 text-sm">
@@ -532,7 +590,7 @@
                                 </div>
                                 <div>
                                     <div class="text-gray-400 text-xs">${pos.closed_at || 'N/A'}</div>
-                                    <div class="text-gray-500 text-xs mt-1">${closeReason}</div>
+                                    <div class="${reasonColor} text-xs mt-1 font-medium">${closeReason}</div>
                                 </div>
                             </div>
                         `;
