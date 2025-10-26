@@ -72,6 +72,12 @@ class MultiCoinTradingController extends Controller
                     continue;
                 }
 
+                // Reduce leverage for risky 75-79% confidence range (historically poor performance)
+                if ($confidence >= 0.75 && $confidence < 0.80 && $action === 'buy') {
+                    $decision['leverage'] = min($decision['leverage'] ?? 2, 2); // Cap at 2x for this range
+                    Log::warning("⚠️ {$symbol}: Confidence {$confidence} in risky range (75-79%), capping leverage at 2x");
+                }
+
                 // Execute action
                 $result = match($action) {
                     'buy' => $this->executeBuy($symbol, $decision, $cash),

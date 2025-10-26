@@ -3,7 +3,8 @@
     "allow": [
       "Bash(php artisan make:migration add_notional_usd_to_positions_table)",
       "Bash(php artisan:*)",
-      "Bash(php -r:*)"
+      "Bash(php -r:*)",
+      "Bash(php:*)"
     ],
     "deny": [],
     "ask": []
