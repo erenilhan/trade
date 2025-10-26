@@ -238,12 +238,12 @@ class TradingService
             'is_open' => false,
             'closed_at' => now(),
             'realized_pnl' => $position->unrealized_pnl,
-            'close_reason' => $decision['reasoning'] ?? 'manual',
+            'close_reason' => 'manual', // Always 'manual' for manual closes
             'close_metadata' => [
                 'profit_pct' => round($pnlPercent, 2),
                 'exit_price' => $exitPrice,
                 'order_id' => $order['id'] ?? null,
-                'reason_detail' => 'Manually closed via API',
+                'reason_detail' => $decision['reasoning'] ?? 'Manually closed via API',
             ],
         ]);
 
