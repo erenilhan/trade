@@ -16,15 +16,19 @@ return [
         'BTC/USDT' => 'Bitcoin ($13.2B)',
         'SOL/USDT' => 'Solana ($4.4B)',
         'BNB/USDT' => 'BNB ($2.7B)',
-        'DOGE/USDT' => 'Dogecoin ($0.99B)',
-        'XRP/USDT' => 'Ripple ($0.97B)',
-        'HYPE/USDT' => 'Hype ($0.59B)',
-        'ZEC/USDT' => 'Zcash ($0.55B)',
-        'PEPE/USDT' => 'Pepe ($0.33B)',
-        'LINK/USDT' => 'Chainlink ($0.31B)',
+        'ZEC/USDT' => 'Zcash ($1.38B)',
+        'XRP/USDT' => 'Ripple ($1.28B)',
+        'DOGE/USDT' => 'Dogecoin ($0.80B)',
+        'HYPE/USDT' => 'Hype ($0.65B)',
+        'SUI/USDT' => 'Sui ($0.33B)',
+        'LINK/USDT' => 'Chainlink ($0.23B)',
         'ADA/USDT' => 'Cardano ($0.26B)',
-        'BCH/USDT' => 'Bitcoin Cash ($0.19B)',
-        'DOT/USDT' => 'Polkadot ($0.18B)',
+        'AVAX/USDT' => 'Avalanche ($0.27B)',
+        'TAO/USDT' => 'Bittensor ($0.23B)',
+        'BCH/USDT' => 'Bitcoin Cash ($0.21B)',
+        'DOT/USDT' => 'Polkadot ($0.20B)',
+        'ZEN/USDT' => 'Horizen ($0.17B)',
+        'PEPE/USDT' => 'Pepe ($0.26B)',
         'LTC/USDT' => 'Litecoin ($0.15B)',
         'MATIC/USDT' => 'Polygon ($0.14B)',
     ],
@@ -141,20 +145,20 @@ return [
     */
     'market_cap_limits' => [
         'large_cap' => ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'],
-        'mid_cap' => ['SOL/USDT', 'ADA/USDT', 'AVAX/USDT', 'LINK/USDT', 'DOT/USDT'],
-        'small_cap' => ['XRP/USDT', 'DOGE/USDT', 'PEPE/USDT', 'HYPE/USDT', 'ZEC/USDT'],
+        'mid_cap' => ['SOL/USDT', 'ADA/USDT', 'AVAX/USDT', 'LINK/USDT', 'DOT/USDT', 'TAO/USDT', 'ZEN/USDT', 'BCH/USDT', 'LTC/USDT', 'MATIC/USDT'],
+        'small_cap' => ['XRP/USDT', 'DOGE/USDT', 'PEPE/USDT', 'HYPE/USDT', 'ZEC/USDT', 'SUI/USDT'],
 
         // Normal volatility limits
         'normal' => [
             'max_large_cap' => 3,
-            'max_mid_cap' => 3,
+            'max_mid_cap' => 5,
             'max_small_cap' => 4,
         ],
 
         // High volatility limits (reduce small cap exposure)
         'high_volatility' => [
             'max_large_cap' => 4,
-            'max_mid_cap' => 3,
+            'max_mid_cap' => 4,
             'max_small_cap' => 2,
         ],
     ],
