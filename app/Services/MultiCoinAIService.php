@@ -213,16 +213,17 @@ class MultiCoinAIService
         $prompt .= "Always include: action, reasoning, confidence (0-1), entry_price, target_price, stop_price, invalidation, leverage.\n\n";
 
         $prompt .= "LEVERAGE SELECTION:\n";
-        $prompt .= "Choose leverage (2-10x) based on:\n";
-        $prompt .= "- Signal strength: Strong signals = higher leverage (up to 10x)\n";
-        $prompt .= "- Volatility: High ATR = lower leverage (2-3x), Low ATR = higher leverage (5-10x)\n";
-        $prompt .= "- Trend strength: Strong ADX (>25) = can use higher leverage (7-10x)\n";
-        $prompt .= "- Risk level: Conservative = 2-3x, Moderate = 3-5x, Aggressive = 5-10x\n";
-        $prompt .= "Example: Strong uptrend + low volatility + ADX>30 + high confidence = 8-10x leverage\n";
-        $prompt .= "Example: Weak signal + high volatility + low ADX = 2-3x leverage\n\n";
+        $prompt .= "Choose leverage (2-3x) based on:\n";
+        $prompt .= "- Signal strength: Strong signals = higher leverage (up to 3x MAX)\n";
+        $prompt .= "- Volatility: High ATR = lower leverage (2x), Low ATR = moderate leverage (3x)\n";
+        $prompt .= "- Trend strength: Strong ADX (>25) = can use 3x, Weak ADX = stick to 2x\n";
+        $prompt .= "- Risk level: Conservative = 2x, Moderate = 2-3x, Aggressive = 3x (MAX)\n";
+        $prompt .= "- IMPORTANT: Maximum leverage is 3x! Historical data shows 5x+ is net negative.\n";
+        $prompt .= "Example: Strong setup + low volatility + ADX>30 + high confidence = 3x leverage\n";
+        $prompt .= "Example: Weak signal + high volatility + low ADX = 2x leverage\n\n";
 
         $prompt .= "RESPONSE FORMAT (strict JSON):\n";
-        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"hold|buy","reasoning":"...","confidence":0.75,"leverage":5,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
+        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"hold|buy|sell","reasoning":"...","confidence":0.75,"leverage":5,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
 
         return $prompt;
     }
@@ -295,10 +296,15 @@ RSI RULES:
 
 DIVERSIFICATION:
 - Mix large cap (BTC/ETH/BNB), mid cap (SOL/ADA/AVAX), small cap (XRP/DOGE/LINK/DOT)
-- Maximum 1-2 BUY per cycle across ALL coins
+- Maximum 1-2 BUY/SELL per cycle across ALL coins
 - Prefer different market cap segments
 
-Use 2-3% stop loss, target 3-5% profit. Always return valid JSON with 'decisions' array containing {symbol,action,confidence,reasoning,entry_price,target_price,stop_price,invalidation} for each coin. Actions: buy, hold.";
+ACTIONS:
+- buy: Open LONG position (profit when price goes UP)
+- sell: Open SHORT position (profit when price goes DOWN) - Use for bearish signals
+- hold: No position or keep existing position
+
+Use 2-3% stop loss, target 3-5% profit. Always return valid JSON with 'decisions' array containing {symbol,action,confidence,reasoning,entry_price,target_price,stop_price,invalidation} for each coin. Actions: buy, sell, hold.";
     }
 
     /**

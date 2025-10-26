@@ -73,7 +73,7 @@ class MultiCoinTradingController extends Controller
                 }
 
                 // Reduce leverage for risky 75-79% confidence range (historically poor performance)
-                if ($confidence >= 0.75 && $confidence < 0.80 && $action === 'buy') {
+                if ($confidence >= 0.75 && $confidence < 0.80 && in_array($action, ['buy', 'sell'])) {
                     $decision['leverage'] = min($decision['leverage'] ?? 2, 2); // Cap at 2x for this range
                     Log::warning("⚠️ {$symbol}: Confidence {$confidence} in risky range (75-79%), capping leverage at 2x");
                 }
@@ -81,6 +81,7 @@ class MultiCoinTradingController extends Controller
                 // Execute action
                 $result = match($action) {
                     'buy' => $this->executeBuy($symbol, $decision, $cash),
+                    'sell' => $this->executeSell($symbol, $decision, $cash),
                     'close_profitable', 'stop_loss' => $this->executeClose($symbol, $action),
                     'hold' => ['action' => 'hold', 'reason' => $decision['reasoning'] ?? 'Holding'],
                     default => ['action' => 'unknown', 'error' => 'Invalid action']
@@ -129,7 +130,8 @@ class MultiCoinTradingController extends Controller
         }
 
         // Calculate position size
-        $positionSize = BotSetting::get('position_size_usdt', 100);
+        $positionSize = BotSetting::get('position_size_usdt', 10);
+
         if ($availableCash < $positionSize) {
             return ['action' => 'hold', 'reason' => 'Insufficient cash'];
         }
@@ -215,6 +217,117 @@ class MultiCoinTradingController extends Controller
 
         } catch (\Exception $e) {
             Log::error("❌ {$symbol}: BUY failed", ['error' => $e->getMessage()]);
+
+            return ['action' => 'error', 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Execute sell (SHORT) for a coin
+     */
+    private function executeSell(string $symbol, array $decision, float $availableCash): array
+    {
+        // Skip BTC, ETH, and BNB if cash is below $10
+        if ($availableCash < 10 && in_array($symbol, ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'])) {
+            return ['action' => 'hold', 'reason' => "Cash below $10, skipping {$symbol}"];
+        }
+
+        // Check if position already exists
+        $existingPosition = Position::active()->bySymbol($symbol)->first();
+        if ($existingPosition) {
+            return ['action' => 'hold', 'reason' => 'Position already exists'];
+        }
+
+        // Calculate position size
+        $positionSize = BotSetting::get('position_size_usdt', 10);
+
+        if ($availableCash < $positionSize) {
+            return ['action' => 'hold', 'reason' => 'Insufficient cash'];
+        }
+
+        try {
+            // Use AI recommended leverage if available, otherwise use max_leverage setting
+            $leverage = $decision['leverage'] ?? BotSetting::get('max_leverage', 2);
+            $maxLeverage = BotSetting::get('max_leverage', 10);
+
+            // Safety cap: don't exceed max_leverage
+            if ($leverage > $maxLeverage) {
+                Log::warning("AI suggested {$leverage}x but max is {$maxLeverage}x, capping");
+                $leverage = $maxLeverage;
+            }
+
+            $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
+            // SHORT: profit when price goes DOWN, stop when price goes UP
+            $targetPrice = $decision['target_price'] ?? $entryPrice * 0.95; // -5% target
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * 1.03;      // +3% stop
+
+            // Calculate liquidation price for SHORT
+            $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage, 'short');
+
+            // Calculate quantity
+            $quantity = ($positionSize * $leverage) / $entryPrice;
+
+            // Set leverage on Binance
+            try {
+                $this->binance->getExchange()->setLeverage($leverage, $symbol);
+                Log::info("📊 Leverage set to {$leverage}x for {$symbol}");
+            } catch (\Exception $e) {
+                Log::warning("⚠️ Leverage setting failed: " . $e->getMessage());
+            }
+
+            // Send MARKET SELL order to Binance (open SHORT position)
+            Log::info("📤 Sending SELL (SHORT) order to Binance for {$symbol}");
+            $order = $this->binance->getExchange()->createMarketOrder(
+                $symbol,
+                'sell',
+                $quantity
+            );
+
+            Log::info("✅ Binance SHORT order executed: ID {$order['id']}");
+
+            // Get actual fill price
+            $actualEntryPrice = $order['average'] ?? $order['price'] ?? $entryPrice;
+
+            // Create position record with Binance order info
+            $position = Position::create([
+                'symbol' => $symbol,
+                'side' => 'short',
+                'quantity' => $order['filled'] ?? $quantity,
+                'entry_price' => $actualEntryPrice,
+                'current_price' => $actualEntryPrice,
+                'liquidation_price' => $liqPrice,
+                'leverage' => $leverage,
+                'notional_value' => $positionSize * $leverage,
+                'notional_usd' => $positionSize * $leverage,
+                'entry_order_id' => $order['id'],
+                'exit_plan' => [
+                    'profit_target' => $targetPrice,
+                    'stop_loss' => $stopPrice,
+                    'invalidation_condition' => $decision['invalidation'] ?? "Price closes above " . ($actualEntryPrice * 1.05),
+                    'reasoning' => $decision['reasoning'] ?? 'SHORT position based on bearish signals',
+                ],
+                'confidence' => $decision['confidence'],
+                'risk_usd' => $positionSize * ($leverage / 100) * 3, // 3% risk
+                'is_open' => true,
+                'opened_at' => now(),
+            ]);
+
+            Log::info("✅ {$symbol}: SELL (SHORT) executed", [
+                'quantity' => $quantity,
+                'entry_price' => $entryPrice,
+                'leverage' => $leverage,
+            ]);
+
+            return [
+                'action' => 'sell',
+                'position_id' => $position->id,
+                'quantity' => $quantity,
+                'entry_price' => $entryPrice,
+                'leverage' => $leverage,
+            ];
+
+        } catch (\Exception $e) {
+            Log::error("❌ {$symbol}: SELL (SHORT) failed", ['error' => $e->getMessage()]);
 
             return ['action' => 'error', 'error' => $e->getMessage()];
         }

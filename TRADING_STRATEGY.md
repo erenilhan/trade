@@ -1,665 +1,290 @@
-# Trading Strategy Documentation
-
-## Overview
-
-This document describes the complete trading strategy implemented in the multi-coin AI trading bot. The strategy uses dynamic risk management, volatility-based adjustments, and AI-powered decision making to trade 6+ cryptocurrencies simultaneously on Binance Futures.
-
----
-
-## Core Strategy Components
-
-### 1. AI-Powered Decision Making
-
-**AI Provider**: DeepSeek Chat V3.1 (via OpenRouter)
-
-**Decision Process**:
-- AI analyzes market data for all supported coins every 10 minutes
-- Reviews technical indicators: EMA, MACD, RSI, ATR, ADX, Funding Rate, Open Interest
-- Analyzes both 3-minute (short-term) and 4-hour (long-term) timeframes
-- Returns decisions: `buy` or `hold` with confidence score (0-1)
-
-**Confidence Threshold**:
-- Minimum confidence: **0.70** (70%)
-- Trades with confidence < 0.70 are automatically rejected
-- Higher confidence trades historically show better win rates
+# 🎯 AI Trading Strategy v2.0
+**Last Updated:** 2025-10-26
+**Status:** Active
+**Performance:** 50% Win Rate, $4.49 Total P&L (28 trades)
 
 ---
 
-## 2. Fixed Position Sizing
+## 📊 PERFORMANCE ANALYSIS (Based on 28 Historical Trades)
 
-**Strategy**: Use a fixed position size per trade
+### Win Rate by Category
+- **Overall:** 50.0% (14W/14L)
+- **Profit Factor:** 1.37
+- **Avg Win:** +$1.18 | **Avg Loss:** -$0.86
 
-**Configuration**:
-```php
-'dynamic_position_sizing' => [
-    'enabled' => false,  // DISABLED - Using fixed amount
-]
+### AI Confidence Analysis
+| Range | Trades | Win Rate | Total P&L | Status |
+|-------|--------|----------|-----------|--------|
+| 80-84% (High) | 1 | **100%** | +$0.26 | ✅ EXCELLENT |
+| 75-79% (Med-High) | 8 | **50%** | -$1.15 | ⚠️ RISKY |
+| 70-74% (Medium) | 12 | **41.7%** | +$3.69 | ✅ PROFITABLE |
+| 60-69% (Low) | 7 | **57.1%** | +$1.69 | ✅ SURPRISINGLY GOOD |
 
-BotSetting::set('position_size_usdt', 30);  // Fixed $30 per trade
-```
+**Key Finding:** 75-79% confidence range is risky despite high confidence!
 
-**Benefits**:
-- Simple and predictable position sizing
-- No calculation overhead
-- Easy to track exact risk per trade
+### Leverage Analysis
+| Leverage | Trades | Win Rate | Total P&L | Avg P&L |
+|----------|--------|----------|-----------|---------|
+| 2x | 24 | 50% | **+$5.67** | +$0.24 |
+| 5x | 4 | 50% | **-$1.18** | -$0.30 |
 
----
+**Key Finding:** 5x leverage is net negative, 2x is profitable!
 
-## 3. AI-Powered Leverage Selection
+### Exit Reason Performance
+| Exit Type | Trades | Win Rate | Total P&L | Notes |
+|-----------|--------|----------|-----------|-------|
+| Trailing L2 | 2 | 50% | +$0.10 | Breakeven protection works |
+| Trailing L3 | 1 | 100% | +$3.96 | Best exit method! |
+| Take Profit | 1 | 100% | +$1.93 | Perfect execution |
+| Manual | 1 | 100% | +$0.26 | Good manual decisions |
+| Stop Loss | 1 | 0% | -$5.24 | Largest single loss |
+| Unknown | 22 | 45.5% | +$3.48 | Needs fixing |
 
-**Strategy**: AI analyzes market conditions and selects optimal leverage (2-10x) for each trade
-
-**AI Decision Criteria**:
-- **Signal Strength**: Strong technical signals → higher leverage (up to 10x)
-- **Volatility (ATR)**: High volatility → lower leverage (2-3x), Low volatility → higher leverage (5-10x)
-- **Trend Strength (ADX)**: Strong trend (ADX > 25) → can use higher leverage (7-10x)
-- **Confidence Level**: High confidence trades → can justify higher leverage
-
-**Leverage Range**: 2x - 10x (configurable via `max_leverage` setting)
-
-**Examples**:
-- **Strong Setup**: Bullish trend + low volatility + ADX > 30 + confidence 0.85 → AI chooses **8-10x**
-- **Moderate Setup**: Normal trend + medium volatility + ADX 20-25 + confidence 0.75 → AI chooses **4-6x**
-- **Weak Setup**: Choppy market + high volatility + low ADX + confidence 0.70 → AI chooses **2-3x**
-
-**Fallback**:
-If AI doesn't specify leverage, system falls back to volatility-based calculation:
-- Low volatility → 5x
-- Medium volatility → 3x
-- High volatility → 2x
-
-**Benefits**:
-- AI considers multiple factors simultaneously (volatility, trend, momentum, volume)
-- Each coin gets custom leverage based on its specific setup
-- More aggressive on high-probability setups
-- More conservative on uncertain setups
-- Adapts to real-time market conditions
-
----
-
-## 4. Dynamic Cooldown (Volatility-Based)
-
-**Strategy**: Trade more frequently in fast markets, less frequently in slow markets
-
-**Configuration**:
-```php
-'dynamic_cooldown' => [
-    'enabled' => true,
-    'low_volatility_minutes' => 120,   // Wait 2 hours
-    'medium_volatility_minutes' => 60,  // Wait 1 hour
-    'high_volatility_minutes' => 30,    // Wait 30 minutes
-]
-```
-
-**Logic**:
-- After closing a position, bot won't trade the same coin for a cooldown period
-- **Low volatility** (slow market): 120 min cooldown (avoid overtrading)
-- **Medium volatility**: 60 min cooldown (normal frequency)
-- **High volatility** (fast market): 30 min cooldown (capture opportunities)
-
-**Benefits**:
-- Prevents overtrading in choppy, directionless markets
-- Allows multiple entries in strong trending (volatile) markets
-- Reduces trading costs (fees) when opportunities are scarce
+### Coin Performance Ranking
+| Rank | Coin | Trades | Win Rate | Total P&L | Status |
+|------|------|--------|----------|-----------|--------|
+| 🥇 | ZEC | 2 | 100% | +$2.69 | BEST |
+| 🥈 | HYPE | 1 | 100% | +$2.10 | EXCELLENT |
+| 🥉 | DOT | 1 | 100% | +$1.93 | EXCELLENT |
+| 4 | SOL | 6 | 33.3% | +$1.23 | VOLATILE |
+| 5 | BNB | 2 | 50% | +$0.57 | STABLE |
+| 6 | XRP | 8 | 62.5% | +$0.18 | High WR, low profit |
+| 7 | DOGE | 3 | 33.3% | -$0.56 | WEAK |
+| 8 | ADA | 1 | 0% | -$0.99 | ❌ AVOID |
+| 9 | BCH | 2 | 50% | -$1.28 | RISKY |
+| 10 | AVAX | 2 | 0% | -$1.38 | ❌ AVOID |
 
 ---
 
-## 5. Market Cap Diversification (Volatility-Adjusted)
+## 🎯 UPDATED STRATEGY RULES
 
-**Strategy**: Limit exposure per market cap segment, adjust based on volatility
-
-**Market Cap Classification**:
-```php
-'large_cap' => ['BTC/USDT', 'ETH/USDT', 'BNB/USDT']
-'mid_cap' => ['SOL/USDT', 'ADA/USDT', 'AVAX/USDT', 'LINK/USDT', 'DOT/USDT']
-'small_cap' => ['XRP/USDT', 'DOGE/USDT', 'PEPE/USDT', 'HYPE/USDT', 'ZEC/USDT']
+### 1. Leverage Rules
+```
+✅ Max Leverage: 3x (reduced from 10x)
+✅ Default: 2x for most trades
+✅ High Confidence (80%+): 3x allowed
+⚠️ Med-High (75-79%): 2x ONLY (risky range)
+✅ Medium (70-74%): 2-3x based on setup
+✅ Low (60-69%): 2x maximum
+❌ Below 60%: REJECT trade
 ```
 
-**Position Limits**:
+**Rationale:**
+- 5x leverage caused -$1.18 net loss
+- 2x leverage generated +$5.67 profit
+- 75-79% confidence is paradoxically risky
 
-**Normal Market Conditions**:
-- Max 3 large cap positions
-- Max 3 mid cap positions
-- Max 4 small cap positions
-- **Total**: Up to 10 positions
-
-**High Volatility Conditions**:
-- Max 4 large cap positions (increased safety)
-- Max 3 mid cap positions
-- Max 2 small cap positions (reduced risk)
-- **Total**: Up to 9 positions
-
-**Benefits**:
-- Prevents concentration risk in one market segment
-- Reduces small cap exposure during volatile periods
-- Increases stable large cap exposure when markets are risky
-- Ensures portfolio diversification
-
----
-
-## 6. Multi-Level Trailing Stops (Automatic Profit Protection)
-
-**Strategy**: Automatically lock in profits progressively as position becomes more profitable - **NO MANUAL ACTION REQUIRED**
-
-### Why Trailing Stops?
-
-You don't need to manually close positions! The system automatically:
-- ✅ Protects your profits as they grow
-- ✅ Lets winners run to maximize gains
-- ✅ Cuts losses early if price reverses
-- ✅ Removes emotional decision-making
-
-### The 4 Protection Levels:
-
-**Configuration**:
-```php
-'trailing_stops' => [
-    'level_1' => ['trigger' => 3,  'target' => -1],  // 🛡️ L1: +3% profit → stop at -1%
-    'level_2' => ['trigger' => 5,  'target' => 0],   // ✅ L2: +5% profit → stop at 0% (breakeven)
-    'level_3' => ['trigger' => 8,  'target' => 3],   // 🔒 L3: +8% profit → stop at +3%
-    'level_4' => ['trigger' => 12, 'target' => 6],   // 💎 L4: +12% profit → stop at +6%
-]
+### 2. Confidence Filtering
+```
+✅ 80%+ : IDEAL (100% WR historically)
+⚠️ 75-79%: CAUTIOUS (50% WR, cap leverage at 2x)
+✅ 70-74%: ACCEPTABLE (41.7% WR but profitable)
+✅ 60-69%: ACCEPTABLE (57.1% WR!)
+❌ <60%  : REJECT
 ```
 
-### Visual Example:
+### 3. Coin Selection (Active Trading List)
+**Primary Coins (Proven Winners):**
+- ✅ ZEC/USDT (100% WR, $2.69 profit)
+- ✅ HYPE/USDT (100% WR, $2.10 profit)
+- ✅ DOT/USDT (100% WR, $1.93 profit)
+- ✅ SOL/USDT (33.3% WR but $1.23 profit)
+- ✅ BNB/USDT (50% WR, stable)
+- ✅ XRP/USDT (62.5% WR, consistent)
 
-**Position: SOL/USDT**
-- Entry: $190.21
-- Capital: $30
-- Leverage: 2x
+**Secondary Coins (Volume + Momentum):**
+- ✅ BTC/USDT (Large cap, stable)
+- ✅ ETH/USDT (Large cap, stable)
+- ✅ LINK/USDT (Mid cap, $233M volume)
 
-#### Stage 1: No Protection Yet
-```
-Entry: $190.21
-Current: $192.00 (+0.94%)
-Stop Loss: $184.50 (original -3%)
-Status: ⚪ No protection yet (need +3% to activate L1)
-```
+**New Additions (High Potential):**
+- 🆕 SUI/USDT ($334M volume, strong momentum)
+- 🆕 TAO/USDT ($226M volume, AI sector)
+- 🆕 ZEN/USDT ($174M volume, 115% weekly gain)
 
-#### Stage 2: 🛡️ Level 1 Activated (+3%)
-```
-Entry: $190.21
-Current: $195.92 (+3.0%)  ← Hit +3%!
-Stop Loss: $188.31 (-1%)  ← Moved up from -3% to -1%
-Max Loss: Only $0.38 (was $1.80)
-Status: 🛡️ T-Stop L1 - Risk reduced!
-```
+**Excluded Coins:**
+- ❌ ADA/USDT (0% WR)
+- ❌ AVAX/USDT (0% WR)
+- ⚠️ BCH/USDT (50% WR but net negative)
+- ⚠️ DOGE/USDT (33% WR, -$0.56)
 
-#### Stage 3: ✅ Level 2 Activated (+5%)
-```
-Entry: $190.21
-Current: $199.72 (+5.0%)  ← Hit +5%!
-Stop Loss: $190.21 (0%)   ← Moved to breakeven!
-Max Loss: $0 (was $0.38)
-Status: ✅ T-Stop L2 - CANNOT LOSE ANYMORE!
-```
+**Total Active Coins:** 12
 
-#### Stage 4: 🔒 Level 3 Activated (+8%)
+### 4. Position Sizing (Fixed - Equal for All Coins)
 ```
-Entry: $190.21
-Current: $205.43 (+8.0%)  ← Hit +8%!
-Stop Loss: $195.92 (+3%)  ← Moved up to +3%!
-Min Profit: $1.80 guaranteed
-Status: 🔒 T-Stop L3 - Profit locked!
-```
+Base Position Size: $10 USDT (same for every coin)
+With Leverage:
+- 2x leverage = $20 notional
+- 3x leverage = $30 notional
 
-#### Stage 5: 💎 Level 4 Activated (+12%)
-```
-Entry: $190.21
-Current: $213.03 (+12.0%) ← Hit +12%!
-Stop Loss: $201.62 (+6%)  ← Moved up to +6%!
-Min Profit: $3.60 guaranteed
-Status: 💎 T-Stop L4 - Big profit locked!
+Max Positions: 6 simultaneous
+Max Capital at Risk: $60 USDT base ($120-180 notional)
+
+Note: No special treatment for any coin. ZEC, XRP, or others
+all get the same $10 position size. Let results speak over time.
 ```
 
-#### Stage 6: Price Reverses (Automatic Exit)
+### 5. Trailing Stop Protection (KEEP AS IS - WORKING WELL!)
 ```
-Price starts falling...
-$210 → $205 → $202 → $201.62 ← STOP LOSS TRIGGERED!
-Automatic sell executed
-Final P&L: +$3.60 (+6% profit locked)
-YOU DID NOTHING - System protected your profit! ✅
-```
-
-### Real World Benefits:
-
-**Without Trailing Stops:**
-```
-Entry: $190.21
-Peak: $213.03 (+12%)  😃 "Wow, +12% profit!"
-Falls: $185.00 (-2.7%) 😭 "Noooo, I lost money!"
-Result: -$1.00 loss
+Level 1: +3% profit → Move stop to -1%
+Level 2: +5% profit → Move stop to 0% (BREAKEVEN)
+Level 3: +8% profit → Move stop to +3%
+Level 4: +12% profit → Move stop to +6%
 ```
 
-**With Trailing Stops (L4 Active):**
-```
-Entry: $190.21
-Peak: $213.03 (+12%)  😃 Stop locked at +6%
-Falls: $201.62        🤖 Auto-sell triggered
-Result: +$3.60 profit ✅
-```
+**Rationale:** Trailing L3 had 100% WR and +$3.96 profit!
 
-### How They Work Automatically:
-
-**Monitoring System** (`php artisan positions:monitor`):
-- Runs **every 1 minute**
-- Checks all open positions
-- Calculates current profit %
-- Updates stop loss if level triggered
-- Updates Binance stop loss order
-- **Never moves stop backwards** (only forward)
-
-**Example Timeline:**
+### 6. Risk Management
 ```
-00:00 - Position opened at $190.21, stop at $184.50 (-3%)
-00:05 - Price $192.00 (+0.94%) - No change
-00:10 - Price $195.92 (+3.0%) - ✅ L1 triggered! Stop → $188.31
-00:15 - Price $198.00 (+4.1%) - No change (still L1)
-00:20 - Price $199.72 (+5.0%) - ✅ L2 triggered! Stop → $190.21
-00:25 - Price $203.00 (+6.7%) - No change (still L2)
-00:30 - Price $205.43 (+8.0%) - ✅ L3 triggered! Stop → $195.92
-00:35 - Price $213.03 (+12%) - ✅ L4 triggered! Stop → $201.62
-00:40 - Price $206.00 - No trigger (still above stop)
-00:45 - Price $201.62 - 🚨 STOP TRIGGERED! Position closed
+✅ Max 1 position per coin
+✅ Max 6 total positions
+✅ Skip trades if cash < $10
+✅ Stop loss at -3% (base) adjusted by leverage
+✅ Take profit at +5% (base) adjusted by leverage
 ```
 
-### Dashboard Indicators:
-
-When you see these badges on your positions:
-
-| Badge | Meaning | What Happened |
-|-------|---------|---------------|
-| **🛡️ T-Stop L1** | Basic protection | Hit +3%, max loss now -1% |
-| **✅ T-Stop L2** | Breakeven | Hit +5%, cannot lose money anymore |
-| **🔒 T-Stop L3** | Profit locked | Hit +8%, +3% profit guaranteed |
-| **💎 T-Stop L4** | Big profit locked | Hit +12%, +6% profit guaranteed |
-
-### Configuration (Customizable):
-
-You can adjust these levels in Bot Settings:
-- `trailing_stop_l1_trigger` = 3% (when to activate L1)
-- `trailing_stop_l1_target` = -1% (where to move stop)
-- `trailing_stop_l2_trigger` = 5%
-- `trailing_stop_l2_target` = 0%
-- ... and so on for L3 and L4
-
-### Key Points:
-
-✅ **Automatic** - No manual closing required
-✅ **Progressive** - Protects more as profit grows
-✅ **One-way** - Stop loss only moves UP, never down
-✅ **Real-time** - Updates every minute
-✅ **Binance sync** - Stop orders placed on exchange
-✅ **Customizable** - Adjust levels in settings
-
-**YOU DON'T NEED TO DO ANYTHING!** Just let the system protect your profits automatically. 🚀
-
----
-
-## 7. Pre-Filtering (Token Optimization)
-
-**Strategy**: Only send coins with promising setups to AI (saves 70% of AI costs)
-
-**Criteria** (Must pass 2 out of 4):
-1. **Price > EMA20**: Price above 20-period EMA (uptrend)
-2. **MACD > Signal**: MACD line above signal line (bullish momentum)
-3. **RSI 35-75**: RSI not oversold or overbought
-4. **4H Trend**: 4-hour EMA20 > EMA50 (long-term uptrend)
-
-**Configuration**:
-```php
-'pre_filtering' => [
-    'enabled' => true,
-    'min_criteria' => 2,  // Must pass at least 2 criteria
-]
+### 7. Market Cap Diversification
+```
+Large Cap (BTC, ETH, BNB): Max 3 positions
+Mid Cap (SOL, LINK, DOT, TAO, ZEN): Max 3 positions
+Small Cap (XRP, DOGE, HYPE, ZEC, SUI): Max 4 positions
 ```
 
-**Example**:
-- 15 coins monitored
-- 8 coins pass pre-filtering (sent to AI)
-- 7 coins filtered out (not sent to AI)
-- **Result**: ~50% cost savings + faster decisions
-
----
-
-## 8. Risk Management Rules
-
-### Position Entry Rules:
-1. **Minimum Confidence**: 0.70 (70%)
-2. **Minimum Cash**: $1 USDT available
-3. **Cooldown Check**: No recent trade on same coin
-4. **Diversification Check**: Market cap limits not exceeded
-5. **Existing Position Check**: No open position on same coin
-
-### Position Exit Rules:
-1. **Take Profit Target**: Set by AI (typically +5-10%)
-2. **Stop Loss**: Set by AI (typically -3-5%)
-3. **Trailing Stops**: 4 levels to lock profits
-4. **Liquidation Distance**: Monitored continuously
-5. **Invalidation Condition**: AI-defined exit criteria
-
-### Emergency Exit Conditions:
-- Liquidation price < 10% away → Close position
-- Stop loss triggered → Immediate market close
-- Bot disabled manually → Hold positions, stop trading
-
----
-
-## 9. Supported Trading Pairs
-
-**Primary Active Pairs** (Default):
-1. **BTC/USDT** - Bitcoin ($13.2B volume)
-2. **ETH/USDT** - Ethereum ($15.8B volume)
-3. **SOL/USDT** - Solana ($4.4B volume)
-4. **BNB/USDT** - BNB ($2.7B volume)
-5. **XRP/USDT** - Ripple ($0.97B volume)
-6. **DOGE/USDT** - Dogecoin ($0.99B volume)
-
-**Additional Available Pairs**:
-7. HYPE/USDT - Hype ($0.59B volume)
-8. ZEC/USDT - Zcash ($0.55B volume)
-9. PEPE/USDT - Pepe ($0.33B volume)
-10. LINK/USDT - Chainlink ($0.31B volume)
-11. ADA/USDT - Cardano ($0.26B volume)
-12. BCH/USDT - Bitcoin Cash ($0.19B volume)
-13. DOT/USDT - Polkadot ($0.18B volume)
-14. LTC/USDT - Litecoin ($0.15B volume)
-15. MATIC/USDT - Polygon ($0.14B volume)
-
-**Configuration**: Managed in `config/trading.php` and Bot Settings page
-
----
-
-## 10. Technical Indicators Used
-
-### Short-Term Analysis (3-minute timeframe):
-- **EMA 20**: 20-period exponential moving average
-- **MACD (12,26,9)**: Trend and momentum indicator
-- **RSI 7**: 7-period relative strength index
-- **ATR 3**: 3-period average true range (volatility)
-- **ADX**: Average directional index (trend strength)
-- **Plus DI / Minus DI**: Directional indicators
-
-### Long-Term Context (4-hour timeframe):
-- **EMA 20 & 50**: Trend identification
-- **ATR 14**: Volatility measurement
-- **Volume**: Trading activity
-- **Funding Rate**: Market sentiment (long/short bias)
-- **Open Interest**: Total open positions
-
----
-
-## 11. Trading Schedule
-
-**Market Data Collection**:
-- Runs every **3 minutes** via `php artisan schedule:work`
-- Collects OHLCV data for all active pairs
-- Calculates all technical indicators
-- Stores in `market_data` table
-
-**AI Trading Decisions**:
-- Runs every **10 minutes** via scheduler
-- Analyzes all coins with fresh data
-- Executes buy orders based on AI recommendations
-- Logs all decisions to `ai_logs` table
-
-**Position Monitoring**:
-- Runs every **1 minute** via scheduler
-- Updates current prices for all open positions
-- Applies trailing stop logic
-- Checks for stop loss / take profit triggers
-
----
-
-## 12. Performance Metrics Tracked
-
-### Account Metrics:
-- **Total Value**: Current account balance (free + locked)
-- **Available Cash**: USDT available for trading
-- **ROI**: Return on investment since start
-- **Realized P&L**: Total profit/loss from closed trades
-- **Unrealized P&L**: Current profit/loss from open positions
-
-### Trading Statistics:
-- **Win Rate**: % of profitable closed positions
-- **Total Trades**: Number of completed trades
-- **Wins / Losses**: Count of profitable vs unprofitable trades
-- **Avg Win**: Average profit per winning trade
-- **Avg Loss**: Average loss per losing trade
-- **Profit Factor**: Total wins ÷ Total losses
-
-### AI Performance Metrics:
-- **Total AI Trades**: Trades executed by AI
-- **Avg Confidence**: Average confidence score of all trades
-- **High Confidence Win Rate**: Win rate for confidence ≥ 80%
-- **Medium Confidence Win Rate**: Win rate for confidence 70-79%
-- **Low Confidence Win Rate**: Win rate for confidence < 70%
-- **Avg Confidence (Wins)**: Average confidence of winning trades
-- **Avg Confidence (Losses)**: Average confidence of losing trades
-- **Best Performing Range**: Which confidence level performs best
-- **Confidence Correlation**: Difference between win/loss confidence
-
----
-
-## 13. Strategy Benefits
-
-### Automated Risk Management:
-✅ Position sizing scales with account balance
-✅ Leverage adjusts automatically to volatility
-✅ Trailing stops lock in profits without manual intervention
-✅ Diversification limits prevent concentration risk
-
-### Adaptive to Market Conditions:
-✅ Faster trading in volatile (opportunity-rich) markets
-✅ Slower trading in choppy (low-opportunity) markets
-✅ Lower leverage during uncertain periods
-✅ Reduced small-cap exposure when markets are risky
-
-### Cost Optimization:
-✅ Pre-filtering reduces AI API costs by ~70%
-✅ Cooldown periods prevent excessive trading fees
-✅ Dynamic position sizing prevents overtrading small accounts
-
-### AI-Powered Intelligence:
-✅ Analyzes 15+ indicators across multiple timeframes
-✅ Considers market sentiment (funding rate, open interest)
-✅ Learns from confidence scores vs actual outcomes
-✅ Provides reasoning for every decision
-
----
-
-## 14. Configuration Files
-
-### Main Configuration:
-- **config/trading.php**: All strategy parameters
-- **Bot Settings (Database)**: Runtime-adjustable settings
-- **.env**: API keys, AI model selection, trading mode
-
-### Key Settings:
-```bash
-# Trading Mode
-TRADING_MODE=mock          # or 'testnet', 'live'
-
-# AI Configuration
-AI_PROVIDER=openrouter
-OPENROUTER_MODEL=deepseek/deepseek-chat-v3.1
-
-# Binance API
-BINANCE_API_KEY=your_key
-BINANCE_API_SECRET=your_secret
-BINANCE_TESTNET=false
+**High Volatility Adjustment:**
+```
+Large Cap: Max 4 positions (increase)
+Mid Cap: Max 3 positions (same)
+Small Cap: Max 2 positions (reduce risk)
 ```
 
 ---
 
-## 15. How to Adjust Strategy
+## 🤖 AI DECISION CRITERIA
 
-### Via Admin Panel (`/admin`):
-- Bot enabled/disabled
-- Active trading pairs selection
-- AI model configuration
-- Initial capital tracking
-- Max leverage limit
-- Take profit / Stop loss percentages
-- Trailing stop levels (4 levels)
+### BUY Signal Requirements (All Must Be Met):
+1. **Price Action:** Price > EMA20 (with 0.3% margin)
+2. **Momentum:** MACD > Signal Line
+3. **Trend Strength:** 4H ADX > 20
+4. **Not Overbought:** RSI < 75
+5. **Confidence:** AI confidence ≥ 60%
 
-### Via Config File (`config/trading.php`):
-- Dynamic position sizing (on/off, risk %)
-- Dynamic leverage (on/off, volatility thresholds)
-- Dynamic cooldown (on/off, time periods)
-- Market cap limits (normal/high volatility)
-- Pre-filtering (on/off, criteria count)
+### SELL/CLOSE Signal Requirements (Any Can Trigger):
+1. **Take Profit:** Target price reached (+5% base)
+2. **Stop Loss:** Stop price hit (-3% base)
+3. **Trailing Stop:** Trailing protection triggered
+4. **Reversal:** Strong bearish signals (MACD crossdown + RSI>75)
+5. **Manual Override:** User closes position
 
-### Via Environment Variables (`.env`):
-- Trading mode (mock/testnet/live)
-- AI provider and model
-- Binance API credentials
-
----
-
-## 16. Safety Features
-
-### Pre-Trade Checks:
-- Sufficient balance verification
-- Existing position check
-- Cooldown period enforcement
-- Confidence threshold validation
-- Diversification limit enforcement
-
-### During Trade:
-- Real-time price monitoring (every 1 minute)
-- Liquidation distance tracking
-- Trailing stop adjustments
-- Stop loss / Take profit order management
-
-### Post-Trade:
-- Realized P&L calculation
-- Performance metrics update
-- AI decision logging with reasoning
-- Position history archival
+### HOLD Signal:
+- Market conditions not ideal
+- Already have position in this coin
+- Insufficient cash
+- Low confidence (<60%)
 
 ---
 
-## 17. Example Trade Flow
+## 📈 OPTIMIZATION LEARNINGS
 
-**Scenario**: BTC/USDT Buy Signal
+### What Works ✅
+1. **2x Leverage:** Most profitable leverage level
+2. **Trailing Stops:** Excellent for protecting profits
+3. **High Confidence (80%+):** 100% win rate
+4. **ZEC, HYPE, DOT:** Top performing coins
+5. **Low Confidence (60-69%):** Surprisingly good 57% WR
 
-1. **Market Data Collection** (every 3 minutes)
-   - Fetch OHLCV data for BTC
-   - Calculate EMA, MACD, RSI, ATR, ADX
-   - Store in database
+### What Doesn't Work ❌
+1. **5x Leverage:** Net negative, too risky
+2. **75-79% Confidence:** Paradox - risky despite high confidence
+3. **ADA, AVAX:** 0% win rate, avoid
+4. **Unknown Exit Reasons:** 45.5% WR, needs fixing
+5. **Position Sizing on XRP:** 62.5% WR but only $0.18 profit
 
-2. **AI Analysis** (every 10 minutes)
-   - Pre-filter: BTC passes 3/4 criteria ✅
-   - Send BTC data to DeepSeek AI
-   - AI returns: `buy`, confidence: 0.85, entry: $95,000, target: $98,000, stop: $93,000
-
-3. **Pre-Trade Validation**
-   - Confidence 0.85 > 0.70 ✅
-   - Available cash: $1,500 ✅
-   - No existing BTC position ✅
-   - Cooldown expired (last trade 90 min ago) ✅
-   - Large cap limit: 1/3 ✅
-
-4. **Position Sizing**
-   - Calculate volatility: ATR ratio = 0.85 → Medium volatility
-   - Dynamic leverage: 3x
-   - Position size: $1,500 × 2.5% = $37.50
-   - Quantity: ($37.50 × 3) / $95,000 = 0.001184 BTC
-
-5. **Order Execution**
-   - Set leverage on Binance: 3x
-   - Send market buy order: 0.001184 BTC
-   - Order filled at: $95,100 (avg)
-   - Create position record with targets
-
-6. **Position Monitoring** (every 1 minute)
-   - Update current price
-   - Check trailing stops:
-     - Price reaches $97,954 (+3%) → Move stop to $94,149 (-1%)
-     - Price reaches $99,855 (+5%) → Move stop to $95,100 (breakeven)
-     - Price reaches $102,708 (+8%) → Move stop to $98,003 (+3%)
-
-7. **Position Exit**
-   - Price hits $98,000 (take profit) ✅
-   - Close position via market sell
-   - Calculate realized P&L: +$2.85 (+2.5% with 3x leverage = +7.5%)
-   - Update statistics, cooldown activated
+### What to Test 🧪
+1. **3x Leverage:** New max, monitor performance
+2. **SUI, TAO, ZEN:** New high-momentum coins
+3. **70-74% Confidence:** Low WR but profitable, why?
+4. **Larger XRP Positions:** High WR, increase size?
 
 ---
 
-## 18. Monitoring & Logs
+## 🎲 EXPECTED OUTCOMES (Next 30 Trades)
 
-### Log Files:
-- **storage/logs/laravel.log**: All trading activity
-- Search for: `🤖` (AI decisions), `✅` (successful trades), `⚠️` (warnings)
+**Conservative Estimate:**
+- Win Rate: 50-55%
+- Avg Win: +$1.20
+- Avg Loss: -$0.80
+- Expected P&L: +$6-12 USD
+- ROI: +18-36% on capital at risk
 
-### Database Tables:
-- **positions**: All open/closed positions with P&L
-- **ai_logs**: AI decisions with reasoning
-- **market_data**: Time-series indicator data
-- **bot_settings**: Configuration values
-
-### Dashboard (`/dashboard`):
-- Real-time account balance
-- Open positions with current P&L
-- Recent closed positions
-- Win rate, ROI, profit factor
-- AI performance metrics
-- Last AI run timestamp
+**Optimistic Estimate:**
+- Win Rate: 55-60%
+- Avg Win: +$1.50
+- Avg Loss: -$0.70
+- Expected P&L: +$12-20 USD
+- ROI: +36-60% on capital at risk
 
 ---
 
-## 19. Best Practices
+## 🚨 RISK WARNINGS
 
-### For Maximum Safety:
-1. Start with **mock mode** to test strategy
-2. Use **testnet mode** with fake money
-3. Begin with **small position sizes** (1-2%)
-4. Set **conservative leverage** (2-3x max)
-5. Enable **all safety features** (trailing stops, diversification)
-
-### For Optimal Performance:
-1. Monitor **AI performance metrics** weekly
-2. Adjust **confidence threshold** based on results
-3. Review **closed positions** to identify patterns
-4. Update **active pairs** based on market conditions
-5. Keep **sufficient balance** to avoid missing opportunities
-
-### For Cost Efficiency:
-1. Enable **pre-filtering** to reduce AI costs
-2. Adjust **cooldown periods** to reduce overtrading
-3. Focus on **high-volume pairs** for better liquidity
-4. Review **trailing stops** to avoid premature exits
+1. **5x Leverage Removed:** May miss high-reward opportunities
+2. **75-79% Confidence Capped:** May reduce profits on "almost good" setups
+3. **Fewer Coins:** Focusing on 12 coins may miss opportunities in others
+4. **Small Sample Size:** Only 28 trades, patterns may change
+5. **Market Conditions:** Strategy optimized for current market, may need adjustment
 
 ---
 
-## 20. Future Enhancements (Planned)
+## 📝 IMPLEMENTATION CHECKLIST
 
-- [ ] Short positions (sell signals)
-- [ ] Multiple AI model voting (ensemble approach)
-- [ ] Bollinger Bands indicator integration
-- [ ] Backtesting framework
-- [ ] Custom indicator builder
-- [ ] Telegram notifications
-- [ ] Advanced position sizing (Kelly Criterion)
-- [ ] Market regime detection (trending vs ranging)
-
----
-
-## Summary
-
-This trading strategy combines:
-- **AI intelligence** for decision-making
-- **Dynamic risk management** for safety
-- **Volatility adaptation** for market conditions
-- **Cost optimization** for profitability
-- **Automated execution** for consistency
-
-The result is a robust, adaptive trading system that can operate 24/7 with minimal manual intervention while maintaining strict risk controls.
+- [x] Max leverage reduced: 10x → 3x
+- [x] 75-79% confidence filter: Cap at 2x leverage
+- [ ] Update config/trading.php with new coin list
+- [ ] Update dynamic_leverage settings
+- [ ] Deploy to production server
+- [ ] Monitor first 10 trades closely
+- [ ] Re-evaluate after 50 total trades
 
 ---
 
-**Last Updated**: October 24, 2025
-**Strategy Version**: 2.0
-**Bot Version**: Multi-Coin AI Trading Bot v1.0
+## 📞 MONITORING & ALERTS
+
+**Daily Review:**
+- Check win rate (target: >50%)
+- Monitor leverage usage (target: avg 2-3x)
+- Review closed positions for patterns
+- Check if any coins underperforming
+
+**Weekly Review:**
+- Update coin performance rankings
+- Adjust active coin list if needed
+- Review AI confidence correlation
+- Optimize position sizing
+
+**Monthly Review:**
+- Full strategy evaluation
+- Backtest alternative approaches
+- Consider adding/removing coins
+- Update expected outcomes
+
+---
+
+## 🎯 SUCCESS METRICS
+
+**Primary KPIs:**
+- Win Rate: >50%
+- Profit Factor: >1.5
+- ROI: >20% monthly
+- Max Drawdown: <15%
+
+**Secondary KPIs:**
+- Avg Win/Loss Ratio: >1.3
+- Trailing Stop Usage: >30% of exits
+- AI Confidence Accuracy: Wins avg >70%
+- Position Count: 4-6 simultaneous
+
+---
+
+**Strategy Version:** 2.0
+**Last Backtest:** 2025-10-26 (28 trades)
+**Next Review:** After 50 total trades or 2025-11-01 (whichever comes first)
