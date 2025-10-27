@@ -61,25 +61,49 @@ class MonitorPositions extends Command
         $stopLoss = $exitPlan['stop_loss'] ?? null;
         $liqPrice = $position->liquidation_price;
 
-        $this->line("  📊 {$symbol}: \${$currentPrice}");
+        $this->line("  📊 {$symbol}: \${$currentPrice} ({$position->side})");
 
-        // 1. CHECK TAKE PROFIT
-        if ($profitTarget && $currentPrice >= $profitTarget) {
+        // 1. CHECK TAKE PROFIT (handle SHORT vs LONG)
+        $takeProfitHit = false;
+        if ($profitTarget) {
+            if ($position->side === 'short') {
+                $takeProfitHit = $currentPrice <= $profitTarget; // SHORT: profit when price goes DOWN
+            } else {
+                $takeProfitHit = $currentPrice >= $profitTarget; // LONG: profit when price goes UP
+            }
+        }
+
+        if ($takeProfitHit) {
             $this->info("    🎯 Take Profit hit! Target: \${$profitTarget}");
             $this->closePosition($position, 'take_profit', $currentPrice);
             return;
         }
 
-        // 2. CHECK STOP LOSS
-        if ($stopLoss && $currentPrice <= $stopLoss) {
+        // 2. CHECK STOP LOSS (handle SHORT vs LONG)
+        $stopLossHit = false;
+        if ($stopLoss) {
+            if ($position->side === 'short') {
+                $stopLossHit = $currentPrice >= $stopLoss; // SHORT: stop when price goes UP
+            } else {
+                $stopLossHit = $currentPrice <= $stopLoss; // LONG: stop when price goes DOWN
+            }
+        }
+
+        if ($stopLossHit) {
             $this->warn("    🛑 Stop Loss hit! Stop: \${$stopLoss}");
             $this->closePosition($position, 'stop_loss', $currentPrice);
             return;
         }
 
-        // 3. CHECK LIQUIDATION DANGER (only for extreme emergencies)
+        // 3. CHECK LIQUIDATION DANGER (handle SHORT vs LONG)
         if ($liqPrice) {
-            $distanceToLiq = (($currentPrice - $liqPrice) / $currentPrice) * 100;
+            if ($position->side === 'short') {
+                // SHORT: liquidation when price goes UP above liqPrice
+                $distanceToLiq = (($liqPrice - $currentPrice) / $currentPrice) * 100;
+            } else {
+                // LONG: liquidation when price goes DOWN below liqPrice
+                $distanceToLiq = (($currentPrice - $liqPrice) / $currentPrice) * 100;
+            }
 
             // Emergency close only if VERY close to liquidation (3%)
             if ($distanceToLiq < 3) {
@@ -146,7 +170,13 @@ class MonitorPositions extends Command
         }
 
         // 5. MULTI-LEVEL TRAILING STOP (Protect profits as position grows)
-        $pnlPercent = (($currentPrice - $entryPrice) / $entryPrice) * 100 * $position->leverage;
+        // Calculate P&L with proper SHORT handling
+        $priceDiff = $currentPrice - $entryPrice;
+        if ($position->side === 'short') {
+            $priceDiff = -$priceDiff; // SHORT: price down = profit
+        }
+        $pnlPercent = ($priceDiff / $entryPrice) * 100 * $position->leverage;
+
         $originalStopLoss = $exitPlan['stop_loss'] ?? null;
         $trailingUpdated = false;
 
@@ -162,8 +192,16 @@ class MonitorPositions extends Command
 
         if ($pnlPercent >= $l4Trigger) {
             // Level 4: Lock in big profit
-            $newStop = $entryPrice * (1 + ($l4Target / 100));
-            if (!$stopLoss || $newStop > $stopLoss) {
+            if ($position->side === 'short') {
+                $newStop = $entryPrice * (1 - ($l4Target / 100)); // SHORT: stop below entry
+            } else {
+                $newStop = $entryPrice * (1 + ($l4Target / 100)); // LONG: stop above entry
+            }
+
+            $shouldUpdate = !$stopLoss ||
+                ($position->side === 'short' ? $newStop < $stopLoss : $newStop > $stopLoss);
+
+            if ($shouldUpdate) {
                 $exitPlan['stop_loss'] = $newStop;
                 $exitPlan['trailing_level'] = 4;
                 $exitPlan['max_profit_reached'] = $pnlPercent;
@@ -173,8 +211,16 @@ class MonitorPositions extends Command
             }
         } elseif ($pnlPercent >= $l3Trigger) {
             // Level 3: Lock in profit
-            $newStop = $entryPrice * (1 + ($l3Target / 100));
-            if (!$stopLoss || $newStop > $stopLoss) {
+            if ($position->side === 'short') {
+                $newStop = $entryPrice * (1 - ($l3Target / 100));
+            } else {
+                $newStop = $entryPrice * (1 + ($l3Target / 100));
+            }
+
+            $shouldUpdate = !$stopLoss ||
+                ($position->side === 'short' ? $newStop < $stopLoss : $newStop > $stopLoss);
+
+            if ($shouldUpdate) {
                 $exitPlan['stop_loss'] = $newStop;
                 $exitPlan['trailing_level'] = 3;
                 $exitPlan['max_profit_reached'] = $pnlPercent;
@@ -184,8 +230,16 @@ class MonitorPositions extends Command
             }
         } elseif ($pnlPercent >= $l2Trigger) {
             // Level 2: Move to breakeven or custom target
-            $newStop = $entryPrice * (1 + ($l2Target / 100));
-            if (!$stopLoss || $newStop > $stopLoss) {
+            if ($position->side === 'short') {
+                $newStop = $entryPrice * (1 - ($l2Target / 100));
+            } else {
+                $newStop = $entryPrice * (1 + ($l2Target / 100));
+            }
+
+            $shouldUpdate = !$stopLoss ||
+                ($position->side === 'short' ? $newStop < $stopLoss : $newStop > $stopLoss);
+
+            if ($shouldUpdate) {
                 $exitPlan['stop_loss'] = $newStop;
                 $exitPlan['trailing_level'] = 2;
                 $exitPlan['max_profit_reached'] = $pnlPercent;
@@ -196,8 +250,16 @@ class MonitorPositions extends Command
             }
         } elseif ($pnlPercent >= $l1Trigger) {
             // Level 1: Reduce risk
-            $newStop = $entryPrice * (1 + ($l1Target / 100));
-            if (!$stopLoss || $newStop > $stopLoss) {
+            if ($position->side === 'short') {
+                $newStop = $entryPrice * (1 - ($l1Target / 100));
+            } else {
+                $newStop = $entryPrice * (1 + ($l1Target / 100));
+            }
+
+            $shouldUpdate = !$stopLoss ||
+                ($position->side === 'short' ? $newStop < $stopLoss : $newStop > $stopLoss);
+
+            if ($shouldUpdate) {
                 $exitPlan['stop_loss'] = $newStop;
                 $exitPlan['trailing_level'] = 1;
                 $exitPlan['max_profit_reached'] = $pnlPercent;
@@ -217,12 +279,16 @@ class MonitorPositions extends Command
         $symbol = $position->symbol;
 
         try {
-            // Send SELL order to Binance
-            $this->line("    📤 Closing position on Binance...");
+            // Determine order side based on position type
+            // LONG position: close with SELL
+            // SHORT position: close with BUY
+            $orderSide = $position->side === 'short' ? 'buy' : 'sell';
+
+            $this->line("    📤 Closing {$position->side} position on Binance ({$orderSide} order)...");
 
             $order = $this->binance->getExchange()->createMarketOrder(
                 $symbol,
-                'sell',
+                $orderSide,
                 $position->quantity
             );
 

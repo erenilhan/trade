@@ -162,38 +162,58 @@ class TradeDashboardController extends Controller
                 $profitTarget = isset($exitPlan['profit_target']) ? (float) $exitPlan['profit_target'] : null;
                 $stopLoss = isset($exitPlan['stop_loss']) ? (float) $exitPlan['stop_loss'] : null;
 
-                // Calculate distance to targets
+                // Calculate distance to targets (handle SHORT positions)
                 $distanceToProfit = null;
                 $distanceToStop = null;
                 $profitNeeded = null;
                 $stopDistance = null;
 
                 if ($profitTarget) {
-                    $distanceToProfit = (($profitTarget - $currentPrice) / $currentPrice) * 100;
-                    $profitNeeded = $profitTarget - $currentPrice;
+                    if ($pos->side === 'short') {
+                        // SHORT: profit target is BELOW current price
+                        $distanceToProfit = (($currentPrice - $profitTarget) / $currentPrice) * 100;
+                        $profitNeeded = $currentPrice - $profitTarget;
+                    } else {
+                        // LONG: profit target is ABOVE current price
+                        $distanceToProfit = (($profitTarget - $currentPrice) / $currentPrice) * 100;
+                        $profitNeeded = $profitTarget - $currentPrice;
+                    }
                 }
 
                 if ($stopLoss) {
-                    $distanceToStop = (($currentPrice - $stopLoss) / $currentPrice) * 100;
-                    $stopDistance = $currentPrice - $stopLoss;
+                    if ($pos->side === 'short') {
+                        // SHORT: stop loss is ABOVE current price
+                        $distanceToStop = (($stopLoss - $currentPrice) / $currentPrice) * 100;
+                        $stopDistance = $stopLoss - $currentPrice;
+                    } else {
+                        // LONG: stop loss is BELOW current price
+                        $distanceToStop = (($currentPrice - $stopLoss) / $currentPrice) * 100;
+                        $stopDistance = $currentPrice - $stopLoss;
+                    }
                 }
 
                 // Calculate position size (how much $ invested)
                 $positionSize = $pos->quantity * $entryPrice;
                 $notionalSize = $pos->notional_usd ?? ($positionSize * $pos->leverage);
 
-                // Detect trailing stop level
+                // Detect trailing stop level (handle SHORT positions)
                 $trailingLevel = null;
                 if ($stopLoss && $entryPrice > 0) {
-                    $stopDiff = (($stopLoss - $entryPrice) / $entryPrice) * 100;
+                    if ($pos->side === 'short') {
+                        // SHORT: stop loss below entry = profit locked
+                        $stopDiff = (($entryPrice - $stopLoss) / $entryPrice) * 100;
+                    } else {
+                        // LONG: stop loss above entry = profit locked
+                        $stopDiff = (($stopLoss - $entryPrice) / $entryPrice) * 100;
+                    }
 
-                    if ($stopDiff >= 5.5) {
-                        $trailingLevel = 4; // Level 4: Stop at +6%
-                    } elseif ($stopDiff >= 2.5) {
-                        $trailingLevel = 3; // Level 3: Stop at +3%
+                    if ($stopDiff >= 7) {
+                        $trailingLevel = 4; // Level 4: Stop at +8%
+                    } elseif ($stopDiff >= 4) {
+                        $trailingLevel = 3; // Level 3: Stop at +5%
+                    } elseif ($stopDiff >= 1.5) {
+                        $trailingLevel = 2; // Level 2: +2%
                     } elseif ($stopDiff >= -0.5 && $stopDiff <= 0.5) {
-                        $trailingLevel = 2; // Level 2: Breakeven
-                    } elseif ($stopDiff >= -1.5 && $stopDiff < -0.5) {
                         $trailingLevel = 1; // Level 1: -1%
                     }
                 }

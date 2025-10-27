@@ -220,10 +220,18 @@ class TradingService
             throw new \Exception("Position not found for {$symbol}");
         }
 
-        // Execute sell order
-        $order = $this->binance->createMarketSell($symbol, $position->quantity, [
-            'reduceOnly' => true,
-        ]);
+        // Execute close order (LONG: sell, SHORT: buy)
+        if ($position->side === 'short') {
+            $order = $this->binance->createMarketBuy($symbol, $position->quantity, [
+                'reduceOnly' => true,
+            ]);
+            $closeSide = 'buy';
+        } else {
+            $order = $this->binance->createMarketSell($symbol, $position->quantity, [
+                'reduceOnly' => true,
+            ]);
+            $closeSide = 'sell';
+        }
 
         // Calculate PNL percentage
         $exitPrice = $order['price'] ?? $position->current_price;
@@ -251,7 +259,7 @@ class TradingService
         Trade::create([
             'order_id' => $order['id'],
             'symbol' => $symbol,
-            'side' => 'sell',
+            'side' => $closeSide,
             'type' => 'market',
             'amount' => $position->quantity,
             'price' => $order['price'] ?? $position->current_price,
