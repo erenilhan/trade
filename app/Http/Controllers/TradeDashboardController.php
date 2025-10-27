@@ -139,9 +139,114 @@ class TradeDashboardController extends Controller
             // Get initial investment
             $initialCapital = BotSetting::get('initial_capital', config('app.initial_capital', 1000));
 
-            // Calculate ROI
+            // Get active positions
+            $positions = Position::active()->get()->map(function ($pos) {
+                $currentPrice = (float) $pos->current_price;
+                $entryPrice = (float) $pos->entry_price;
+
+                // Calculate PNL
+                $priceDiff = $currentPrice - $entryPrice;
+                if ($pos->side === 'short') {
+                    $priceDiff = -$priceDiff;
+                }
+                $pnl = $priceDiff * $pos->quantity * $pos->leverage;
+                $pnlPercent = ($priceDiff / $entryPrice) * 100 * $pos->leverage;
+
+                // Get exit plan targets
+                $exitPlan = $pos->exit_plan ?? [];
+                $profitTarget = isset($exitPlan['profit_target']) ? (float) $exitPlan['profit_target'] : null;
+                $stopLoss = isset($exitPlan['stop_loss']) ? (float) $exitPlan['stop_loss'] : null;
+
+                // Calculate distance to targets (handle SHORT positions)
+                $distanceToProfit = null;
+                $distanceToStop = null;
+                $profitNeeded = null;
+                $stopDistance = null;
+
+                if ($profitTarget) {
+                    if ($pos->side === 'short') {
+                        // SHORT: profit target is BELOW current price
+                        $distanceToProfit = (($currentPrice - $profitTarget) / $currentPrice) * 100;
+                        $profitNeeded = $currentPrice - $profitTarget;
+                    } else {
+                        // LONG: profit target is ABOVE current price
+                        $distanceToProfit = (($profitTarget - $currentPrice) / $currentPrice) * 100;
+                        $profitNeeded = $profitTarget - $currentPrice;
+                    }
+                }
+
+                if ($stopLoss) {
+                    if ($pos->side === 'short') {
+                        // SHORT: stop loss is ABOVE current price
+                        $distanceToStop = (($stopLoss - $currentPrice) / $currentPrice) * 100;
+                        $stopDistance = $stopLoss - $currentPrice;
+                    } else {
+                        // LONG: stop loss is BELOW current price
+                        $distanceToStop = (($currentPrice - $stopLoss) / $currentPrice) * 100;
+                        $stopDistance = $currentPrice - $stopLoss;
+                    }
+                }
+
+                // Calculate position size (how much $ invested)
+                $positionSize = $pos->quantity * $entryPrice;
+                $notionalSize = $pos->notional_usd ?? ($positionSize * $pos->leverage);
+
+                // Detect trailing stop level (handle SHORT positions)
+                $trailingLevel = null;
+                if ($stopLoss && $entryPrice > 0) {
+                    if ($pos->side === 'short') {
+                        // SHORT: stop loss below entry = profit locked
+                        $stopDiff = (($entryPrice - $stopLoss) / $entryPrice) * 100;
+                    } else {
+                        // LONG: stop loss above entry = profit locked
+                        $stopDiff = (($stopLoss - $entryPrice) / $entryPrice) * 100;
+                    }
+
+                    if ($stopDiff >= 7) {
+                        $trailingLevel = 4; // Level 4: Stop at +8%
+                    } elseif ($stopDiff >= 4) {
+                        $trailingLevel = 3; // Level 3: Stop at +5%
+                    } elseif ($stopDiff >= 1.5) {
+                        $trailingLevel = 2; // Level 2: +2%
+                    } elseif ($stopDiff >= -0.5 && $stopDiff <= 0.5) {
+                        $trailingLevel = 1; // Level 1: -1%
+                    }
+                }
+
+                return [
+                    'symbol' => $pos->symbol,
+                    'side' => $pos->side,
+                    'entry_price' => $entryPrice,
+                    'current_price' => $currentPrice,
+                    'quantity' => $pos->quantity,
+                    'leverage' => $pos->leverage,
+                    'position_size' => $positionSize,
+                    'notional_size' => $notionalSize,
+                    'pnl' => $pnl,
+                    'pnl_percent' => $pnlPercent,
+                    'unrealized_pnl' => $pos->unrealized_pnl ?? $pnl,
+                    'opened_at' => $pos->opened_at?->diffForHumans(),
+                    'price_updated_at' => $pos->price_updated_at?->diffForHumans() ?? 'Never',
+                    'liquidation_price' => $pos->liquidation_price,
+                    'trailing_level' => $trailingLevel,
+                    'targets' => [
+                        'profit_target' => $profitTarget,
+                        'stop_loss' => $stopLoss,
+                        'distance_to_profit_pct' => $distanceToProfit,
+                        'distance_to_stop_pct' => $distanceToStop,
+                        'profit_needed' => $profitNeeded,
+                        'stop_distance' => $stopDistance,
+                    ],
+                ];
+            });
+
+            // Calculate ROI based on actual profit (total P&L) rather than total account value
+            $totalUnrealizedPnl = $positions->sum('pnl');
+            $totalRealizedPnl = Position::where('is_open', false)->sum('realized_pnl');
+            $totalProfit = $totalUnrealizedPnl + $totalRealizedPnl;
+            
             $roi = $initialCapital > 0
-                ? (($totalValue - $initialCapital) / $initialCapital) * 100
+                ? ($totalProfit / $initialCapital) * 100
                 : 0;
 
             // Get active positions

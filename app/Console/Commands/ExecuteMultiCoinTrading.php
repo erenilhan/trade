@@ -58,7 +58,8 @@ class ExecuteMultiCoinTrading extends Command
 
             // Check if there are any coins without open positions
             $openPositionsCount = Position::active()->count();
-            $totalCoins = 10; // BTC, ETH, SOL, BNB, XRP, DOGE, ADA, AVAX, LINK, DOT
+            $supportedCoins = BotSetting::get('supported_coins', config('trading.default_active_pairs', []));
+            $totalCoins = count($supportedCoins); // Get from BotSetting (19 coins by default)
             $coinsAvailableForTrading = $totalCoins - $openPositionsCount;
 
             if ($coinsAvailableForTrading === 0) {

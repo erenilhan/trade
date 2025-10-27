@@ -51,7 +51,8 @@ class ManageBotSettings extends Page implements HasForms
             'position_size_usdt' => BotSetting::get('position_size_usdt', 100),
             'max_leverage' => BotSetting::get('max_leverage', 2),
             'take_profit_percent' => BotSetting::get('take_profit_percent', 5),
-            'stop_loss_percent' => BotSetting::get('stop_loss_percent', 3),
+            'stop_loss_percent_long' => BotSetting::get('stop_loss_percent_long', 3),
+            'stop_loss_percent_short' => BotSetting::get('stop_loss_percent_short', 3),
             'supported_coins' => BotSetting::get('supported_coins', config('trading.default_active_pairs', [])),
             // Trailing stops
             'trailing_stop_l1_trigger' => BotSetting::get('trailing_stop_l1_trigger', 3),
@@ -151,28 +152,43 @@ class ManageBotSettings extends Page implements HasForms
                             ->helperText('Maximum leverage to use (1-125x)')
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn($state) => $this->saveSetting('max_leverage', $state)),
-
+                    ])
+                    ->columns(3),
+                
+                Section::make('Profit & Loss Management')
+                    ->description('Configure profit targets and loss limits for LONG and SHORT positions')
+                    ->schema([
                         TextInput::make('take_profit_percent')
                             ->label('Take Profit %')
                             ->numeric()
                             ->required()
                             ->default(5)
                             ->suffix('%')
-                            ->helperText('Target profit percentage')
+                            ->helperText('Target profit percentage (applies to both LONG and SHORT)')
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn($state) => $this->saveSetting('take_profit_percent', $state)),
 
-                        TextInput::make('stop_loss_percent')
-                            ->label('Stop Loss %')
+                        TextInput::make('stop_loss_percent_long')
+                            ->label('Stop Loss % (LONG)')
                             ->numeric()
                             ->required()
                             ->default(3)
                             ->suffix('%')
-                            ->helperText('Maximum loss percentage')
+                            ->helperText('Maximum loss % for LONG positions (price goes DOWN)')
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('stop_loss_percent', $state)),
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('stop_loss_percent_long', $state)),
+
+                        TextInput::make('stop_loss_percent_short')
+                            ->label('Stop Loss % (SHORT)')
+                            ->numeric()
+                            ->required()
+                            ->default(3)
+                            ->suffix('%')
+                            ->helperText('Maximum loss % for SHORT positions (price goes UP)')
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn($state) => $this->saveSetting('stop_loss_percent_short', $state)),
                     ])
-                    ->columns(2),
+                    ->columns(3),
 
                 Section::make('Multi-Coin Settings')
                     ->description('Configure multi-coin trading (for new system)')
@@ -195,79 +211,99 @@ class ManageBotSettings extends Page implements HasForms
                 Section::make('Trailing Stop Levels')
                     ->description('Multi-level trailing stop configuration - automatically protect profits as positions grow')
                     ->schema([
-                        TextInput::make('trailing_stop_l1_trigger')
-                            ->label('Level 1 Trigger (% profit)')
-                            ->numeric()
-                            ->default(3)
-                            ->suffix('%')
-                            ->helperText('Activate Level 1 when profit reaches this %')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_trigger', $state)),
+                        // Level 1
+                        Section::make('Level 1 Configuration')
+                            ->schema([
+                                TextInput::make('trailing_stop_l1_trigger')
+                                    ->label('Trigger (% profit)')
+                                    ->numeric()
+                                    ->default(3)
+                                    ->suffix('%')
+                                    ->helperText('Activate Level 1 when profit reaches this %')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_trigger', $state)),
 
-                        TextInput::make('trailing_stop_l1_target')
-                            ->label('Level 1 Target (% from entry)')
-                            ->numeric()
-                            ->default(-1)
-                            ->suffix('%')
-                            ->helperText('Move stop loss to this % from entry (negative = loss, 0 = breakeven, positive = profit)')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_target', $state)),
+                                TextInput::make('trailing_stop_l1_target')
+                                    ->label('Target (% from entry)')
+                                    ->numeric()
+                                    ->default(-1)
+                                    ->suffix('%')
+                                    ->helperText('Move stop loss to this % from entry (negative = loss, 0 = breakeven, positive = profit)')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_target', $state)),
+                            ])
+                            ->columns(2),
 
-                        TextInput::make('trailing_stop_l2_trigger')
-                            ->label('Level 2 Trigger (% profit)')
-                            ->numeric()
-                            ->default(5)
-                            ->suffix('%')
-                            ->helperText('Activate Level 2 when profit reaches this %')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_trigger', $state)),
+                        // Level 2
+                        Section::make('Level 2 Configuration')
+                            ->schema([
+                                TextInput::make('trailing_stop_l2_trigger')
+                                    ->label('Trigger (% profit)')
+                                    ->numeric()
+                                    ->default(5)
+                                    ->suffix('%')
+                                    ->helperText('Activate Level 2 when profit reaches this %')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_trigger', $state)),
 
-                        TextInput::make('trailing_stop_l2_target')
-                            ->label('Level 2 Target (% from entry)')
-                            ->numeric()
-                            ->default(0)
-                            ->suffix('%')
-                            ->helperText('Typically breakeven (0%)')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_target', $state)),
+                                TextInput::make('trailing_stop_l2_target')
+                                    ->label('Target (% from entry)')
+                                    ->numeric()
+                                    ->default(0)
+                                    ->suffix('%')
+                                    ->helperText('Typically breakeven (0%)')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_target', $state)),
+                            ])
+                            ->columns(2),
 
-                        TextInput::make('trailing_stop_l3_trigger')
-                            ->label('Level 3 Trigger (% profit)')
-                            ->numeric()
-                            ->default(8)
-                            ->suffix('%')
-                            ->helperText('Activate Level 3 when profit reaches this %')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_trigger', $state)),
+                        // Level 3
+                        Section::make('Level 3 Configuration')
+                            ->schema([
+                                TextInput::make('trailing_stop_l3_trigger')
+                                    ->label('Trigger (% profit)')
+                                    ->numeric()
+                                    ->default(8)
+                                    ->suffix('%')
+                                    ->helperText('Activate Level 3 when profit reaches this %')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_trigger', $state)),
 
-                        TextInput::make('trailing_stop_l3_target')
-                            ->label('Level 3 Target (% from entry)')
-                            ->numeric()
-                            ->default(3)
-                            ->suffix('%')
-                            ->helperText('Lock in profit at this %')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_target', $state)),
+                                TextInput::make('trailing_stop_l3_target')
+                                    ->label('Target (% from entry)')
+                                    ->numeric()
+                                    ->default(3)
+                                    ->suffix('%')
+                                    ->helperText('Lock in profit at this %')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_target', $state)),
+                            ])
+                            ->columns(2),
 
-                        TextInput::make('trailing_stop_l4_trigger')
-                            ->label('Level 4 Trigger (% profit)')
-                            ->numeric()
-                            ->default(12)
-                            ->suffix('%')
-                            ->helperText('Activate Level 4 when profit reaches this %')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_trigger', $state)),
+                        // Level 4
+                        Section::make('Level 4 Configuration')
+                            ->schema([
+                                TextInput::make('trailing_stop_l4_trigger')
+                                    ->label('Trigger (% profit)')
+                                    ->numeric()
+                                    ->default(12)
+                                    ->suffix('%')
+                                    ->helperText('Activate Level 4 when profit reaches this %')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_trigger', $state)),
 
-                        TextInput::make('trailing_stop_l4_target')
-                            ->label('Level 4 Target (% from entry)')
-                            ->numeric()
-                            ->default(6)
-                            ->suffix('%')
-                            ->helperText('Lock in big profit at this %')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_target', $state)),
+                                TextInput::make('trailing_stop_l4_target')
+                                    ->label('Target (% from entry)')
+                                    ->numeric()
+                                    ->default(6)
+                                    ->suffix('%')
+                                    ->helperText('Lock in big profit at this %')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_target', $state)),
+                            ])
+                            ->columns(2),
                     ])
-                    ->columns(2)
+                    ->columns(1)
                     ->collapsible(),
             ])
             ->statePath('data');
@@ -345,7 +381,8 @@ class ManageBotSettings extends Page implements HasForms
             'position_size_usdt' => 'Size of each position in USDT',
             'max_leverage' => 'Maximum leverage multiplier',
             'take_profit_percent' => 'Target profit percentage',
-            'stop_loss_percent' => 'Maximum loss percentage',
+            'stop_loss_percent_long' => 'Stop loss threshold % for LONG positions',
+            'stop_loss_percent_short' => 'Stop loss threshold % for SHORT positions',
             default => ucfirst(str_replace('_', ' ', $key)),
         };
     }
@@ -391,7 +428,8 @@ class ManageBotSettings extends Page implements HasForms
             'position_size_usdt' => 'Position Size',
             'max_leverage' => 'Leverage',
             'take_profit_percent' => 'Take Profit',
-            'stop_loss_percent' => 'Stop Loss',
+            'stop_loss_percent_long' => 'Stop Loss (LONG)',
+            'stop_loss_percent_short' => 'Stop Loss (SHORT)',
             'supported_coins' => 'Trading Pairs',
             default => ucfirst(str_replace('_', ' ', $key)),
         };

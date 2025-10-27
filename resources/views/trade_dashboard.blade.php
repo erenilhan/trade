@@ -321,8 +321,10 @@
             const protectedCount = positions.filter(p => p.trailing_level).length;
             document.getElementById('trailing-stops').textContent = protectedCount;
 
-            // Update Total P&L
-            const totalPnl = account.realized_pnl || 0;
+            // Update Total P&L (realized + unrealized)
+            const realizedPnl = account.realized_pnl || 0;
+            const unrealizedPnl = account.total_pnl || 0;
+            const totalPnl = realizedPnl + unrealizedPnl;
             const totalPnlEl = document.getElementById('total-pnl-value');
             const pnlColor = totalPnl >= 0 ? 'text-green-400' : 'text-red-400';
             totalPnlEl.className = `stat-value text-2xl font-bold ${pnlColor}`;
