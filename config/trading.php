@@ -77,16 +77,16 @@ return [
             'target' => -1,   // Move stop to -1%
         ],
         'level_2' => [
-            'trigger' => 5,   // Activate at +5% profit
-            'target' => 0,    // Move stop to breakeven (0%)
+            'trigger' => 6,   // Activate at +6% profit (was +5%)
+            'target' => 2,    // Move stop to +2% (was 0% breakeven)
         ],
         'level_3' => [
-            'trigger' => 8,   // Activate at +8% profit
-            'target' => 3,    // Move stop to +3%
+            'trigger' => 9,   // Activate at +9% profit (was +8%)
+            'target' => 5,    // Move stop to +5% (was +3%)
         ],
         'level_4' => [
-            'trigger' => 12,  // Activate at +12% profit
-            'target' => 6,    // Move stop to +6%
+            'trigger' => 13,  // Activate at +13% profit (was +12%)
+            'target' => 8,    // Move stop to +8% (was +6%)
         ],
     ],
 
