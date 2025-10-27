@@ -108,7 +108,11 @@ class TradingService
 
         // Rule 3: Stop loss (<-3%)
         foreach ($positions as $position) {
-            if ($position['profit_percent'] < -BotSetting::get('stop_loss_percent', 3)) {
+            // Use side-specific stop loss threshold
+            $stopLossKey = $position['side'] === 'short' ? 'stop_loss_percent_short' : 'stop_loss_percent_long';
+            $stopLossThreshold = BotSetting::get($stopLossKey, 3);
+
+            if ($position['profit_percent'] < -$stopLossThreshold) {
                 return [
                     'action' => 'stop_loss',
                     'symbol' => $position['symbol'],

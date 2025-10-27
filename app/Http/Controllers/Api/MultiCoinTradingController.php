@@ -149,7 +149,10 @@ class MultiCoinTradingController extends Controller
 
             $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
             $targetPrice = $decision['target_price'] ?? $entryPrice * 1.05;
-            $stopPrice = $decision['stop_price'] ?? $entryPrice * 0.97;
+
+            // Use LONG-specific stop loss from settings
+            $stopLossPercent = BotSetting::get('stop_loss_percent_long', 3);
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($stopLossPercent / 100));
 
             // Calculate liquidation price
             $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage);
@@ -259,7 +262,10 @@ class MultiCoinTradingController extends Controller
             $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
             // SHORT: profit when price goes DOWN, stop when price goes UP
             $targetPrice = $decision['target_price'] ?? $entryPrice * 0.95; // -5% target
-            $stopPrice = $decision['stop_price'] ?? $entryPrice * 1.03;      // +3% stop
+
+            // Use SHORT-specific stop loss from settings
+            $stopLossPercent = BotSetting::get('stop_loss_percent_short', 3);
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($stopLossPercent / 100)); // SHORT: stop above entry
 
             // Calculate liquidation price for SHORT
             $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage, 'short');

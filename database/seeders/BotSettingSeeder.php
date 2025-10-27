@@ -67,10 +67,16 @@ class BotSettingSeeder extends Seeder
                 'description' => 'Take profit threshold %',
             ],
             [
-                'key' => 'stop_loss_percent',
+                'key' => 'stop_loss_percent_long',
                 'value' => 3,
                 'type' => 'int',
-                'description' => 'Stop loss threshold %',
+                'description' => 'Stop loss threshold % for LONG positions',
+            ],
+            [
+                'key' => 'stop_loss_percent_short',
+                'value' => 3,
+                'type' => 'int',
+                'description' => 'Stop loss threshold % for SHORT positions',
             ],
 
             // Multi-Coin Settings (using config default)
