@@ -11,10 +11,11 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use UnitEnum;
 
@@ -70,241 +71,251 @@ class ManageBotSettings extends Page implements HasForms
     {
         return $schema
             ->schema([
-                Section::make('Bot Control')
-                    ->description('Enable or disable the trading bot')
-                    ->schema([
-                        Toggle::make('bot_enabled')
-                            ->label('Bot Enabled')
-                            ->helperText('Master switch for the entire trading bot')
-                            ->default(true)
-                            ->live()
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('bot_enabled', $state)),
-                    ])
-                    ->columns(1),
-
-                Section::make('AI Configuration')
-                    ->description('Configure AI provider and model')
-                    ->schema([
-                        Toggle::make('use_ai')
-                            ->label('Use AI Trading')
-                            ->helperText('Enable AI-powered trading decisions')
-                            ->default(true)
-                            ->live()
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('use_ai', $state)),
-
-                        Select::make('ai_provider')
-                            ->label('AI Provider')
-                            ->options([
-                                'openrouter' => 'OpenRouter',
-                                'deepseek' => 'DeepSeek Direct',
-                                'openai' => 'OpenAI',
-                            ])
-                            ->default(env('AI_PROVIDER', 'openrouter'))
-                            ->helperText('Select which AI service to use')
-                            ->live()
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_provider', $state)),
-
-                        TextInput::make('ai_model')
-                            ->label('AI Model')
-                            ->default(env('OPENROUTER_MODEL', 'deepseek/deepseek-chat'))
-                            ->helperText('Model name (e.g., deepseek/deepseek-chat, x-ai/grok-2-vision-1212)')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_model', $state)),
-
-                        Textarea::make('ai_system_prompt')
-                            ->label('System Prompt Override')
-                            ->rows(4)
-                            ->placeholder('Leave empty to use default prompt...')
-                            ->helperText('Custom system prompt for AI (optional, leave empty for default)')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_system_prompt', $state)),
-                    ])
-                    ->columns(2),
-
-                Section::make('Trading Parameters')
-                    ->description('Configure position sizing and risk management')
-                    ->schema([
-                        TextInput::make('initial_capital')
-                            ->label('Initial Capital (USDT)')
-                            ->numeric()
-                            ->required()
-                            ->default(9)
-                            ->helperText('Starting balance for ROI calculation')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('initial_capital', $state)),
-
-                        TextInput::make('position_size_usdt')
-                            ->label('Position Size (USDT)')
-                            ->numeric()
-                            ->required()
-                            ->default(100)
-                            ->helperText('Size of each position in USDT')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('position_size_usdt', $state)),
-
-                        TextInput::make('max_leverage')
-                            ->label('Max Leverage')
-                            ->numeric()
-                            ->required()
-                            ->default(2)
-                            ->minValue(1)
-                            ->maxValue(125)
-                            ->helperText('Maximum leverage to use (1-125x)')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('max_leverage', $state)),
-                    ])
-                    ->columns(3),
-                
-                Section::make('Profit & Loss Management')
-                    ->description('Configure profit targets and loss limits for LONG and SHORT positions')
-                    ->schema([
-                        TextInput::make('take_profit_percent')
-                            ->label('Take Profit %')
-                            ->numeric()
-                            ->required()
-                            ->default(5)
-                            ->suffix('%')
-                            ->helperText('Target profit percentage (applies to both LONG and SHORT)')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('take_profit_percent', $state)),
-
-                        TextInput::make('stop_loss_percent_long')
-                            ->label('Stop Loss % (LONG)')
-                            ->numeric()
-                            ->required()
-                            ->default(3)
-                            ->suffix('%')
-                            ->helperText('Maximum loss % for LONG positions (price goes DOWN)')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('stop_loss_percent_long', $state)),
-
-                        TextInput::make('stop_loss_percent_short')
-                            ->label('Stop Loss % (SHORT)')
-                            ->numeric()
-                            ->required()
-                            ->default(3)
-                            ->suffix('%')
-                            ->helperText('Maximum loss % for SHORT positions (price goes UP)')
-                            ->live(onBlur: true)
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('stop_loss_percent_short', $state)),
-                    ])
-                    ->columns(3),
-
-                Section::make('Multi-Coin Settings')
-                    ->description('Configure multi-coin trading (for new system)')
-                    ->schema([
-                        Select::make('supported_coins')
-                            ->label('Active Trading Pairs')
-                            ->multiple()
-                            ->options(function () {
-                                $pairs = config('trading.supported_pairs', []);
-                                return collect($pairs)->mapWithKeys(fn($name, $pair) => [$pair => "$name ($pair)"])->toArray();
-                            })
-                            ->default(config('trading.default_active_pairs', []))
-                            ->helperText('Select which coins to trade (' . count(config('trading.supported_pairs', [])) . ' coins available, pre-filtering enabled to save AI tokens)')
-                            ->searchable()
-                            ->live()
-                            ->afterStateUpdated(fn($state) => $this->saveSetting('supported_coins', $state)),
-                    ])
-                    ->columns(1),
-
-                Section::make('Trailing Stop Levels')
-                    ->description('Multi-level trailing stop configuration - automatically protect profits as positions grow')
-                    ->schema([
-                        // Level 1
-                        Section::make('Level 1 Configuration')
+                Tabs::make('Settings')
+                    ->tabs([
+                       Tab::make('General')
                             ->schema([
-                                TextInput::make('trailing_stop_l1_trigger')
-                                    ->label('Trigger (% profit)')
-                                    ->numeric()
-                                    ->default(3)
-                                    ->suffix('%')
-                                    ->helperText('Activate Level 1 when profit reaches this %')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_trigger', $state)),
+                                Section::make('Bot Control')
+                                    ->description('Enable or disable the trading bot')
+                                    ->schema([
+                                        Toggle::make('bot_enabled')
+                                            ->label('Bot Enabled')
+                                            ->helperText('Master switch for the entire trading bot')
+                                            ->default(true)
+                                            ->live()
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('bot_enabled', $state)),
+                                    ])
+                                    ->columns(1),
 
-                                TextInput::make('trailing_stop_l1_target')
-                                    ->label('Target (% from entry)')
-                                    ->numeric()
-                                    ->default(-1)
-                                    ->suffix('%')
-                                    ->helperText('Move stop loss to this % from entry (negative = loss, 0 = breakeven, positive = profit)')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_target', $state)),
-                            ])
-                            ->columns(2),
+                                Section::make('AI Configuration')
+                                    ->description('Configure AI provider and model')
+                                    ->schema([
+                                        Toggle::make('use_ai')
+                                            ->label('Use AI Trading')
+                                            ->helperText('Enable AI-powered trading decisions')
+                                            ->default(true)
+                                            ->live()
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('use_ai', $state)),
 
-                        // Level 2
-                        Section::make('Level 2 Configuration')
+                                        Select::make('ai_provider')
+                                            ->label('AI Provider')
+                                            ->options([
+                                                'openrouter' => 'OpenRouter',
+                                                'deepseek' => 'DeepSeek Direct',
+                                                'openai' => 'OpenAI',
+                                            ])
+                                            ->default(env('AI_PROVIDER', 'openrouter'))
+                                            ->helperText('Select which AI service to use')
+                                            ->live()
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_provider', $state)),
+
+                                        TextInput::make('ai_model')
+                                            ->label('AI Model')
+                                            ->default(env('OPENROUTER_MODEL', 'deepseek/deepseek-chat'))
+                                            ->helperText('Model name (e.g., deepseek/deepseek-chat, x-ai/grok-2-vision-1212)')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_model', $state)),
+
+                                        Textarea::make('ai_system_prompt')
+                                            ->label('System Prompt Override')
+                                            ->rows(4)
+                                            ->placeholder('Leave empty to use default prompt...')
+                                            ->helperText('Custom system prompt for AI (optional, leave empty for default)')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('ai_system_prompt', $state)),
+                                    ])
+                                    ->columns(2),
+                            ]),
+                       Tab::make('Trading')
                             ->schema([
-                                TextInput::make('trailing_stop_l2_trigger')
-                                    ->label('Trigger (% profit)')
-                                    ->numeric()
-                                    ->default(5)
-                                    ->suffix('%')
-                                    ->helperText('Activate Level 2 when profit reaches this %')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_trigger', $state)),
+                                Section::make('Trading Parameters')
+                                    ->description('Configure position sizing and risk management')
+                                    ->schema([
+                                        TextInput::make('initial_capital')
+                                            ->label('Initial Capital (USDT)')
+                                            ->numeric()
+                                            ->required()
+                                            ->default(9)
+                                            ->helperText('Starting balance for ROI calculation')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('initial_capital', $state)),
 
-                                TextInput::make('trailing_stop_l2_target')
-                                    ->label('Target (% from entry)')
-                                    ->numeric()
-                                    ->default(0)
-                                    ->suffix('%')
-                                    ->helperText('Typically breakeven (0%)')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_target', $state)),
-                            ])
-                            ->columns(2),
+                                        TextInput::make('position_size_usdt')
+                                            ->label('Position Size (USDT)')
+                                            ->numeric()
+                                            ->required()
+                                            ->default(100)
+                                            ->helperText('Size of each position in USDT')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('position_size_usdt', $state)),
 
-                        // Level 3
-                        Section::make('Level 3 Configuration')
+                                        TextInput::make('max_leverage')
+                                            ->label('Max Leverage')
+                                            ->numeric()
+                                            ->required()
+                                            ->default(2)
+                                            ->minValue(1)
+                                            ->maxValue(125)
+                                            ->helperText('Maximum leverage to use (1-125x)')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('max_leverage', $state)),
+                                    ])
+                                    ->columns(3),
+
+                                Section::make('Profit & Loss Management')
+                                    ->description('Configure profit targets and loss limits for LONG and SHORT positions')
+                                    ->schema([
+                                        TextInput::make('take_profit_percent')
+                                            ->label('Take Profit %')
+                                            ->numeric()
+                                            ->required()
+                                            ->default(5)
+                                            ->suffix('%')
+                                            ->helperText('Target profit percentage (applies to both LONG and SHORT)')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('take_profit_percent', $state)),
+
+                                        TextInput::make('stop_loss_percent_long')
+                                            ->label('Stop Loss % (LONG)')
+                                            ->numeric()
+                                            ->required()
+                                            ->default(3)
+                                            ->suffix('%')
+                                            ->helperText('Maximum loss % for LONG positions (price goes DOWN)')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('stop_loss_percent_long', $state)),
+
+                                        TextInput::make('stop_loss_percent_short')
+                                            ->label('Stop Loss % (SHORT)')
+                                            ->numeric()
+                                            ->required()
+                                            ->default(3)
+                                            ->suffix('%')
+                                            ->helperText('Maximum loss % for SHORT positions (price goes UP)')
+                                            ->live(onBlur: true)
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('stop_loss_percent_short', $state)),
+                                    ])
+                                    ->columns(3),
+
+                                Section::make('Multi-Coin Settings')
+                                    ->description('Configure multi-coin trading (for new system)')
+                                    ->schema([
+                                        Select::make('supported_coins')
+                                            ->label('Active Trading Pairs')
+                                            ->multiple()
+                                            ->options(function () {
+                                                $pairs = config('trading.supported_pairs', []);
+                                                return collect($pairs)->mapWithKeys(fn($name, $pair) => [$pair => "$name ($pair)"])->toArray();
+                                            })
+                                            ->default(config('trading.default_active_pairs', []))
+                                            ->helperText('Select which coins to trade (' . count(config('trading.supported_pairs', [])) . ' coins available, pre-filtering enabled to save AI tokens)')
+                                            ->searchable()
+                                            ->live()
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('supported_coins', $state)),
+                                    ])
+                                    ->columns(1),
+                            ]),
+                        Tab::make('Trailing Stops')
                             ->schema([
-                                TextInput::make('trailing_stop_l3_trigger')
-                                    ->label('Trigger (% profit)')
-                                    ->numeric()
-                                    ->default(8)
-                                    ->suffix('%')
-                                    ->helperText('Activate Level 3 when profit reaches this %')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_trigger', $state)),
+                                Section::make('Trailing Stop Levels')
+                                    ->description('Multi-level trailing stop configuration - automatically protect profits as positions grow')
+                                    ->schema([
+                                        // Level 1
+                                        Section::make('Level 1 Configuration')
+                                            ->schema([
+                                                TextInput::make('trailing_stop_l1_trigger')
+                                                    ->label('Trigger (% profit)')
+                                                    ->numeric()
+                                                    ->default(3)
+                                                    ->suffix('%')
+                                                    ->helperText('Activate Level 1 when profit reaches this %')
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_trigger', $state)),
 
-                                TextInput::make('trailing_stop_l3_target')
-                                    ->label('Target (% from entry)')
-                                    ->numeric()
-                                    ->default(3)
-                                    ->suffix('%')
-                                    ->helperText('Lock in profit at this %')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_target', $state)),
-                            ])
-                            ->columns(2),
+                                                TextInput::make('trailing_stop_l1_target')
+                                                    ->label('Target (% from entry)')
+                                                    ->numeric()
+                                                    ->default(-1)
+                                                    ->suffix('%')
+                                                    ->helperText('Move stop loss to this % from entry (negative = loss, 0 = breakeven, positive = profit)')
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l1_target', $state)),
+                                            ])
+                                            ->columns(2),
 
-                        // Level 4
-                        Section::make('Level 4 Configuration')
-                            ->schema([
-                                TextInput::make('trailing_stop_l4_trigger')
-                                    ->label('Trigger (% profit)')
-                                    ->numeric()
-                                    ->default(12)
-                                    ->suffix('%')
-                                    ->helperText('Activate Level 4 when profit reaches this %')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_trigger', $state)),
+                                        // Level 2
+                                        Section::make('Level 2 Configuration')
+                                            ->schema([
+                                                TextInput::make('trailing_stop_l2_trigger')
+                                                    ->label('Trigger (% profit)')
+                                                    ->numeric()
+                                                    ->default(5)
+                                                    ->suffix('%')
+                                                    ->helperText('Activate Level 2 when profit reaches this %')
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_trigger', $state)),
 
-                                TextInput::make('trailing_stop_l4_target')
-                                    ->label('Target (% from entry)')
-                                    ->numeric()
-                                    ->default(6)
-                                    ->suffix('%')
-                                    ->helperText('Lock in big profit at this %')
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_target', $state)),
-                            ])
-                            ->columns(2),
+                                                TextInput::make('trailing_stop_l2_target')
+                                                    ->label('Target (% from entry)')
+                                                    ->numeric()
+                                                    ->default(0)
+                                                    ->suffix('%')
+                                                    ->helperText('Typically breakeven (0%)')
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l2_target', $state)),
+                                            ])
+                                            ->columns(2),
+
+                                        // Level 3
+                                        Section::make('Level 3 Configuration')
+                                            ->schema([
+                                                TextInput::make('trailing_stop_l3_trigger')
+                                                    ->label('Trigger (% profit)')
+                                                    ->numeric()
+                                                    ->default(8)
+                                                    ->suffix('%')
+                                                    ->helperText('Activate Level 3 when profit reaches this %')
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_trigger', $state)),
+
+                                                TextInput::make('trailing_stop_l3_target')
+                                                    ->label('Target (% from entry)')
+                                                    ->numeric()
+                                                    ->default(3)
+                                                    ->suffix('%')
+                                                    ->helperText('Lock in profit at this %')
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l3_target', $state)),
+                                            ])
+                                            ->columns(2),
+
+                                        // Level 4
+                                        Section::make('Level 4 Configuration')
+                                            ->schema([
+                                                TextInput::make('trailing_stop_l4_trigger')
+                                                    ->label('Trigger (% profit)')
+                                                    ->numeric()
+                                                    ->default(12)
+                                                    ->suffix('%')
+                                                    ->helperText('Activate Level 4 when profit reaches this %')
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_trigger', $state)),
+
+                                                TextInput::make('trailing_stop_l4_target')
+                                                    ->label('Target (% from entry)')
+                                                    ->numeric()
+                                                    ->default(6)
+                                                    ->suffix('%')
+                                                    ->helperText('Lock in big profit at this %')
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(fn($state) => $this->saveSetting('trailing_stop_l4_target', $state)),
+                                            ])
+                                            ->columns(2),
+                                    ])
+                                    ->columns(1)
+                                    ->collapsible(),
+                            ]),
                     ])
-                    ->columns(1)
-                    ->collapsible(),
             ])
             ->statePath('data');
     }

@@ -432,7 +432,7 @@ class TradeDashboardController extends Controller
                         'cash' => $cash,
                         'initial_capital' => $initialCapital,
                         'roi' => $roi,
-                        'total_pnl' => $totalPnl,
+                        'total_pnl' => $totalProfit,
                         'realized_pnl' => $totalRealizedPnl,
                     ],
                     'positions' => $positions,
