@@ -63,6 +63,44 @@ class MonitorPositions extends Command
 
         $this->line("  📊 {$symbol}: \${$currentPrice} ({$position->side})");
 
+        // 🌙 SLEEP MODE: Tighten stop loss during low liquidity hours
+        $sleepModeConfig = config('trading.sleep_mode');
+        if ($sleepModeConfig['enabled'] && $sleepModeConfig['tighter_stops'] && $stopLoss) {
+            $currentHourUTC = now()->utc()->hour;
+            $startHour = $sleepModeConfig['start_hour'];
+            $endHour = $sleepModeConfig['end_hour'];
+
+            // Check if we're in sleep mode
+            $inSleepMode = false;
+            if ($startHour > $endHour) {
+                $inSleepMode = $currentHourUTC >= $startHour || $currentHourUTC < $endHour;
+            } else {
+                $inSleepMode = $currentHourUTC >= $startHour && $currentHourUTC < $endHour;
+            }
+
+            if ($inSleepMode) {
+                // Tighten stop loss by multiplier (e.g., 0.75 = 25% tighter)
+                $multiplier = $sleepModeConfig['stop_multiplier'];
+                $stopDistance = abs($entryPrice - $stopLoss);
+                $tighterStopDistance = $stopDistance * $multiplier;
+
+                if ($position->side === 'short') {
+                    $tighterStop = $entryPrice + $tighterStopDistance; // SHORT: stop above entry
+                } else {
+                    $tighterStop = $entryPrice - $tighterStopDistance; // LONG: stop below entry
+                }
+
+                // Only tighten if new stop is closer than current stop
+                $shouldTighten = ($position->side === 'short' && $tighterStop < $stopLoss) ||
+                                 ($position->side === 'long' && $tighterStop > $stopLoss);
+
+                if ($shouldTighten) {
+                    $stopLoss = $tighterStop;
+                    $this->warn("    🌙 Sleep mode: Stop tightened to \${$stopLoss} ({$multiplier}x multiplier)");
+                }
+            }
+        }
+
         // 1. CHECK TAKE PROFIT (handle SHORT vs LONG)
         $takeProfitHit = false;
         if ($profitTarget) {

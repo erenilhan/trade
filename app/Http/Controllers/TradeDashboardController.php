@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BotSetting;
 use App\Models\Position;
 use App\Models\Trade;
+use App\Models\DailyStat;
 use App\Services\BinanceService;
 use App\Services\MarketDataService;
 use App\Models\AiLog;
@@ -439,6 +440,46 @@ class TradeDashboardController extends Controller
                 }
             }
 
+            // 🛡️ Risk Management Status
+            $sleepModeConfig = config('trading.sleep_mode');
+            $currentHourUTC = now()->utc()->hour;
+            $startHour = $sleepModeConfig['start_hour'];
+            $endHour = $sleepModeConfig['end_hour'];
+
+            $inSleepMode = false;
+            if ($startHour > $endHour) {
+                $inSleepMode = $currentHourUTC >= $startHour || $currentHourUTC < $endHour;
+            } else {
+                $inSleepMode = $currentHourUTC >= $startHour && $currentHourUTC < $endHour;
+            }
+
+            $dailyStat = DailyStat::today();
+
+            $riskManagement = [
+                'sleep_mode' => [
+                    'enabled' => $sleepModeConfig['enabled'],
+                    'active' => $inSleepMode,
+                    'hours_utc' => "{$startHour}:00-{$endHour}:00",
+                    'max_positions' => $sleepModeConfig['max_positions'],
+                    'current_utc_hour' => $currentHourUTC,
+                ],
+                'daily_drawdown' => [
+                    'enabled' => config('trading.daily_max_drawdown.enabled'),
+                    'current_pnl_percent' => round($dailyStat->daily_pnl_percent, 2),
+                    'max_allowed_percent' => config('trading.daily_max_drawdown.max_drawdown_percent'),
+                    'limit_hit' => $dailyStat->max_drawdown_hit,
+                    'cooldown_until' => $dailyStat->cooldown_until?->diffForHumans(),
+                    'trades_today' => $dailyStat->trades_count,
+                    'wins_today' => $dailyStat->wins_count,
+                    'losses_today' => $dailyStat->losses_count,
+                ],
+                'cluster_loss' => [
+                    'enabled' => config('trading.cluster_loss_cooldown.enabled'),
+                    'trigger_count' => config('trading.cluster_loss_cooldown.consecutive_losses_trigger'),
+                    'in_cooldown' => $this->checkClusterLossCooldown() !== null,
+                ],
+            ];
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -454,6 +495,7 @@ class TradeDashboardController extends Controller
                     'closed_positions' => $closedPositions,
                     'ai_logs' => $aiLogs,
                     'hold_reasons' => $holdReasons,
+                    'risk_management' => $riskManagement,
                     'last_ai_run' => $lastAiRun ? $lastAiRun->created_at->diffForHumans() : 'Never',
                     'ai_provider' => $aiProvider,
                     'ai_model' => $aiModel,
@@ -991,5 +1033,53 @@ class TradeDashboardController extends Controller
             'best_performing_confidence_range' => $bestRange,
             'confidence_correlation' => round(($avgConfidenceWins - $avgConfidenceLosses) * 100, 2),
         ];
+    }
+
+    /**
+     * Check for cluster loss cooldown (consecutive losses trigger trading pause)
+     */
+    private function checkClusterLossCooldown(): ?string
+    {
+        $config = config('trading.cluster_loss_cooldown');
+
+        if (!$config['enabled']) {
+            return null;
+        }
+
+        // Look at recent closed positions
+        $lookbackTime = now()->subHours($config['lookback_hours']);
+        $recentPositions = Position::where('is_open', false)
+            ->where('closed_at', '>=', $lookbackTime)
+            ->orderBy('closed_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        if ($recentPositions->count() < $config['consecutive_losses_trigger']) {
+            return null;
+        }
+
+        // Check if we have N consecutive losses
+        $consecutiveLosses = 0;
+        foreach ($recentPositions as $position) {
+            if (($position->realized_pnl ?? 0) < 0) {
+                $consecutiveLosses++;
+            } else {
+                // Streak broken by a win
+                break;
+            }
+        }
+
+        if ($consecutiveLosses >= $config['consecutive_losses_trigger']) {
+            // Check if we're still in cooldown period
+            $lastLoss = $recentPositions->first();
+            $cooldownEnds = $lastLoss->closed_at->addHours($config['cooldown_hours']);
+
+            if (now()->lt($cooldownEnds)) {
+                $remainingHours = now()->diffInHours($cooldownEnds, false);
+                return "Cluster loss cooldown active ({$consecutiveLosses} consecutive losses). Trading paused for {$remainingHours}h to prevent emotional trading.";
+            }
+        }
+
+        return null;
     }
 }

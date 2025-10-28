@@ -162,4 +162,57 @@ return [
             'max_small_cap' => 2,
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sleep Mode (Low Liquidity Hours - UTC Based)
+    |--------------------------------------------------------------------------
+    |
+    | Trading restrictions during low liquidity hours (23:00-04:00 UTC)
+    | This is when US markets are closed and Asian markets haven't opened yet.
+    |
+    */
+    'sleep_mode' => [
+        'enabled' => env('SLEEP_MODE_ENABLED', true),
+
+        // UTC time range for sleep mode (23:00 - 04:00 UTC)
+        'start_hour' => 23, // 23:00 UTC
+        'end_hour' => 4,    // 04:00 UTC
+
+        // During sleep mode
+        'allow_new_trades' => false,        // No new entries during sleep
+        'max_positions' => 3,               // Max 2-3 positions during sleep
+        'tighter_stops' => true,            // Tighten stop losses
+        'stop_multiplier' => 0.75,          // 25% tighter stops (3% → 2.25% for 2x)
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Daily Max Drawdown Protection
+    |--------------------------------------------------------------------------
+    |
+    | Auto-stop trading if daily drawdown exceeds limit
+    |
+    */
+    'daily_max_drawdown' => [
+        'enabled' => env('DAILY_MAX_DRAWDOWN_ENABLED', true),
+        'max_drawdown_percent' => 8.0,      // Stop trading if daily loss > 8%
+        'reset_hour_utc' => 0,              // Reset at midnight UTC
+        'cooldown_hours' => 24,             // 24-hour cooldown after limit hit
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cluster Loss Cooldown
+    |--------------------------------------------------------------------------
+    |
+    | Prevent emotional trading after consecutive losses
+    |
+    */
+    'cluster_loss_cooldown' => [
+        'enabled' => env('CLUSTER_LOSS_COOLDOWN_ENABLED', true),
+        'consecutive_losses_trigger' => 3,  // Trigger after 3 consecutive losses
+        'cooldown_hours' => 24,             // 24-hour trading pause
+        'lookback_hours' => 24,             // Look at last 24 hours of trades
+    ],
 ];

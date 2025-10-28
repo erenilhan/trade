@@ -152,6 +152,84 @@ class BotSettingSeeder extends Seeder
                 'type' => 'int',
                 'description' => 'Level 4: Move stop to +6% (lock big profit)',
             ],
+
+            // Sleep Mode (Low Liquidity Hours)
+            [
+                'key' => 'sleep_mode_enabled',
+                'value' => true,
+                'type' => 'bool',
+                'description' => 'Enable sleep mode during low liquidity hours (23:00-04:00 UTC)',
+            ],
+            [
+                'key' => 'sleep_mode_start_hour',
+                'value' => 23,
+                'type' => 'int',
+                'description' => 'Sleep mode start hour (UTC, 0-23)',
+            ],
+            [
+                'key' => 'sleep_mode_end_hour',
+                'value' => 4,
+                'type' => 'int',
+                'description' => 'Sleep mode end hour (UTC, 0-23)',
+            ],
+            [
+                'key' => 'sleep_mode_max_positions',
+                'value' => 3,
+                'type' => 'int',
+                'description' => 'Maximum positions allowed during sleep mode',
+            ],
+            [
+                'key' => 'sleep_mode_tighter_stops',
+                'value' => true,
+                'type' => 'bool',
+                'description' => 'Tighten stop losses during sleep mode',
+            ],
+            [
+                'key' => 'sleep_mode_stop_multiplier',
+                'value' => 0.75,
+                'type' => 'float',
+                'description' => 'Stop loss multiplier during sleep mode (0.75 = 25% tighter)',
+            ],
+
+            // Daily Max Drawdown Protection
+            [
+                'key' => 'daily_max_drawdown_enabled',
+                'value' => true,
+                'type' => 'bool',
+                'description' => 'Enable daily max drawdown protection',
+            ],
+            [
+                'key' => 'daily_max_drawdown_percent',
+                'value' => 8.0,
+                'type' => 'float',
+                'description' => 'Stop trading if daily loss exceeds this % (default: 8%)',
+            ],
+            [
+                'key' => 'daily_max_drawdown_cooldown_hours',
+                'value' => 24,
+                'type' => 'int',
+                'description' => 'Hours to pause trading after max drawdown hit',
+            ],
+
+            // Cluster Loss Cooldown
+            [
+                'key' => 'cluster_loss_cooldown_enabled',
+                'value' => true,
+                'type' => 'bool',
+                'description' => 'Enable cooldown after consecutive losses',
+            ],
+            [
+                'key' => 'cluster_loss_consecutive_trigger',
+                'value' => 3,
+                'type' => 'int',
+                'description' => 'Number of consecutive losses to trigger cooldown',
+            ],
+            [
+                'key' => 'cluster_loss_cooldown_hours',
+                'value' => 24,
+                'type' => 'int',
+                'description' => 'Hours to pause trading after cluster losses',
+            ],
         ];
 
         foreach ($settings as $setting) {

@@ -140,6 +140,39 @@
             </div>
         </div>
 
+        <!-- Risk Management Status -->
+        <div class="mb-8" id="risk-management-section">
+            <h2 class="text-xl font-semibold text-white mb-4">🛡️ Risk Management</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Sleep Mode -->
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-gray-400">🌙 Sleep Mode</h3>
+                        <span id="sleep-mode-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
+                    </div>
+                    <div id="sleep-mode-details" class="text-sm text-gray-300 space-y-1"></div>
+                </div>
+
+                <!-- Daily Drawdown -->
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-gray-400">📉 Daily Drawdown</h3>
+                        <span id="drawdown-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
+                    </div>
+                    <div id="drawdown-details" class="text-sm text-gray-300 space-y-1"></div>
+                </div>
+
+                <!-- Cluster Loss Cooldown -->
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-gray-400">⏸️ Cluster Loss</h3>
+                        <span id="cluster-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
+                    </div>
+                    <div id="cluster-details" class="text-sm text-gray-300 space-y-1"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Open Positions -->
         <div class="mb-8">
             <h2 class="text-xl font-semibold text-white mb-4">Open Positions</h2>
@@ -761,6 +794,104 @@
 
             // Last AI run
             document.getElementById('last-ai-run').textContent = last_ai_run;
+
+            // 🛡️ Render Risk Management Status
+            if (data.risk_management) {
+                const { sleep_mode, daily_drawdown, cluster_loss } = data.risk_management;
+
+                // Sleep Mode
+                const sleepBadge = document.getElementById('sleep-mode-badge');
+                const sleepDetails = document.getElementById('sleep-mode-details');
+
+                if (sleep_mode.enabled) {
+                    if (sleep_mode.active) {
+                        sleepBadge.className = 'px-2 py-1 text-xs rounded-md bg-yellow-900/50 text-yellow-300';
+                        sleepBadge.textContent = '🌙 Active';
+                        sleepDetails.innerHTML = `
+                            <div class="text-yellow-300">Low liquidity hours</div>
+                            <div class="text-gray-400 text-xs">UTC: ${sleep_mode.hours_utc}</div>
+                            <div class="text-gray-400 text-xs">Max ${sleep_mode.max_positions} positions allowed</div>
+                            <div class="text-gray-400 text-xs">Current hour: ${sleep_mode.current_utc_hour}:00 UTC</div>
+                        `;
+                    } else {
+                        sleepBadge.className = 'px-2 py-1 text-xs rounded-md bg-green-900/50 text-green-300';
+                        sleepBadge.textContent = '✅ Normal';
+                        sleepDetails.innerHTML = `
+                            <div class="text-green-300">Full trading hours</div>
+                            <div class="text-gray-400 text-xs">Sleep: UTC ${sleep_mode.hours_utc}</div>
+                            <div class="text-gray-400 text-xs">Current: ${sleep_mode.current_utc_hour}:00 UTC</div>
+                        `;
+                    }
+                } else {
+                    sleepBadge.className = 'px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-400';
+                    sleepBadge.textContent = 'Disabled';
+                    sleepDetails.innerHTML = '<div class="text-gray-400">Sleep mode disabled</div>';
+                }
+
+                // Daily Drawdown
+                const drawdownBadge = document.getElementById('drawdown-badge');
+                const drawdownDetails = document.getElementById('drawdown-details');
+
+                if (daily_drawdown.enabled) {
+                    const currentPnl = daily_drawdown.current_pnl_percent;
+                    const maxAllowed = daily_drawdown.max_allowed_percent;
+                    const pnlColor = currentPnl < 0 ? 'text-red-300' : 'text-green-300';
+
+                    if (daily_drawdown.limit_hit) {
+                        drawdownBadge.className = 'px-2 py-1 text-xs rounded-md bg-red-900/50 text-red-300';
+                        drawdownBadge.textContent = '🚨 Limit Hit';
+                        drawdownDetails.innerHTML = `
+                            <div class="text-red-300">Trading paused!</div>
+                            <div class="text-gray-400 text-xs">Cooldown: ${daily_drawdown.cooldown_until}</div>
+                            <div class="text-gray-400 text-xs">Today's P&L: <span class="${pnlColor}">${currentPnl.toFixed(2)}%</span></div>
+                        `;
+                    } else {
+                        const usedPct = Math.abs(currentPnl / maxAllowed) * 100;
+                        const badgeColor = usedPct > 75 ? 'bg-orange-900/50 text-orange-300' :
+                                          usedPct > 50 ? 'bg-yellow-900/50 text-yellow-300' :
+                                          'bg-green-900/50 text-green-300';
+                        drawdownBadge.className = `px-2 py-1 text-xs rounded-md ${badgeColor}`;
+                        drawdownBadge.textContent = `${Math.abs(currentPnl).toFixed(1)}% / ${maxAllowed}%`;
+                        drawdownDetails.innerHTML = `
+                            <div class="${pnlColor}">Today: ${currentPnl.toFixed(2)}%</div>
+                            <div class="text-gray-400 text-xs">Limit: ${maxAllowed}%</div>
+                            <div class="text-gray-400 text-xs">Trades: ${daily_drawdown.trades_today} (${daily_drawdown.wins_today}W/${daily_drawdown.losses_today}L)</div>
+                        `;
+                    }
+                } else {
+                    drawdownBadge.className = 'px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-400';
+                    drawdownBadge.textContent = 'Disabled';
+                    drawdownDetails.innerHTML = '<div class="text-gray-400">Drawdown protection disabled</div>';
+                }
+
+                // Cluster Loss
+                const clusterBadge = document.getElementById('cluster-badge');
+                const clusterDetails = document.getElementById('cluster-details');
+
+                if (cluster_loss.enabled) {
+                    if (cluster_loss.in_cooldown) {
+                        clusterBadge.className = 'px-2 py-1 text-xs rounded-md bg-red-900/50 text-red-300';
+                        clusterBadge.textContent = '⏸️ Cooldown';
+                        clusterDetails.innerHTML = `
+                            <div class="text-red-300">Trading paused</div>
+                            <div class="text-gray-400 text-xs">Consecutive losses detected</div>
+                            <div class="text-gray-400 text-xs">Preventing emotional trading</div>
+                        `;
+                    } else {
+                        clusterBadge.className = 'px-2 py-1 text-xs rounded-md bg-green-900/50 text-green-300';
+                        clusterBadge.textContent = '✅ OK';
+                        clusterDetails.innerHTML = `
+                            <div class="text-green-300">No cluster losses</div>
+                            <div class="text-gray-400 text-xs">Trigger: ${cluster_loss.trigger_count} consecutive losses</div>
+                            <div class="text-gray-400 text-xs">Monitoring active</div>
+                        `;
+                    }
+                } else {
+                    clusterBadge.className = 'px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-400';
+                    clusterBadge.textContent = 'Disabled';
+                    clusterDetails.innerHTML = '<div class="text-gray-400">Cluster loss protection disabled</div>';
+                }
+            }
         }
 
         async function loadData() {
