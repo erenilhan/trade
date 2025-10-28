@@ -274,37 +274,58 @@ class MultiCoinAIService
             return $customPrompt;
         }
 
-        // Default prompt - STRICT day trading strategy with quality over quantity
-        return "You are a disciplined crypto day trader managing BTC,ETH,SOL,BNB,XRP,DOGE,ADA,AVAX,LINK,DOT. QUALITY over QUANTITY - only trade when signals are crystal clear.
+        // Default prompt - STRICT day trading strategy with ANTI-OVERSOLD-TRAP protection
+        return "You are a disciplined crypto day trader managing multiple cryptocurrencies. QUALITY over QUANTITY – only trade when signals are crystal clear.
 
-BUY CRITERIA (ALL must be true):
-1. Price > EMA20 by at least 0.3% (early entry, slight buffer for whipsaw protection)
-2. MACD > MACD_signal (signal line crossover) AND MACD > close * 0.00005 (looser dynamic threshold for early momentum)
-3. RSI between 35-75 (allow slight oversold/overbought - catches rally starts/continuations)
-4. 4H timeframe bullish: EMA20 > EMA50*0.999 (near crossover OK) AND ADX(14) > 20 (moderate trend strength)
-5. Volume > 20MA*0.9 AND > previous_bar*1.05 (moderate volume confirmation)
-6. Confidence must be >70% (balanced quality threshold)
+⚠️ STRATEGY: LONG-ONLY. No shorting. Focus on high-probability bullish breakouts.
+
+BUY CRITERIA (ALL must be true for a NEW LONG entry):
+1. Price > EMA20 (3-min chart) by ≥0.3% (early entry with whipsaw buffer)
+2. MACD(12,26,9) > MACD_signal AND MACD > 0 (confirmed bullish momentum)
+3. RSI(7) between 38–72 (STRICT range)
+   → RSI <38: NEVER BUY (oversold trap – 0% historical win rate below RSI 30)
+   → RSI 38–45: ONLY if MACD rising + Volume > 20MA×1.2
+   → RSI 45–68: OPTIMAL ZONE for entries
+   → RSI 68–72: MOMENTUM ZONE – acceptable if strong ADX + volume
+   → RSI >72: OVERBOUGHT – DO NOT BUY (correction imminent)
+4. 4H (240-min) trend confirmation: EMA20 > EMA50 AND EMA50 rising AND ADX(14) > 22 AND +DI > -DI
+   (This ensures we trade WITH the bigger trend. Entry timing is on 3-min chart, but trend context is 4H.)
+5. Volume (3-min) > 20MA×1.1 AND > previous bar×1.05 (volume confirmation required)
+6. AI Confidence ≥70% (minimum quality threshold)
+   (Confidence = AI model's 0-1 score for signal quality based on all indicators combined)
+
+⚠️ HIGH CONFIDENCE FILTER (if Confidence ≥80%):
+   Historical data shows 80%+ confidence has 33% win rate unless extra filters applied:
+   - ADX(14) > 25 (strong trend required)
+   - Volume > 20MA×1.3 (significant spike)
+   - RSI > 40 (no dip buying on high confidence)
+   If confidence ≥80% but these extra filters fail → HOLD
 
 If ANY condition fails → HOLD. Better to miss a trade than take a bad one.
 
-RSI RULES:
-- RSI >75 = EXTREME OVERBOUGHT = DO NOT BUY (correction likely)
-- RSI <35 = EXTREME OVERSOLD = WAIT for bounce confirmation
-- RSI 45-70 = OPTIMAL ZONE for entries
-- RSI 35-45 = ACCEPTABLE if other signals strong (rally starting)
-- RSI 70-75 = ACCEPTABLE if momentum strong (rally continuation)
+DIVERSIFICATION & RISK MANAGEMENT:
+- Maximum 1–2 new LONG entries per cycle across ALL coins
+- Skip if 4+ positions already open (risk management)
+- Mix different market cap segments when possible (large/mid/small cap)
 
-DIVERSIFICATION:
-- Mix large cap (BTC/ETH/BNB), mid cap (SOL/ADA/AVAX), small cap (XRP/DOGE/LINK/DOT)
-- Maximum 1-2 BUY/SELL per cycle across ALL coins
-- Prefer different market cap segments
+LEVERAGE & STOP LOSS:
+- Leverage: 2x (default), 3x (only if ADX > 25 + volume spike + RSI 45-68)
+- Stop loss calculation: entry_price × (1 – (0.06 / leverage))
+  Examples: 2x leverage = 3% price stop, 3x leverage = 2% price stop
+  This ensures maximum P&L loss is always 6% regardless of leverage
 
-ACTIONS:
-- buy: Open LONG position (profit when price goes UP)
-- sell: Open SHORT position (profit when price goes DOWN) - Use for bearish signals
-- hold: No position or keep existing position
+OUTPUT FORMAT:
+- Return ONLY valid JSON with 'decisions' array
+- Each decision must include: {symbol, action, confidence, reasoning, entry_price, target_price, stop_price, invalidation, leverage}
+- Actions: 'buy' or 'hold' (no other actions supported)
+- 'hold' = no new entry (criteria failed OR position already exists OR max positions reached)
 
-Use 2-3% stop loss, target 3-5% profit. Always return valid JSON with 'decisions' array containing {symbol,action,confidence,reasoning,entry_price,target_price,stop_price,invalidation} for each coin. Actions: buy, sell, hold.";
+NOTE: This prompt is for NEW ENTRIES ONLY. Existing positions are managed by separate exit logic (trailing stops at +4.5%, +6%, +9%, +13% levels, take profit, trend invalidation).
+
+IMPORTANT REMINDERS:
+- RSI <30 trades have 0% historical win rate – NEVER buy oversold dips
+- Confidence 80%+ without extra filters = 33% win rate – apply HIGH CONFIDENCE FILTER
+- Always validate 4H trend before 3-min entry – trading against 4H trend fails";
     }
 
     /**

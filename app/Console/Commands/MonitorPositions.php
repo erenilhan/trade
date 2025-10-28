@@ -343,6 +343,20 @@ class MonitorPositions extends Command
                 'close_metadata' => $closeMetadata,
             ]);
 
+            // Record closing trade in trades table
+            \App\Models\Trade::create([
+                'order_id' => $order['id'] ?? null,
+                'symbol' => $symbol,
+                'side' => $orderSide, // 'sell' for LONG close, 'buy' for SHORT close
+                'type' => 'market',
+                'amount' => $position->quantity,
+                'price' => $actualExitPrice,
+                'cost' => $position->quantity * $actualExitPrice,
+                'leverage' => $position->leverage,
+                'status' => 'filled',
+                'response_data' => json_encode($order),
+            ]);
+
             $pnlEmoji = $realizedPnl >= 0 ? '🟢' : '🔴';
             $this->info("    {$pnlEmoji} CLOSED ({$closeReason}): PNL \${$realizedPnl} ({$pnlPercent}%)");
 

@@ -150,9 +150,12 @@ class MultiCoinTradingController extends Controller
             $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
             $targetPrice = $decision['target_price'] ?? $entryPrice * 1.05;
 
-            // Use LONG-specific stop loss from settings
-            $stopLossPercent = BotSetting::get('stop_loss_percent_long', 3);
-            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($stopLossPercent / 100));
+            // Dynamic stop loss based on leverage: max 6% P&L loss
+            // Formula: price_stop% = 6% / leverage
+            // Examples: 2x = 3% price stop, 3x = 2% price stop, 5x = 1.2% price stop
+            $maxPnlLoss = 6.0; // Maximum P&L loss %
+            $priceStopPercent = $maxPnlLoss / $leverage;
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($priceStopPercent / 100));
 
             // Calculate liquidation price
             $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage);
@@ -202,6 +205,22 @@ class MultiCoinTradingController extends Controller
                 'risk_usd' => $positionSize * ($leverage / 100) * 3, // 3% risk
                 'is_open' => true,
                 'opened_at' => now(),
+            ]);
+
+            // Record BUY trade in trades table
+            \App\Models\Trade::create([
+                'order_id' => $order['id'],
+                'symbol' => $symbol,
+                'side' => 'buy',
+                'type' => 'market',
+                'amount' => $order['filled'] ?? $quantity,
+                'price' => $actualEntryPrice,
+                'cost' => ($order['filled'] ?? $quantity) * $actualEntryPrice,
+                'leverage' => $leverage,
+                'stop_loss' => $stopPrice,
+                'take_profit' => $targetPrice,
+                'status' => 'filled',
+                'response_data' => json_encode($order),
             ]);
 
             Log::info("✅ {$symbol}: BUY executed", [
@@ -263,9 +282,12 @@ class MultiCoinTradingController extends Controller
             // SHORT: profit when price goes DOWN, stop when price goes UP
             $targetPrice = $decision['target_price'] ?? $entryPrice * 0.95; // -5% target
 
-            // Use SHORT-specific stop loss from settings
-            $stopLossPercent = BotSetting::get('stop_loss_percent_short', 3);
-            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($stopLossPercent / 100)); // SHORT: stop above entry
+            // Dynamic stop loss based on leverage: max 6% P&L loss
+            // Formula: price_stop% = 6% / leverage
+            // Examples: 2x = 3% price stop, 3x = 2% price stop, 5x = 1.2% price stop
+            $maxPnlLoss = 6.0; // Maximum P&L loss %
+            $priceStopPercent = $maxPnlLoss / $leverage;
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($priceStopPercent / 100)); // SHORT: stop above entry
 
             // Calculate liquidation price for SHORT
             $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage, 'short');

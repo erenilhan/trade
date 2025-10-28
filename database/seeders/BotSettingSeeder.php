@@ -100,15 +100,15 @@ class BotSettingSeeder extends Seeder
             // Trailing Stop Level 1
             [
                 'key' => 'trailing_stop_l1_trigger',
-                'value' => 3,
-                'type' => 'int',
-                'description' => 'Level 1: Activate at +3% profit',
+                'value' => 4.5,
+                'type' => 'float',
+                'description' => 'Level 1: Activate at +4.5% profit',
             ],
             [
                 'key' => 'trailing_stop_l1_target',
-                'value' => -1,
-                'type' => 'int',
-                'description' => 'Level 1: Move stop to -1%',
+                'value' => -0.5,
+                'type' => 'float',
+                'description' => 'Level 1: Move stop to -0.5%',
             ],
 
             // Trailing Stop Level 2

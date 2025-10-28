@@ -424,6 +424,21 @@ class TradeDashboardController extends Controller
             // Calculate AI performance metrics
             $aiPerformance = $this->calculateAiPerformance();
 
+            // Extract HOLD decisions from last AI run
+            $holdReasons = [];
+            if ($lastAiRun && isset($lastAiRun->decision['decisions'])) {
+                $decisions = $lastAiRun->decision['decisions'];
+                foreach ($decisions as $decision) {
+                    if ($decision['action'] === 'hold') {
+                        $holdReasons[] = [
+                            'symbol' => $decision['symbol'],
+                            'confidence' => round(($decision['confidence'] ?? 0) * 100),
+                            'reason' => $decision['reasoning'] ?? 'No reason provided',
+                        ];
+                    }
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -438,6 +453,7 @@ class TradeDashboardController extends Controller
                     'positions' => $positions,
                     'closed_positions' => $closedPositions,
                     'ai_logs' => $aiLogs,
+                    'hold_reasons' => $holdReasons,
                     'last_ai_run' => $lastAiRun ? $lastAiRun->created_at->diffForHumans() : 'Never',
                     'ai_provider' => $aiProvider,
                     'ai_model' => $aiModel,

@@ -115,15 +115,26 @@
                 <div class="stat-label text-sm text-gray-400 mt-1">🛡️ Protected</div>
                 <div class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-4 py-3 bg-dark-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-72 shadow-xl">
                     <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-dark-900"></div>
-                    <div class="font-bold mb-2 text-emerald-400">🛡️ Trailing Stop Protection</div>
-                    <div class="text-gray-300 text-xs space-y-1">
-                        <div><span class="text-yellow-400">🛡️ L1:</span> Position hit +3%, max loss -1%</div>
-                        <div><span class="text-green-400">✅ L2:</span> Position hit +5%, breakeven (no loss possible)</div>
-                        <div><span class="text-emerald-400">🔒 L3:</span> Position hit +8%, +3% profit locked</div>
-                        <div><span class="text-teal-400">💎 L4:</span> Position hit +12%, +6% profit locked</div>
+                    <div class="font-bold mb-2 text-emerald-400">🛡️ Risk Management</div>
+
+                    <div class="text-gray-300 text-xs mb-3">
+                        <div class="font-semibold text-orange-400 mb-1">⚡ Dynamic Stop Loss:</div>
+                        <div class="text-gray-400 ml-4">Max loss: <span class="text-white font-bold">6% P&L</span></div>
+                        <div class="text-gray-400 ml-4">2x leverage → 3% price stop</div>
+                        <div class="text-gray-400 ml-4">3x leverage → 2% price stop</div>
+                        <div class="text-gray-400 ml-4">5x leverage → 1.2% price stop</div>
                     </div>
+
+                    <div class="text-gray-300 text-xs space-y-1 border-t border-dark-700 pt-2">
+                        <div class="font-semibold text-emerald-400 mb-1">🛡️ Trailing Stops:</div>
+                        <div><span class="text-yellow-400">L1:</span> Hit +4.5% → stop at -0.5%</div>
+                        <div><span class="text-green-400">L2:</span> Hit +6% → stop at +2%</div>
+                        <div><span class="text-emerald-400">L3:</span> Hit +9% → stop at +5%</div>
+                        <div><span class="text-teal-400">L4:</span> Hit +13% → stop at +8%</div>
+                    </div>
+
                     <div class="text-gray-400 text-xs mt-2 pt-2 border-t border-dark-700">
-                        Positions with active trailing stop protection
+                        <span class="text-white font-bold" id="trailing-stops-count">0</span> positions protected
                     </div>
                 </div>
             </div>
@@ -164,7 +175,36 @@
             </div>
         </div>
 
+        <!-- Why Not Bought Section -->
+        <div class="mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-white">❌ Why Not Bought (Last AI Run)</h2>
+                <div class="text-sm text-gray-400">
+                    <span>HOLD decisions from AI analysis</span>
+                </div>
+            </div>
 
+            <div class="bg-dark-800 rounded-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-dark-700 text-xs uppercase">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-gray-400">Symbol</th>
+                                <th class="px-4 py-3 text-left text-gray-400">Confidence</th>
+                                <th class="px-4 py-3 text-left text-gray-400">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hold-reasons" class="divide-y divide-dark-700">
+                            <tr>
+                                <td colspan="3" class="px-4 py-8 text-center text-gray-400">
+                                    Loading HOLD reasons...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
         <!-- AI Decision Detail Modal -->
         <div id="ai-modal" class="modal fixed inset-0 z-50 hidden bg-black/50">
@@ -309,7 +349,7 @@
         }
 
         function renderDashboard(data) {
-            const { account, positions, closed_positions, ai_logs, last_ai_run, ai_provider, ai_model, stats } = data;
+            const { account, positions, closed_positions, ai_logs, hold_reasons, last_ai_run, ai_provider, ai_model, stats } = data;
 
             // Update account stats
             document.getElementById('total-value').textContent = formatMoney(account.total_value);
@@ -700,6 +740,23 @@
                     </div>
                     ${aiLogItems.join('')}
                 `;
+            }
+
+            // Render HOLD reasons (Why Not Bought)
+            const holdReasonsEl = document.getElementById('hold-reasons');
+            if (!hold_reasons || hold_reasons.length === 0) {
+                holdReasonsEl.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-400">No HOLD decisions in last AI run</td></tr>';
+            } else {
+                holdReasonsEl.innerHTML = hold_reasons.map(hold => {
+                    const confidenceClass = hold.confidence >= 70 ? 'text-yellow-400' : 'text-gray-400';
+                    return `
+                        <tr class="hover:bg-dark-700/50">
+                            <td class="px-4 py-3 font-medium text-white">${hold.symbol}</td>
+                            <td class="px-4 py-3 ${confidenceClass}">${hold.confidence}%</td>
+                            <td class="px-4 py-3 text-gray-300 text-sm">${hold.reason}</td>
+                        </tr>
+                    `;
+                }).join('');
             }
 
             // Last AI run

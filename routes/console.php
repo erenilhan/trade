@@ -28,3 +28,8 @@ Schedule::command('positions:monitor')
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();
+
+// Prune AI logs daily
+Schedule::command('logs:prune-ai')
+    ->daily()
+    ->onOneServer();

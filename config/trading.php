@@ -73,20 +73,20 @@ return [
     */
     'trailing_stops' => [
         'level_1' => [
-            'trigger' => 3,   // Activate at +3% profit
-            'target' => -1,   // Move stop to -1%
+            'trigger' => 4.5,   // Activate at +4.5% profit (was +3%, too early)
+            'target' => -0.5,   // Move stop to -0.5% (was -1%, tighter protection)
         ],
         'level_2' => [
-            'trigger' => 6,   // Activate at +6% profit (was +5%)
-            'target' => 2,    // Move stop to +2% (was 0% breakeven)
+            'trigger' => 6,   // Activate at +6% profit
+            'target' => 2,    // Move stop to +2% (breakeven protection)
         ],
         'level_3' => [
-            'trigger' => 9,   // Activate at +9% profit (was +8%)
-            'target' => 5,    // Move stop to +5% (was +3%)
+            'trigger' => 9,   // Activate at +9% profit
+            'target' => 5,    // Move stop to +5% (lock profit)
         ],
         'level_4' => [
-            'trigger' => 13,  // Activate at +13% profit (was +12%)
-            'target' => 8,    // Move stop to +8% (was +6%)
+            'trigger' => 13,  // Activate at +13% profit
+            'target' => 8,    // Move stop to +8% (lock big profit)
         ],
     ],
 

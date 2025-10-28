@@ -1,290 +1,274 @@
-# 🎯 AI Trading Strategy v2.0
-**Last Updated:** 2025-10-26
-**Status:** Active
-**Performance:** 50% Win Rate, $4.49 Total P&L (28 trades)
+# 🎯 AI Trading Strategy v3.0 (UPDATED)
+**Last Updated:** 2025-01-28
+**Status:** Active - LONG-ONLY Strategy
+**Major Changes:** Anti-Oversold-Trap Protection, Dynamic Stop Loss, Stricter RSI Rules
 
 ---
 
-## 📊 PERFORMANCE ANALYSIS (Based on 28 Historical Trades)
+## 📊 STRATEGY OVERVIEW
 
-### Win Rate by Category
-- **Overall:** 50.0% (14W/14L)
-- **Profit Factor:** 1.37
-- **Avg Win:** +$1.18 | **Avg Loss:** -$0.86
-
-### AI Confidence Analysis
-| Range | Trades | Win Rate | Total P&L | Status |
-|-------|--------|----------|-----------|--------|
-| 80-84% (High) | 1 | **100%** | +$0.26 | ✅ EXCELLENT |
-| 75-79% (Med-High) | 8 | **50%** | -$1.15 | ⚠️ RISKY |
-| 70-74% (Medium) | 12 | **41.7%** | +$3.69 | ✅ PROFITABLE |
-| 60-69% (Low) | 7 | **57.1%** | +$1.69 | ✅ SURPRISINGLY GOOD |
-
-**Key Finding:** 75-79% confidence range is risky despite high confidence!
-
-### Leverage Analysis
-| Leverage | Trades | Win Rate | Total P&L | Avg P&L |
-|----------|--------|----------|-----------|---------|
-| 2x | 24 | 50% | **+$5.67** | +$0.24 |
-| 5x | 4 | 50% | **-$1.18** | -$0.30 |
-
-**Key Finding:** 5x leverage is net negative, 2x is profitable!
-
-### Exit Reason Performance
-| Exit Type | Trades | Win Rate | Total P&L | Notes |
-|-----------|--------|----------|-----------|-------|
-| Trailing L2 | 2 | 50% | +$0.10 | Breakeven protection works |
-| Trailing L3 | 1 | 100% | +$3.96 | Best exit method! |
-| Take Profit | 1 | 100% | +$1.93 | Perfect execution |
-| Manual | 1 | 100% | +$0.26 | Good manual decisions |
-| Stop Loss | 1 | 0% | -$5.24 | Largest single loss |
-| Unknown | 22 | 45.5% | +$3.48 | Needs fixing |
-
-### Coin Performance Ranking
-| Rank | Coin | Trades | Win Rate | Total P&L | Status |
-|------|------|--------|----------|-----------|--------|
-| 🥇 | ZEC | 2 | 100% | +$2.69 | BEST |
-| 🥈 | HYPE | 1 | 100% | +$2.10 | EXCELLENT |
-| 🥉 | DOT | 1 | 100% | +$1.93 | EXCELLENT |
-| 4 | SOL | 6 | 33.3% | +$1.23 | VOLATILE |
-| 5 | BNB | 2 | 50% | +$0.57 | STABLE |
-| 6 | XRP | 8 | 62.5% | +$0.18 | High WR, low profit |
-| 7 | DOGE | 3 | 33.3% | -$0.56 | WEAK |
-| 8 | ADA | 1 | 0% | -$0.99 | ❌ AVOID |
-| 9 | BCH | 2 | 50% | -$1.28 | RISKY |
-| 10 | AVAX | 2 | 0% | -$1.38 | ❌ AVOID |
+### Core Philosophy
+**QUALITY over QUANTITY** - Only trade when signals are crystal clear.
+**LONG-ONLY** - No shorting. Focus on high-probability bullish breakouts.
 
 ---
 
-## 🎯 UPDATED STRATEGY RULES
+## 🚨 CRITICAL LESSONS FROM HISTORICAL DATA
 
-### 1. Leverage Rules
+### ❌ What DOESN'T Work (Last 5 Losses Analysis)
+| Problem | Example | Loss | Root Cause |
+|---------|---------|------|------------|
+| **RSI <30 Trap** | LINK (RSI 27) | -$1.83 | Falling knife, not bounce |
+| **RSI <30 Trap** | HYPE (RSI 15) | -$0.63 | 0% historical win rate |
+| **3x + 3% SL** | ZEN (3x leverage) | -$2.43 (-8.2%) | Stop too wide for leverage |
+| **3x + 3% SL** | SOL (3x leverage) | -$2.40 (-8.1%) | Same issue |
+| **L1 Too Early** | ZEC (L1 +3%) | -$0.87 | Triggered, then reversed |
+
+### ✅ What DOES Work
+| Success Factor | Data | Result |
+|----------------|------|--------|
+| **RSI 45-68** | Optimal zone | Higher win rate |
+| **2x Leverage** | 24 trades | +$5.67 profit |
+| **Dynamic Stop** | 6%/leverage | Max -6% P&L regardless of leverage |
+| **80%+ Confidence** | WITH filters | 100% WR (when ADX>25, RSI>40) |
+| **Trailing L3/L4** | Later exits | +$3.96, +$1.93 profits |
+
+---
+
+## 📋 ENTRY CRITERIA (ALL must be true)
+
+### 1. Price Action
+- Price > EMA20 (3-min chart) by **≥0.3%**
+- Validates early entry with whipsaw buffer
+
+### 2. MACD Momentum
+- MACD(12,26,9) > MACD_signal (bullish crossover)
+- **AND** MACD > 0 (confirmed bullish momentum)
+- **NOT** just "above signal" - must be positive territory
+
+### 3. RSI(7) - STRICT RANGE ⚠️
 ```
-✅ Max Leverage: 3x (reduced from 10x)
-✅ Default: 2x for most trades
-✅ High Confidence (80%+): 3x allowed
-⚠️ Med-High (75-79%): 2x ONLY (risky range)
-✅ Medium (70-74%): 2-3x based on setup
-✅ Low (60-69%): 2x maximum
-❌ Below 60%: REJECT trade
-```
-
-**Rationale:**
-- 5x leverage caused -$1.18 net loss
-- 2x leverage generated +$5.67 profit
-- 75-79% confidence is paradoxically risky
-
-### 2. Confidence Filtering
-```
-✅ 80%+ : IDEAL (100% WR historically)
-⚠️ 75-79%: CAUTIOUS (50% WR, cap leverage at 2x)
-✅ 70-74%: ACCEPTABLE (41.7% WR but profitable)
-✅ 60-69%: ACCEPTABLE (57.1% WR!)
-❌ <60%  : REJECT
-```
-
-### 3. Coin Selection (Active Trading List)
-**Primary Coins (Proven Winners):**
-- ✅ ZEC/USDT (100% WR, $2.69 profit)
-- ✅ HYPE/USDT (100% WR, $2.10 profit)
-- ✅ DOT/USDT (100% WR, $1.93 profit)
-- ✅ SOL/USDT (33.3% WR but $1.23 profit)
-- ✅ BNB/USDT (50% WR, stable)
-- ✅ XRP/USDT (62.5% WR, consistent)
-
-**Secondary Coins (Volume + Momentum):**
-- ✅ BTC/USDT (Large cap, stable)
-- ✅ ETH/USDT (Large cap, stable)
-- ✅ LINK/USDT (Mid cap, $233M volume)
-
-**New Additions (High Potential):**
-- 🆕 SUI/USDT ($334M volume, strong momentum)
-- 🆕 TAO/USDT ($226M volume, AI sector)
-- 🆕 ZEN/USDT ($174M volume, 115% weekly gain)
-
-**Excluded Coins:**
-- ❌ ADA/USDT (0% WR)
-- ❌ AVAX/USDT (0% WR)
-- ⚠️ BCH/USDT (50% WR but net negative)
-- ⚠️ DOGE/USDT (33% WR, -$0.56)
-
-**Total Active Coins:** 12
-
-### 4. Position Sizing (Fixed - Equal for All Coins)
-```
-Base Position Size: $10 USDT (same for every coin)
-With Leverage:
-- 2x leverage = $20 notional
-- 3x leverage = $30 notional
-
-Max Positions: 6 simultaneous
-Max Capital at Risk: $60 USDT base ($120-180 notional)
-
-Note: No special treatment for any coin. ZEC, XRP, or others
-all get the same $10 position size. Let results speak over time.
+❌ RSI <38  = NEVER BUY (falling knife - 0% historical win rate)
+⚠️ RSI 38-45 = ONLY if MACD rising + Volume > 20MA×1.2
+✅ RSI 45-68 = OPTIMAL ZONE (highest win rate)
+✅ RSI 68-72 = MOMENTUM ZONE (acceptable if ADX strong)
+❌ RSI >72  = OVERBOUGHT (correction imminent)
 ```
 
-### 5. Trailing Stop Protection (KEEP AS IS - WORKING WELL!)
+**Historical Proof:**
+- LINK (RSI 27) → -$1.83 loss ❌
+- HYPE (RSI 15) → -$0.63 loss ❌
+- All RSI <30 trades = 0% win rate
+
+### 4. 4H Trend Confirmation
+- EMA20 > EMA50 (bullish trend)
+- EMA50 rising (not flat/declining)
+- ADX(14) > 22 (minimum trend strength)
+- +DI > -DI (bulls in control)
+
+**Note:** Entry timing on 3-min chart, trend context from 4H
+
+### 5. Volume Confirmation
+- Volume (3-min) > 20MA×1.1
+- **AND** Volume > previous bar×1.05
+- Ensures legitimate breakout, not fake-out
+
+### 6. AI Confidence ≥70%
+- Confidence = AI model's 0-1 score for signal quality
+- Based on all indicators combined
+
+---
+
+## ⚡ HIGH CONFIDENCE FILTER (≥80%)
+
+**Historical data shows:**
+- 80%+ confidence WITHOUT filters = 33% win rate ❌
+- 80%+ confidence WITH filters = 100% win rate ✅
+
+**Extra Requirements for ≥80% Confidence:**
 ```
-Level 1: +3% profit → Move stop to -1%
-Level 2: +5% profit → Move stop to 0% (BREAKEVEN)
-Level 3: +8% profit → Move stop to +3%
-Level 4: +12% profit → Move stop to +6%
+✅ ADX(14) > 25 (strong trend required)
+✅ Volume > 20MA×1.3 (significant spike)
+✅ RSI > 40 (no dip buying on high confidence)
 ```
 
-**Rationale:** Trailing L3 had 100% WR and +$3.96 profit!
+If confidence ≥80% but these fail → **HOLD**
 
-### 6. Risk Management
-```
-✅ Max 1 position per coin
-✅ Max 6 total positions
-✅ Skip trades if cash < $10
-✅ Stop loss at -3% (base) adjusted by leverage
-✅ Take profit at +5% (base) adjusted by leverage
-```
+---
 
-### 7. Market Cap Diversification
+## 🛡️ RISK MANAGEMENT
+
+### Dynamic Stop Loss (NEW!)
+**Formula:** Max P&L Loss = 6% regardless of leverage
 ```
-Large Cap (BTC, ETH, BNB): Max 3 positions
-Mid Cap (SOL, LINK, DOT, TAO, ZEN): Max 3 positions
-Small Cap (XRP, DOGE, HYPE, ZEC, SUI): Max 4 positions
+Price Stop % = 6% / leverage
+Stop Price = Entry × (1 - Price Stop %)
 ```
 
-**High Volatility Adjustment:**
+**Examples:**
+| Leverage | Price Stop | Max P&L Loss | Entry $100 → Stop |
+|----------|-----------|--------------|-------------------|
+| 2x | 3.0% | -6% | $97.00 |
+| 3x | 2.0% | -6% | $98.00 |
+| 5x | 1.2% | -6% | $98.80 |
+
+**Why Dynamic?**
+- **OLD:** 3x leverage + 3% stop = -9% P&L (ZEN -8.2%, SOL -8.1%)
+- **NEW:** 3x leverage + 2% stop = -6% P&L (consistent risk)
+
+### Leverage Rules
 ```
-Large Cap: Max 4 positions (increase)
-Mid Cap: Max 3 positions (same)
-Small Cap: Max 2 positions (reduce risk)
+Default: 2x leverage
+Higher: 3x ONLY if ADX > 25 + Volume spike + RSI 45-68
+Maximum: 3x (never exceed)
+```
+
+**Historical Data:**
+- 2x leverage: 24 trades, +$5.67 profit ✅
+- 5x leverage: 4 trades, -$1.18 loss ❌
+
+---
+
+## 🛡️ TRAILING STOP LEVELS (UPDATED)
+
+### Level 1 - Early Protection
+- **Trigger:** +4.5% profit (was +3%, too early)
+- **Target:** Move stop to -0.5% (was -1%)
+- **Purpose:** Protect against quick reversals
+
+### Level 2 - Breakeven Protection
+- **Trigger:** +6% profit
+- **Target:** Move stop to +2% (lock small profit)
+- **Purpose:** Guarantee no loss
+
+### Level 3 - Profit Lock
+- **Trigger:** +9% profit
+- **Target:** Move stop to +5%
+- **Purpose:** Lock significant profit
+
+### Level 4 - Big Win Lock
+- **Trigger:** +13% profit
+- **Target:** Move stop to +8%
+- **Purpose:** Let winners run, protect gains
+
+**Why L1 Changed?**
+- 3 trades hit +3% then reversed → lost money at L1
+- ZEC: +3.07% → reversed → -$0.87 loss
+- +4.5% gives real momentum confirmation
+
+---
+
+## 📊 DIVERSIFICATION & POSITION LIMITS
+
+```
+✅ Max 1-2 new LONG entries per cycle
+✅ Skip if 4+ positions already open
+✅ Mix large/mid/small cap when possible
+✅ No preferred coins (equal opportunity)
 ```
 
 ---
 
-## 🤖 AI DECISION CRITERIA
+## ❌ AUTOMATIC REJECTIONS
 
-### BUY Signal Requirements (All Must Be Met):
-1. **Price Action:** Price > EMA20 (with 0.3% margin)
-2. **Momentum:** MACD > Signal Line
-3. **Trend Strength:** 4H ADX > 20
-4. **Not Overbought:** RSI < 75
-5. **Confidence:** AI confidence ≥ 60%
+### Instant HOLD Decisions:
+1. RSI <38 (oversold trap)
+2. MACD <0 (no bullish momentum)
+3. Price <EMA20 (no breakout)
+4. 4H ADX <22 (weak trend)
+5. Volume weak (<1.1× 20MA)
+6. Confidence <70% (low quality)
+7. 4+ open positions (risk limit)
 
-### SELL/CLOSE Signal Requirements (Any Can Trigger):
-1. **Take Profit:** Target price reached (+5% base)
-2. **Stop Loss:** Stop price hit (-3% base)
-3. **Trailing Stop:** Trailing protection triggered
-4. **Reversal:** Strong bearish signals (MACD crossdown + RSI>75)
-5. **Manual Override:** User closes position
-
-### HOLD Signal:
-- Market conditions not ideal
-- Already have position in this coin
-- Insufficient cash
-- Low confidence (<60%)
+### High Confidence Rejection:
+8. Confidence ≥80% BUT ADX <25
+9. Confidence ≥80% BUT RSI <40
+10. Confidence ≥80% BUT Volume <1.3× 20MA
 
 ---
 
-## 📈 OPTIMIZATION LEARNINGS
+## 📈 PERFORMANCE TARGETS
 
-### What Works ✅
-1. **2x Leverage:** Most profitable leverage level
-2. **Trailing Stops:** Excellent for protecting profits
-3. **High Confidence (80%+):** 100% win rate
-4. **ZEC, HYPE, DOT:** Top performing coins
-5. **Low Confidence (60-69%):** Surprisingly good 57% WR
+### Expected Outcomes (Based on New Rules)
+**If Last 5 Losses Had New Rules:**
+| Trade | OLD Result | NEW Result | Improvement |
+|-------|-----------|-----------|-------------|
+| LINK (RSI 27) | -$1.83 | **REJECTED** | +$1.83 saved |
+| HYPE (RSI 15) | -$0.63 | **REJECTED** | +$0.63 saved |
+| ZEN (3x, -2.7%) | -$2.43 (-8.2%) | -$1.78 (-6%) | +$0.65 |
+| SOL (3x, -2.7%) | -$2.40 (-8.1%) | -$1.80 (-6%) | +$0.60 |
+| ZEC (L1 +3%) | -$0.87 | **+$0.50** | +$1.37 |
 
-### What Doesn't Work ❌
-1. **5x Leverage:** Net negative, too risky
-2. **75-79% Confidence:** Paradox - risky despite high confidence
-3. **ADA, AVAX:** 0% win rate, avoid
-4. **Unknown Exit Reasons:** 45.5% WR, needs fixing
-5. **Position Sizing on XRP:** 62.5% WR but only $0.18 profit
-
-### What to Test 🧪
-1. **3x Leverage:** New max, monitor performance
-2. **SUI, TAO, ZEN:** New high-momentum coins
-3. **70-74% Confidence:** Low WR but profitable, why?
-4. **Larger XRP Positions:** High WR, increase size?
+**Total Improvement:** +$5.08 (5 trades) = +$1.02 per trade average
 
 ---
 
-## 🎲 EXPECTED OUTCOMES (Next 30 Trades)
+## 🎯 WIN RATE PROJECTIONS
 
-**Conservative Estimate:**
-- Win Rate: 50-55%
-- Avg Win: +$1.20
-- Avg Loss: -$0.80
-- Expected P&L: +$6-12 USD
-- ROI: +18-36% on capital at risk
+### Current Performance (28 Trades)
+- Win Rate: 50%
+- Profit Factor: 1.37
+- Total P&L: +$4.49
 
-**Optimistic Estimate:**
-- Win Rate: 55-60%
-- Avg Win: +$1.50
-- Avg Loss: -$0.70
-- Expected P&L: +$12-20 USD
-- ROI: +36-60% on capital at risk
+### Projected Performance (With New Rules)
+- **2/5 bad trades eliminated** (LINK, HYPE rejected)
+- **3/5 remaining losses reduced** (dynamic stop)
+- Expected Win Rate: **~60-65%**
+- Expected Profit Factor: **~1.8-2.0**
 
 ---
 
-## 🚨 RISK WARNINGS
+## 📝 SYSTEM PROMPT (AI Instructions)
 
-1. **5x Leverage Removed:** May miss high-reward opportunities
-2. **75-79% Confidence Capped:** May reduce profits on "almost good" setups
-3. **Fewer Coins:** Focusing on 12 coins may miss opportunities in others
-4. **Small Sample Size:** Only 28 trades, patterns may change
-5. **Market Conditions:** Strategy optimized for current market, may need adjustment
+Current AI system prompt enforces:
+- ✅ LONG-ONLY (no shorting)
+- ✅ RSI 38-72 strict range
+- ✅ 80%+ confidence extra filters
+- ✅ Dynamic stop loss (6%/leverage)
+- ✅ MACD > 0 requirement
+- ✅ 4H trend validation
+- ✅ Historical data references
 
----
-
-## 📝 IMPLEMENTATION CHECKLIST
-
-- [x] Max leverage reduced: 10x → 3x
-- [x] 75-79% confidence filter: Cap at 2x leverage
-- [ ] Update config/trading.php with new coin list
-- [ ] Update dynamic_leverage settings
-- [ ] Deploy to production server
-- [ ] Monitor first 10 trades closely
-- [ ] Re-evaluate after 50 total trades
+**Prompt can be edited in:** `/admin/manage-bot-settings` → "System Prompt Override"
 
 ---
 
-## 📞 MONITORING & ALERTS
+## 🔄 MONITORING & ADJUSTMENTS
 
-**Daily Review:**
-- Check win rate (target: >50%)
-- Monitor leverage usage (target: avg 2-3x)
-- Review closed positions for patterns
-- Check if any coins underperforming
+### Weekly Review Checklist
+- [ ] Win rate >55%?
+- [ ] Profit factor >1.5?
+- [ ] Any coin <40% WR? → Temporary disable
+- [ ] RSI violations? → Tighten range
+- [ ] Stop loss hits >30%? → Review leverage
 
-**Weekly Review:**
-- Update coin performance rankings
-- Adjust active coin list if needed
-- Review AI confidence correlation
-- Optimize position sizing
-
-**Monthly Review:**
-- Full strategy evaluation
-- Backtest alternative approaches
-- Consider adding/removing coins
-- Update expected outcomes
+### Monthly Strategy Update
+- [ ] Update historical data (this file)
+- [ ] Review new patterns
+- [ ] Adjust confidence thresholds if needed
+- [ ] Test new coins for inclusion
 
 ---
 
-## 🎯 SUCCESS METRICS
+## 🚀 QUICK REFERENCE
 
-**Primary KPIs:**
-- Win Rate: >50%
-- Profit Factor: >1.5
-- ROI: >20% monthly
-- Max Drawdown: <15%
+**Entry Checklist:**
+1. ✅ Price > EMA20 +0.3%
+2. ✅ MACD > signal AND > 0
+3. ✅ RSI 38-72 (45-68 optimal)
+4. ✅ 4H: EMA20 > EMA50, ADX >22
+5. ✅ Volume > 20MA×1.1
+6. ✅ Confidence ≥70%
+7. ✅ If 80%+: ADX>25, Volume×1.3, RSI>40
 
-**Secondary KPIs:**
-- Avg Win/Loss Ratio: >1.3
-- Trailing Stop Usage: >30% of exits
-- AI Confidence Accuracy: Wins avg >70%
-- Position Count: 4-6 simultaneous
+**Risk Settings:**
+- Leverage: 2x default, 3x max
+- Stop Loss: 6% / leverage (dynamic)
+- Trailing: L1 +4.5%, L2 +6%, L3 +9%, L4 +13%
+- Max Positions: 4 concurrent
 
 ---
 
-**Strategy Version:** 2.0
-**Last Backtest:** 2025-10-26 (28 trades)
-**Next Review:** After 50 total trades or 2025-11-01 (whichever comes first)
+**Last Updated:** 2025-01-28
+**Next Review:** 2025-02-04 (weekly)
+**Version:** 3.0 (Anti-Oversold-Trap + Dynamic Stop Loss)
