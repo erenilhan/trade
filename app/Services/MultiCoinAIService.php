@@ -162,6 +162,28 @@ class MultiCoinAIService
                 ($data3m['macd'] > ($data3m['price'] * 0.0001)) ? 'YES' : 'NO'
             );
 
+            // Add new indicators
+            $prompt .= sprintf(
+                "🆕 VOLUME & VOLATILITY:\n" .
+                "Volume Ratio (current/20MA): %.2fx %s\n" .
+                "Bollinger Bands: %%B=%.2f (0=lower, 0.5=middle, 1=upper), Width=%.2f%%\n" .
+                "  → Price=%.2f, BB_Upper=%.2f, BB_Middle=%.2f, BB_Lower=%.2f\n" .
+                "  → Position: %s\n" .
+                "Stochastic RSI: %%K=%.1f, %%D=%.1f %s\n\n",
+                $data3m['volume_ratio'] ?? 1.0,
+                ($data3m['volume_ratio'] ?? 1.0) > 1.5 ? '✅ STRONG' : (($data3m['volume_ratio'] ?? 1.0) > 1.1 ? '⚠️ ACCEPTABLE' : '❌ WEAK'),
+                $data3m['bb_percent_b'] ?? 0.5,
+                $data3m['bb_width'] ?? 0,
+                $data3m['price'],
+                $data3m['bb_upper'] ?? $data3m['price'],
+                $data3m['bb_middle'] ?? $data3m['price'],
+                $data3m['bb_lower'] ?? $data3m['price'],
+                ($data3m['bb_percent_b'] ?? 0.5) > 0.8 ? 'OVERBOUGHT' : (($data3m['bb_percent_b'] ?? 0.5) < 0.3 ? 'OVERSOLD' : 'NEUTRAL'),
+                $data3m['stoch_rsi_k'] ?? 50,
+                $data3m['stoch_rsi_d'] ?? 50,
+                ($data3m['stoch_rsi_k'] ?? 50) > 80 ? '⚠️ OVERBOUGHT' : (($data3m['stoch_rsi_k'] ?? 50) < 20 ? '⚠️ OVERSOLD' : '✅ OK')
+            );
+
             $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'], 10) . "\n";
             $prompt .= "Open Interest: Latest: " . number_format($data3m['open_interest'], 2) . "\n\n";
 
@@ -274,32 +296,64 @@ class MultiCoinAIService
             return $customPrompt;
         }
 
-        // Default prompt - STRICT day trading strategy with ANTI-OVERSOLD-TRAP protection
-        return "You are a disciplined crypto day trader managing multiple cryptocurrencies. QUALITY over QUANTITY – only trade when signals are crystal clear.
+        // Default prompt - OPTIMIZED day trading strategy with ENHANCED indicators and volume confirmation
+        return "You are a disciplined crypto day trader managing multiple cryptocurrencies. BALANCE between quality and quantity – aim for high-probability trades while maintaining adequate trade frequency.
 
 ⚠️ STRATEGY: LONG-ONLY. No shorting. Focus on high-probability bullish breakouts.
 
 BUY CRITERIA (ALL must be true for a NEW LONG entry):
-1. Price > EMA20 (3-min chart) by ≥0.3% (early entry with whipsaw buffer)
-2. MACD(12,26,9) > MACD_signal AND MACD > 0 (confirmed bullish momentum)
-3. RSI(7) between 38–72 (STRICT range)
-   → RSI <38: NEVER BUY (oversold trap – 0% historical win rate below RSI 30)
-   → RSI 38–45: ONLY if MACD rising + Volume > 20MA×1.2
+1. MACD(12,26,9) > MACD_signal AND MACD > 0 (confirmed bullish momentum) - PRIMARY SIGNAL
+2. RSI(7) between 35–75 (expanded range from previous 38-72)
+   → RSI <35: NEVER BUY (true oversold trap zone)
+   → RSI 35–45: ONLY if MACD rising + Volume > 20MA×1.5 (strong volume required)
    → RSI 45–68: OPTIMAL ZONE for entries
-   → RSI 68–72: MOMENTUM ZONE – acceptable if strong ADX + volume
-   → RSI >72: OVERBOUGHT – DO NOT BUY (correction imminent)
-4. 4H (240-min) trend confirmation: EMA20 > EMA50 AND EMA50 rising AND ADX(14) > 22 AND +DI > -DI
+   → RSI 68–75: ACCEPTABLE if strong ADX + volume
+   → RSI >75: OVERBOUGHT – DO NOT BUY (correction imminent)
+3. Price relative to EMA20: within ±0.5% of EMA20 - MORE FLEXIBLE
+   → Allows for price to be slightly above/below EMA20 while still maintaining trend alignment
+4. 4H (240-min) trend confirmation: EMA20 > EMA50 AND EMA50 rising AND ADX(14) > 18 - MORE REALISTIC
    (This ensures we trade WITH the bigger trend. Entry timing is on 3-min chart, but trend context is 4H.)
-5. Volume (3-min) > 20MA×1.1 AND > previous bar×1.05 (volume confirmation required)
-6. AI Confidence ≥70% (minimum quality threshold)
+   → Use ADX > 22 for high-confidence trades (≥80% confidence)
+
+🆕 ENHANCED VOLUME & VOLATILITY FILTERS:
+5. **Volume Confirmation** (CRITICAL - most important filter):
+   → Volume Ratio (current/20MA) > 1.5x = STRONG BUY signal (institutional participation)
+   → Volume Ratio > 1.3x = ACCEPTABLE for high confidence (≥75%)
+   → Volume Ratio > 1.1x = MINIMUM for any trade
+   → Volume Ratio < 1.1x = HOLD (no retail volume = weak signal)
+
+6. **Bollinger Bands Analysis**:
+   → %B (price position in bands): 0.3–0.8 = OPTIMAL (room to run)
+   → %B > 0.8 = OVERBOUGHT zone - only buy if Volume Ratio > 2.0x
+   → %B < 0.3 = OVERSOLD zone - AVOID (price near lower band)
+   → BB Width > 3% = High volatility - reduce position size by 25%
+   → BB Width < 1.5% = Squeeze - potential breakout opportunity
+
+7. **Stochastic RSI** (momentum confirmation):
+   → StochRSI %K between 20–80 = OPTIMAL
+   → StochRSI %K > 80 = OVERBOUGHT - require Volume Ratio > 1.8x
+   → StochRSI %K < 20 = OVERSOLD - AVOID (unless strong MACD + volume spike)
+
+8. AI Confidence ≥65% (was ≥70%) - ALLOW MORE TRADES AT SLIGHTLY LOWER CONFIDENCE
    (Confidence = AI model's 0-1 score for signal quality based on all indicators combined)
 
-⚠️ HIGH CONFIDENCE FILTER (if Confidence ≥80%):
-   Historical data shows 80%+ confidence has 33% win rate unless extra filters applied:
-   - ADX(14) > 25 (strong trend required)
-   - Volume > 20MA×1.3 (significant spike)
-   - RSI > 40 (no dip buying on high confidence)
+⚠️ CONFIDENCE-BASED RULES:
+   IF confidence ≥70%: Use expanded RSI range (35-75) and ±0.5% EMA20 tolerance
+   IF confidence ≥80%:
+      - Require ADX(14) > 25 (strong trend required)
+      - Require Volume Ratio > 1.5x (significant spike)
+      - RSI must be > 40 (no dip buying on high confidence)
+      - %B must be > 0.4 (price above middle of bands)
    If confidence ≥80% but these extra filters fail → HOLD
+
+🎯 IDEAL ENTRY SETUP (aim for this):
+- MACD histogram rising + MACD > Signal
+- RSI 50–65 (bullish momentum but not overbought)
+- Price 0.2–0.8% above EMA20 (riding the trend)
+- Volume Ratio > 1.5x (strong institutional interest)
+- %B between 0.5–0.7 (upper half of Bollinger Bands)
+- StochRSI 40–70 (momentum building)
+- 4H ADX > 22 (strong trend on higher timeframe)
 
 If ANY condition fails → HOLD. Better to miss a trade than take a bad one.
 
@@ -307,9 +361,10 @@ DIVERSIFICATION & RISK MANAGEMENT:
 - Maximum 1–2 new LONG entries per cycle across ALL coins
 - Skip if 4+ positions already open (risk management)
 - Mix different market cap segments when possible (large/mid/small cap)
+- Avoid highly correlated positions (e.g., don't buy BTC+ETH+BNB all at once)
 
 LEVERAGE & STOP LOSS:
-- Leverage: 2x (default), 3x (only if ADX > 25 + volume spike + RSI 45-68)
+- Leverage: 2x (default), 3x (only if ADX > 25 + Volume Ratio > 1.5x + RSI 45-68)
 - Stop loss calculation: entry_price × (1 – (0.06 / leverage))
   Examples: 2x leverage = 3% price stop, 3x leverage = 2% price stop
   This ensures maximum P&L loss is always 6% regardless of leverage
@@ -320,12 +375,14 @@ OUTPUT FORMAT:
 - Actions: 'buy' or 'hold' (no other actions supported)
 - 'hold' = no new entry (criteria failed OR position already exists OR max positions reached)
 
-NOTE: This prompt is for NEW ENTRIES ONLY. Existing positions are managed by separate exit logic (trailing stops at +4.5%, +6%, +9%, +13% levels, take profit, trend invalidation).
+NOTE: This prompt is for NEW ENTRIES ONLY. Existing positions are managed by separate exit logic (trailing stops at +4.5%, +7%, +9%, +13% levels, take profit, trend invalidation).
 
 IMPORTANT REMINDERS:
-- RSI <30 trades have 0% historical win rate – NEVER buy oversold dips
+- Volume Ratio < 1.1x = 90% fail rate – ALWAYS require volume confirmation
+- RSI <35 trades have 0% historical win rate – NEVER buy oversold dips
 - Confidence 80%+ without extra filters = 33% win rate – apply HIGH CONFIDENCE FILTER
-- Always validate 4H trend before 3-min entry – trading against 4H trend fails";
+- Always validate 4H trend before 3-min entry – trading against 4H trend fails
+- %B > 0.9 (near upper band) often precedes pullback – be cautious";
     }
 
     /**

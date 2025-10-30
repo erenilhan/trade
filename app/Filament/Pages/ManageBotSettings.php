@@ -373,8 +373,48 @@ class ManageBotSettings extends Page implements HasForms
                             ]),
                         Tab::make('Trailing Stops')
                             ->schema([
-                                Section::make('Trailing Stop Levels')
-                                    ->description('Multi-level trailing stop configuration - automatically protect profits as positions grow')
+                                Section::make('⚠️ TRAILING STOPS - READ ONLY')
+                                    ->description('Trailing stops are now configured in config/trading.php (code-based). These values are shown for reference only and cannot be changed from admin panel.')
+                                    ->schema([
+                                        \Filament\Forms\Components\Placeholder::make('trailing_stops_info')
+                                            ->label('')
+                                            ->content(function () {
+                                                $config = config('trading.trailing_stops');
+                                                return new \Illuminate\Support\HtmlString('
+                                                    <div class="space-y-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                                                        <div class="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-2">
+                                                            📌 Current Configuration (from config/trading.php):
+                                                        </div>
+                                                        <div class="grid grid-cols-2 gap-4">
+                                                            <div class="p-3 bg-white dark:bg-gray-900 rounded">
+                                                                <div class="text-xs text-gray-500 mb-1">Level 1</div>
+                                                                <div class="font-mono text-sm">Trigger: +' . $config['level_1']['trigger'] . '% → Target: ' . $config['level_1']['target'] . '%</div>
+                                                            </div>
+                                                            <div class="p-3 bg-white dark:bg-gray-900 rounded">
+                                                                <div class="text-xs text-gray-500 mb-1">Level 2</div>
+                                                                <div class="font-mono text-sm">Trigger: +' . $config['level_2']['trigger'] . '% → Target: ' . $config['level_2']['target'] . '%</div>
+                                                            </div>
+                                                            <div class="p-3 bg-white dark:bg-gray-900 rounded">
+                                                                <div class="text-xs text-gray-500 mb-1">Level 3</div>
+                                                                <div class="font-mono text-sm">Trigger: +' . $config['level_3']['trigger'] . '% → Target: ' . $config['level_3']['target'] . '%</div>
+                                                            </div>
+                                                            <div class="p-3 bg-white dark:bg-gray-900 rounded">
+                                                                <div class="text-xs text-gray-500 mb-1">Level 4</div>
+                                                                <div class="font-mono text-sm">Trigger: +' . $config['level_4']['trigger'] . '% → Target: ' . $config['level_4']['target'] . '%</div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-xs text-gray-600 dark:text-gray-400 mt-3 pt-3 border-t border-gray-300 dark:border-gray-700">
+                                                            <strong>To change these values:</strong> Edit <code class="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">config/trading.php</code> file directly.
+                                                        </div>
+                                                    </div>
+                                                ');
+                                            })
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->columns(1),
+
+                                Section::make('Legacy Trailing Stop Settings (DEPRECATED)')
+                                    ->description('⚠️ These database values are NO LONGER USED. System now reads from config/trading.php')
                                     ->schema([
                                         // Level 1
                                         Section::make('Level 1 Configuration')

@@ -102,6 +102,16 @@ class MarketDataService
             'funding_rate' => $fundingRate,
             'open_interest' => $openInterest,
             'price_series' => $priceSeries,
+            // New indicators
+            'bb_upper' => $indicators['bb_upper'],
+            'bb_middle' => $indicators['bb_middle'],
+            'bb_lower' => $indicators['bb_lower'],
+            'bb_width' => $indicators['bb_width'],
+            'bb_percent_b' => $indicators['bb_percent_b'],
+            'volume_ma' => $indicators['volume_ma'],
+            'volume_ratio' => $indicators['volume_ratio'],
+            'stoch_rsi_k' => $indicators['stoch_rsi_k'],
+            'stoch_rsi_d' => $indicators['stoch_rsi_d'],
             'indicators' => [
                 'ema_series' => array_slice($indicators['ema20_series'], -10),
                 'macd_series' => array_slice($indicators['macd_series'], -10),
@@ -147,6 +157,15 @@ class MarketDataService
         // Calculate ADX
         $adxData = $this->calculateADX($highs, $lows, $closes, 14);
 
+        // Calculate new indicators
+        $bollingerBands = $this->calculateBollingerBands($closes, 20, 2.0);
+        $volumeMA = $this->calculateVolumeMA($volumes, 20);
+        $stochRsi = $this->calculateStochasticRSI($closes, 14, 14);
+
+        // Volume ratio (current volume vs 20-period average)
+        $currentVolume = end($volumes);
+        $volumeRatio = $volumeMA > 0 ? $currentVolume / $volumeMA : 1.0;
+
         return [
             'ema20' => $this->calculateEMA($closes, 20),
             'ema50' => $this->calculateEMA($closes, 50),
@@ -164,7 +183,17 @@ class MarketDataService
             'adx' => $adxData['adx'],
             'plus_di' => $adxData['plus_di'],
             'minus_di' => $adxData['minus_di'],
-            'volume' => end($volumes),
+            'volume' => $currentVolume,
+            // New indicators
+            'bb_upper' => $bollingerBands['upper'],
+            'bb_middle' => $bollingerBands['middle'],
+            'bb_lower' => $bollingerBands['lower'],
+            'bb_width' => $bollingerBands['bandwidth'],
+            'bb_percent_b' => $bollingerBands['percent_b'],
+            'volume_ma' => $volumeMA,
+            'volume_ratio' => round($volumeRatio, 4),
+            'stoch_rsi_k' => $stochRsi['k'],
+            'stoch_rsi_d' => $stochRsi['d'],
         ];
     }
 
@@ -490,5 +519,112 @@ class MarketDataService
         }
 
         return $data;
+    }
+
+    /**
+     * Calculate Bollinger Bands
+     * Returns middle band (SMA), upper band, lower band, bandwidth, and %B
+     */
+    private function calculateBollingerBands(array $prices, int $period = 20, float $stdDevMultiplier = 2.0): array
+    {
+        if (count($prices) < $period) {
+            $currentPrice = end($prices);
+            return [
+                'middle' => $currentPrice,
+                'upper' => $currentPrice,
+                'lower' => $currentPrice,
+                'bandwidth' => 0,
+                'percent_b' => 0.5,
+            ];
+        }
+
+        // Calculate SMA (middle band)
+        $subset = array_slice($prices, -$period);
+        $sma = array_sum($subset) / $period;
+
+        // Calculate standard deviation
+        $variance = 0;
+        foreach ($subset as $price) {
+            $variance += pow($price - $sma, 2);
+        }
+        $stdDev = sqrt($variance / $period);
+
+        $upper = $sma + ($stdDevMultiplier * $stdDev);
+        $lower = $sma - ($stdDevMultiplier * $stdDev);
+
+        // Bollinger Band Width (measures volatility)
+        $bandwidth = $upper > 0 ? (($upper - $lower) / $sma) * 100 : 0;
+
+        // %B (where is price relative to bands? 0 = lower, 0.5 = middle, 1 = upper)
+        $currentPrice = end($prices);
+        $percentB = ($upper - $lower) > 0 ? (($currentPrice - $lower) / ($upper - $lower)) : 0.5;
+
+        return [
+            'middle' => round($sma, 8),
+            'upper' => round($upper, 8),
+            'lower' => round($lower, 8),
+            'bandwidth' => round($bandwidth, 4),
+            'percent_b' => round($percentB, 4),
+        ];
+    }
+
+    /**
+     * Calculate Volume Moving Average
+     */
+    private function calculateVolumeMA(array $volumes, int $period = 20): float
+    {
+        if (count($volumes) < $period) {
+            return end($volumes) ?: 0;
+        }
+
+        $subset = array_slice($volumes, -$period);
+        return array_sum($subset) / $period;
+    }
+
+    /**
+     * Calculate Stochastic RSI
+     * More sensitive than regular RSI - better for detecting momentum shifts
+     */
+    private function calculateStochasticRSI(array $prices, int $rsiPeriod = 14, int $stochPeriod = 14): array
+    {
+        if (count($prices) < $rsiPeriod + $stochPeriod) {
+            return [
+                'k' => 50,
+                'd' => 50,
+            ];
+        }
+
+        // Calculate RSI series
+        $rsiValues = [];
+        for ($i = $rsiPeriod + 1; $i <= count($prices); $i++) {
+            $subset = array_slice($prices, 0, $i);
+            $rsiValues[] = $this->calculateRSI($subset, $rsiPeriod);
+        }
+
+        if (count($rsiValues) < $stochPeriod) {
+            return [
+                'k' => 50,
+                'd' => 50,
+            ];
+        }
+
+        // Get last N RSI values for stochastic calculation
+        $recentRSI = array_slice($rsiValues, -$stochPeriod);
+        $currentRSI = end($rsiValues);
+        $lowestRSI = min($recentRSI);
+        $highestRSI = max($recentRSI);
+
+        // Stochastic %K
+        $k = ($highestRSI - $lowestRSI) > 0
+            ? (($currentRSI - $lowestRSI) / ($highestRSI - $lowestRSI)) * 100
+            : 50;
+
+        // Stochastic %D (3-period SMA of %K) - simplified to just %K for now
+        $d = $k; // For simplicity, can be enhanced to calculate proper SMA of %K series
+
+        return [
+            'k' => round($k, 4),
+            'd' => round($d, 4),
+        ];
     }
 }

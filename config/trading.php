@@ -74,11 +74,11 @@ return [
     'trailing_stops' => [
         'level_1' => [
             'trigger' => 4.5,   // Activate at +4.5% profit (was +3%, too early)
-            'target' => -0.5,   // Move stop to -0.5% (was -1%, tighter protection)
+            'target' => 0.5,    // Move stop to +0.5% (was -0.5%, preserve more profit)
         ],
         'level_2' => [
-            'trigger' => 6,   // Activate at +6% profit
-            'target' => 2,    // Move stop to +2% (breakeven protection)
+            'trigger' => 7,   // Activate at +7% profit (was +6%, preserve more profit)
+            'target' => 3,    // Move stop to +3% (was +2%, preserve more profit)
         ],
         'level_3' => [
             'trigger' => 9,   // Activate at +9% profit
@@ -99,10 +99,28 @@ return [
     |
     */
     'dynamic_position_sizing' => [
-        'enabled' => env('DYNAMIC_POSITION_SIZE', false), // DISABLED - Using fixed $30
+        'enabled' => env('DYNAMIC_POSITION_SIZE', true), // ENABLED - Using confidence-based sizing
         'risk_percent' => env('RISK_PERCENT', 2.5), // 2.5% of balance per trade
         'min_position_size' => 10,  // Minimum $10
         'max_position_size' => 500, // Maximum $500
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Confidence-Based Position Sizing
+    |--------------------------------------------------------------------------
+    |
+    | Adjust position size based on AI confidence level
+    |
+    */
+    'confidence_position_sizing' => [
+        'enabled' => true,
+        'low_confidence_range' => [0.65, 0.69],      // 65-69% confidence
+        'low_confidence_size_factor' => 0.75,        // 75% of normal position size
+        'medium_confidence_range' => [0.70, 0.79],   // 70-79% confidence
+        'medium_confidence_size_factor' => 1.0,      // 100% of normal position size
+        'high_confidence_range' => [0.80, 1.0],      // 80-100% confidence
+        'high_confidence_size_factor' => 1.25,       // 125% of normal position size (capped at max leverage)
     ],
 
     /*
