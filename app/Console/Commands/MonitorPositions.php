@@ -219,13 +219,14 @@ class MonitorPositions extends Command
         $trailingUpdated = false;
 
         // Get trailing stop settings from BotSetting (dynamic!)
+        // Trailing L1 disabled - historically 0% win rate (7 trades lost). Skipping to L2 which performs well.
         $l4Trigger = BotSetting::get('trailing_stop_l4_trigger', 12);
         $l4Target = BotSetting::get('trailing_stop_l4_target', 6);
         $l3Trigger = BotSetting::get('trailing_stop_l3_trigger', 8);
         $l3Target = BotSetting::get('trailing_stop_l3_target', 3);
-        $l2Trigger = BotSetting::get('trailing_stop_l2_trigger', 5);
-        $l2Target = BotSetting::get('trailing_stop_l2_target', 0);
-        $l1Trigger = BotSetting::get('trailing_stop_l1_trigger', 3);
+        $l2Trigger = BotSetting::get('trailing_stop_l2_trigger', 6); // Increased from 5% to 6% (was too early)
+        $l2Target = BotSetting::get('trailing_stop_l2_target', 1); // Changed from 0% to +1% (preserve small profit)
+        $l1Trigger = BotSetting::get('trailing_stop_l1_trigger', 999); // Effectively disabled (999 = never trigger)
         $l1Target = BotSetting::get('trailing_stop_l1_target', -1);
 
         if ($pnlPercent >= $l4Trigger) {

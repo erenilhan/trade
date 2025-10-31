@@ -229,7 +229,13 @@ class ExecuteMultiCoinTrading extends Command
 
         $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
         $targetPrice = $decision['target_price'] ?? $entryPrice * 1.05;
-        $stopPrice = $decision['stop_price'] ?? $entryPrice * 0.97;
+        
+        // Dynamic stop loss based on leverage: max 8% P&L loss (increased from 6% for volatility tolerance)
+        // Formula: price_stop% = 8% / leverage
+        // Examples: 2x = 4% price stop, 3x = 2.67% price stop, 5x = 1.6% price stop
+        $maxPnlLoss = 8.0; // Maximum P&L loss % (was 6.0)
+        $priceStopPercent = $maxPnlLoss / $leverage;
+        $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($priceStopPercent / 100));
 
         // Calculate liquidation price
         $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage);

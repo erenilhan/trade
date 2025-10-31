@@ -97,32 +97,32 @@ class BotSettingSeeder extends Seeder
                 'description' => 'Enable pre-filtering to reduce AI token usage',
             ],
 
-            // Trailing Stop Level 1
+            // Trailing Stop Level 1 - DISABLED (historically 0% win rate, 7 trades lost)
             [
                 'key' => 'trailing_stop_l1_trigger',
-                'value' => 4.5,
+                'value' => 999,
                 'type' => 'float',
-                'description' => 'Level 1: Activate at +4.5% profit',
+                'description' => 'Level 1: DISABLED (was +4.5%, had 0% win rate)',
             ],
             [
                 'key' => 'trailing_stop_l1_target',
                 'value' => -0.5,
                 'type' => 'float',
-                'description' => 'Level 1: Move stop to -0.5%',
+                'description' => 'Level 1: DISABLED (was -0.5%, had 0% win rate)',
             ],
 
-            // Trailing Stop Level 2
+            // Trailing Stop Level 2 - OPTIMIZED (increased trigger, preserve small profit)
             [
                 'key' => 'trailing_stop_l2_trigger',
-                'value' => 5,
+                'value' => 6,
                 'type' => 'int',
-                'description' => 'Level 2: Activate at +5% profit',
+                'description' => 'Level 2: Activate at +6% profit (was +5%, too early)',
             ],
             [
                 'key' => 'trailing_stop_l2_target',
-                'value' => 0,
+                'value' => 1,
                 'type' => 'int',
-                'description' => 'Level 2: Move stop to breakeven (0%)',
+                'description' => 'Level 2: Move stop to +1% (was 0% breakeven, now preserves small profit)',
             ],
 
             // Trailing Stop Level 3

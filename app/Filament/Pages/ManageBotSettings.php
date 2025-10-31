@@ -56,10 +56,10 @@ class ManageBotSettings extends Page implements HasForms
             'stop_loss_percent_short' => BotSetting::get('stop_loss_percent_short', 3),
             'supported_coins' => BotSetting::get('supported_coins', config('trading.default_active_pairs', [])),
             // Trailing stops
-            'trailing_stop_l1_trigger' => BotSetting::get('trailing_stop_l1_trigger', 3),
+            'trailing_stop_l1_trigger' => BotSetting::get('trailing_stop_l1_trigger', 999), // DISABLED
             'trailing_stop_l1_target' => BotSetting::get('trailing_stop_l1_target', -1),
-            'trailing_stop_l2_trigger' => BotSetting::get('trailing_stop_l2_trigger', 5),
-            'trailing_stop_l2_target' => BotSetting::get('trailing_stop_l2_target', 0),
+            'trailing_stop_l2_trigger' => BotSetting::get('trailing_stop_l2_trigger', 6), // Updated from 5
+            'trailing_stop_l2_target' => BotSetting::get('trailing_stop_l2_target', 1), // Updated from 0
             'trailing_stop_l3_trigger' => BotSetting::get('trailing_stop_l3_trigger', 8),
             'trailing_stop_l3_target' => BotSetting::get('trailing_stop_l3_target', 3),
             'trailing_stop_l4_trigger' => BotSetting::get('trailing_stop_l4_trigger', 12),

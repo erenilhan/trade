@@ -203,10 +203,11 @@ class MultiCoinTradingController extends Controller
             $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
             $targetPrice = $decision['target_price'] ?? $entryPrice * 1.05;
 
-            // Dynamic stop loss based on leverage: max 6% P&L loss
-            // Formula: price_stop% = 6% / leverage
-            // Examples: 2x = 3% price stop, 3x = 2% price stop, 5x = 1.2% price stop
-            $maxPnlLoss = 6.0; // Maximum P&L loss %
+            // Dynamic stop loss based on leverage: max 8% P&L loss (increased from 6% for volatility tolerance)
+            // Formula: price_stop% = 8% / leverage
+            // Examples: 2x = 4% price stop, 3x = 2.67% price stop, 5x = 1.6% price stop
+            // Increased tolerance to reduce premature stop loss triggers (20 trades had 0% win rate with 6% limit)
+            $maxPnlLoss = 8.0; // Maximum P&L loss % (was 6.0)
             $priceStopPercent = $maxPnlLoss / $leverage;
             $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($priceStopPercent / 100));
 
@@ -335,10 +336,11 @@ class MultiCoinTradingController extends Controller
             // SHORT: profit when price goes DOWN, stop when price goes UP
             $targetPrice = $decision['target_price'] ?? $entryPrice * 0.95; // -5% target
 
-            // Dynamic stop loss based on leverage: max 6% P&L loss
-            // Formula: price_stop% = 6% / leverage
-            // Examples: 2x = 3% price stop, 3x = 2% price stop, 5x = 1.2% price stop
-            $maxPnlLoss = 6.0; // Maximum P&L loss %
+            // Dynamic stop loss based on leverage: max 8% P&L loss (increased from 6% for volatility tolerance)
+            // Formula: price_stop% = 8% / leverage
+            // Examples: 2x = 4% price stop, 3x = 2.67% price stop, 5x = 1.6% price stop
+            // Increased tolerance to reduce premature stop loss triggers
+            $maxPnlLoss = 8.0; // Maximum P&L loss % (was 6.0)
             $priceStopPercent = $maxPnlLoss / $leverage;
             $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($priceStopPercent / 100)); // SHORT: stop above entry
 

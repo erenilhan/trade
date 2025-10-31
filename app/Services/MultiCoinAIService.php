@@ -147,18 +147,23 @@ class MultiCoinAIService
             $cleanSymbol = str_replace('/USDT', '', $symbol);
 
             $prompt .= "ALL {$cleanSymbol} DATA\n";
+            $macdHistogram = ($data3m['macd_histogram'] ?? ($data3m['macd'] - ($data3m['macd_signal'] ?? 0)));
+            $macdHistogramRising = ($data3m['macd_histogram_rising'] ?? false);
+            
             $prompt .= sprintf(
-                "current_price = %.2f, current_ema20 = %.2f, current_macd = %.3f, macd_signal = %.3f, current_rsi (7 period) = %.2f\n",
+                "current_price = %.2f, current_ema20 = %.2f, current_macd = %.3f, macd_signal = %.3f, macd_histogram = %.3f, current_rsi (7 period) = %.2f\n",
                 $data3m['price'],
                 $data3m['ema20'],
                 $data3m['macd'],
                 $data3m['macd_signal'] ?? 0,
+                $macdHistogram,
                 $data3m['rsi7']
             );
 
             $prompt .= sprintf(
-                "MACD > Signal? %s, MACD > (price * 0.0001)? %s\n\n",
+                "MACD > Signal? %s, MACD Histogram Rising? %s, MACD > (price * 0.0001)? %s\n\n",
                 ($data3m['macd'] > ($data3m['macd_signal'] ?? 0)) ? 'YES' : 'NO',
+                $macdHistogramRising ? 'YES ✅' : 'NO',
                 ($data3m['macd'] > ($data3m['price'] * 0.0001)) ? 'YES' : 'NO'
             );
 
@@ -319,8 +324,9 @@ BUY CRITERIA (ALL must be true for a NEW LONG entry):
 5. **Volume Confirmation** (CRITICAL - most important filter):
    → Volume Ratio (current/20MA) > 1.5x = STRONG BUY signal (institutional participation)
    → Volume Ratio > 1.3x = ACCEPTABLE for high confidence (≥75%)
-   → Volume Ratio > 1.1x = MINIMUM for any trade
-   → Volume Ratio < 1.1x = HOLD (no retail volume = weak signal)
+   → Volume Ratio > 0.95x = MINIMUM for any trade (reduced from 1.1x to allow more opportunities)
+   → Volume Ratio 0.95x-1.1x = ACCEPTABLE if other signals are strong (RSI, MACD, ADX all bullish)
+   → Volume Ratio < 0.95x = HOLD (too weak volume)
 
 6. **Bollinger Bands Analysis**:
    → %B (price position in bands): 0.3–0.8 = OPTIMAL (room to run)
@@ -340,11 +346,16 @@ BUY CRITERIA (ALL must be true for a NEW LONG entry):
 ⚠️ CONFIDENCE-BASED RULES:
    IF confidence ≥70%: Use expanded RSI range (35-75) and ±0.5% EMA20 tolerance
    IF confidence ≥80%:
-      - Require ADX(14) > 25 (strong trend required)
-      - Require Volume Ratio > 1.5x (significant spike)
-      - RSI must be > 40 (no dip buying on high confidence)
-      - %B must be > 0.4 (price above middle of bands)
+      - Require ADX(14) > 28 (strong trend required - increased from 25)
+      - Require Volume Ratio > 1.6x (significant spike - increased from 1.5x)
+      - RSI must be 45-68 (optimal zone only - was >40, now more restrictive)
+      - %B must be 0.5-0.75 (optimal zone - was >0.4, now more restrictive)
+      - MACD histogram must be rising (not just MACD > Signal)
+      - StochRSI must be 40-70 (momentum zone - avoid extremes)
    If confidence ≥80% but these extra filters fail → HOLD
+   
+   ⚠️ Historical data shows 80-84% confidence trades had only 28.6% win rate.
+   These stricter filters are essential for high confidence trades.
 
 🎯 IDEAL ENTRY SETUP (aim for this):
 - MACD histogram rising + MACD > Signal
@@ -364,10 +375,11 @@ DIVERSIFICATION & RISK MANAGEMENT:
 - Avoid highly correlated positions (e.g., don't buy BTC+ETH+BNB all at once)
 
 LEVERAGE & STOP LOSS:
-- Leverage: 2x (default), 3x (only if ADX > 25 + Volume Ratio > 1.5x + RSI 45-68)
-- Stop loss calculation: entry_price × (1 – (0.06 / leverage))
-  Examples: 2x leverage = 3% price stop, 3x leverage = 2% price stop
-  This ensures maximum P&L loss is always 6% regardless of leverage
+- Leverage: 2x (default), 3x (only if ADX > 28 + Volume Ratio > 1.6x + RSI 45-68)
+- Stop loss calculation: entry_price × (1 – (0.08 / leverage)) - INCREASED from 6% to 8% P&L loss tolerance
+  Examples: 2x leverage = 4% price stop, 3x leverage = 2.67% price stop
+  This ensures maximum P&L loss is 8% (increased from 6% to reduce premature stop loss triggers)
+  Historical data: 20 trades hit stop loss with 0% win rate - need more volatility tolerance
 
 OUTPUT FORMAT:
 - Return ONLY valid JSON with 'decisions' array
@@ -375,14 +387,16 @@ OUTPUT FORMAT:
 - Actions: 'buy' or 'hold' (no other actions supported)
 - 'hold' = no new entry (criteria failed OR position already exists OR max positions reached)
 
-NOTE: This prompt is for NEW ENTRIES ONLY. Existing positions are managed by separate exit logic (trailing stops at +4.5%, +7%, +9%, +13% levels, take profit, trend invalidation).
+NOTE: This prompt is for NEW ENTRIES ONLY. Existing positions are managed by separate exit logic (trailing stops at +6%, +8%, +12% levels - L1 disabled due to 0% win rate, take profit, trend invalidation).
 
 IMPORTANT REMINDERS:
-- Volume Ratio < 1.1x = 90% fail rate – ALWAYS require volume confirmation
+- Volume Ratio < 0.95x = REJECT (reduced threshold from 1.1x but still critical)
+- Volume Ratio 0.95x-1.1x = ACCEPTABLE only if RSI 45-68, MACD strong, ADX > 22
 - RSI <35 trades have 0% historical win rate – NEVER buy oversold dips
-- Confidence 80%+ without extra filters = 33% win rate – apply HIGH CONFIDENCE FILTER
+- Confidence 80%+ without extra filters = 28.6% win rate – apply STRICT HIGH CONFIDENCE FILTER
 - Always validate 4H trend before 3-min entry – trading against 4H trend fails
-- %B > 0.9 (near upper band) often precedes pullback – be cautious";
+- %B > 0.9 (near upper band) often precedes pullback – be cautious
+- Trailing L1 disabled (0% win rate, 7 trades lost) - positions go straight to L2 at +6%";
     }
 
     /**

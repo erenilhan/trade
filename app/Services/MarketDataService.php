@@ -91,6 +91,8 @@ class MarketDataService
             'ema50' => $indicators['ema50'],
             'macd' => $indicators['macd'],
             'macd_signal' => $indicators['macd_signal'],
+            'macd_histogram' => $indicators['macd_histogram'] ?? 0,
+            'macd_histogram_rising' => $indicators['macd_histogram_rising'] ?? false,
             'rsi7' => $indicators['rsi7'],
             'rsi14' => $indicators['rsi14'],
             'atr3' => $indicators['atr3'] ?? 0,
@@ -153,6 +155,13 @@ class MarketDataService
         $macdData = $this->calculateMACDSeries($closes);
         $macdValue = end($macdData['macd']);
         $signalValue = end($macdData['signal']);
+        $macdHistogram = $macdValue - $signalValue; // MACD Histogram = MACD - Signal
+        
+        // Calculate previous MACD histogram to determine if rising
+        $prevMacdValue = count($macdData['macd']) > 1 ? $macdData['macd'][count($macdData['macd']) - 2] : $macdValue;
+        $prevSignalValue = count($macdData['signal']) > 1 ? $macdData['signal'][count($macdData['signal']) - 2] : $signalValue;
+        $prevMacdHistogram = $prevMacdValue - $prevSignalValue;
+        $macdHistogramRising = $macdHistogram > $prevMacdHistogram;
 
         // Calculate ADX
         $adxData = $this->calculateADX($highs, $lows, $closes, 14);
@@ -172,6 +181,8 @@ class MarketDataService
             'ema20_series' => $this->calculateEMASeries($closes, 20),
             'macd' => $macdValue,
             'macd_signal' => $signalValue,
+            'macd_histogram' => round($macdHistogram, 8),
+            'macd_histogram_rising' => $macdHistogramRising,
             'macd_series' => $macdData['macd'],
             'signal_series' => $macdData['signal'],
             'rsi7' => $this->calculateRSI($closes, 7),
@@ -280,7 +291,8 @@ class MarketDataService
     }
 
     /**
-     * Calculate RSI (Relative Strength Index)
+     * Calculate RSI (Relative Strength Index) with Wilder's Smoothing
+     * Standard RSI uses Wilder's smoothing, not simple moving average
      */
     private function calculateRSI(array $prices, int $period = 14): float
     {
@@ -297,8 +309,16 @@ class MarketDataService
             $losses[] = $change < 0 ? abs($change) : 0;
         }
 
-        $avgGain = array_sum(array_slice($gains, -$period)) / $period;
-        $avgLoss = array_sum(array_slice($losses, -$period)) / $period;
+        // Initial average (first period) - simple average
+        $avgGain = array_sum(array_slice($gains, 0, $period)) / $period;
+        $avgLoss = array_sum(array_slice($losses, 0, $period)) / $period;
+
+        // Wilder's smoothing for remaining periods
+        // Formula: AvgGain = (PrevAvgGain * (n-1) + CurrentGain) / n
+        for ($i = $period; $i < count($gains); $i++) {
+            $avgGain = (($avgGain * ($period - 1)) + $gains[$i]) / $period;
+            $avgLoss = (($avgLoss * ($period - 1)) + $losses[$i]) / $period;
+        }
 
         if ($avgLoss == 0) {
             return 100;
@@ -326,7 +346,8 @@ class MarketDataService
     }
 
     /**
-     * Calculate ATR (Average True Range)
+     * Calculate ATR (Average True Range) with Wilder's Smoothing
+     * Standard ATR uses Wilder's smoothing, not simple moving average
      */
     private function calculateATR(array $highs, array $lows, array $closes, int $period = 14): float
     {
@@ -345,7 +366,14 @@ class MarketDataService
             $trueRanges[] = $tr;
         }
 
-        $atr = array_sum(array_slice($trueRanges, -$period)) / $period;
+        // Initial ATR (first period) - simple average
+        $atr = array_sum(array_slice($trueRanges, 0, $period)) / $period;
+
+        // Wilder's smoothing for remaining periods
+        // Formula: ATR = (PrevATR * (n-1) + CurrentTR) / n
+        for ($i = $period; $i < count($trueRanges); $i++) {
+            $atr = (($atr * ($period - 1)) + $trueRanges[$i]) / $period;
+        }
 
         return round($atr, 8);
     }
@@ -584,6 +612,7 @@ class MarketDataService
     /**
      * Calculate Stochastic RSI
      * More sensitive than regular RSI - better for detecting momentum shifts
+     * %D is 3-period SMA of %K (proper calculation)
      */
     private function calculateStochasticRSI(array $prices, int $rsiPeriod = 14, int $stochPeriod = 14): array
     {
@@ -608,22 +637,34 @@ class MarketDataService
             ];
         }
 
-        // Get last N RSI values for stochastic calculation
-        $recentRSI = array_slice($rsiValues, -$stochPeriod);
-        $currentRSI = end($rsiValues);
-        $lowestRSI = min($recentRSI);
-        $highestRSI = max($recentRSI);
+        // Calculate %K for each period in the stochastic window
+        $kValues = [];
+        for ($i = $stochPeriod - 1; $i < count($rsiValues); $i++) {
+            $window = array_slice($rsiValues, $i - $stochPeriod + 1, $stochPeriod);
+            $currentRSI = end($window);
+            $lowestRSI = min($window);
+            $highestRSI = max($window);
 
-        // Stochastic %K
-        $k = ($highestRSI - $lowestRSI) > 0
-            ? (($currentRSI - $lowestRSI) / ($highestRSI - $lowestRSI)) * 100
-            : 50;
+            $k = ($highestRSI - $lowestRSI) > 0
+                ? (($currentRSI - $lowestRSI) / ($highestRSI - $lowestRSI)) * 100
+                : 50;
+            $kValues[] = $k;
+        }
 
-        // Stochastic %D (3-period SMA of %K) - simplified to just %K for now
-        $d = $k; // For simplicity, can be enhanced to calculate proper SMA of %K series
+        // Get current %K (last value)
+        $currentK = end($kValues);
+
+        // Calculate %D as 3-period SMA of %K
+        $d = 50; // Default
+        if (count($kValues) >= 3) {
+            $last3K = array_slice($kValues, -3);
+            $d = array_sum($last3K) / 3;
+        } elseif (count($kValues) > 0) {
+            $d = array_sum($kValues) / count($kValues);
+        }
 
         return [
-            'k' => round($k, 4),
+            'k' => round($currentK, 4),
             'd' => round($d, 4),
         ];
     }

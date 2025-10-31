@@ -73,20 +73,20 @@ return [
     */
     'trailing_stops' => [
         'level_1' => [
-            'trigger' => 4.5,   // Activate at +4.5% profit (was +3%, too early)
-            'target' => 0.5,    // Move stop to +0.5% (was -0.5%, preserve more profit)
+            'trigger' => 999,   // DISABLED - Historically 0% win rate (7 trades lost)
+            'target' => -0.5,   // Not used (disabled)
         ],
         'level_2' => [
-            'trigger' => 7,   // Activate at +7% profit (was +6%, preserve more profit)
-            'target' => 3,    // Move stop to +3% (was +2%, preserve more profit)
+            'trigger' => 6,   // Activate at +6% profit (was +5%, increased to avoid premature triggers)
+            'target' => 1,    // Move stop to +1% (was 0%, now preserves small profit instead of breakeven)
         ],
         'level_3' => [
-            'trigger' => 9,   // Activate at +9% profit
-            'target' => 5,    // Move stop to +5% (lock profit)
+            'trigger' => 8,   // Activate at +8% profit (unchanged, performs well - 100% win rate)
+            'target' => 5,    // Move stop to +5% (unchanged, performs well)
         ],
         'level_4' => [
-            'trigger' => 13,  // Activate at +13% profit
-            'target' => 8,    // Move stop to +8% (lock big profit)
+            'trigger' => 12,  // Activate at +12% profit (unchanged, performs well)
+            'target' => 8,    // Move stop to +8% (unchanged, performs well)
         ],
     ],
 
