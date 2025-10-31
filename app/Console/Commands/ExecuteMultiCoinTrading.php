@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\BotSetting;
 use App\Models\CoinBlacklist;
+use App\Models\DailyStat;
 use App\Models\Position;
 use App\Services\BinanceService;
 use App\Services\MultiCoinAIService;
@@ -49,6 +50,9 @@ class ExecuteMultiCoinTrading extends Command
 
             $this->info("💰 Cash: \${$cash}, Total: \${$totalValue}");
 
+            // Initialize daily stats
+            DailyStat::initializeDay($totalValue);
+
             // Skip AI if cash is below $10
             if ($cash < 10) {
                 $this->warn('⚠️ Cash below $10, skipping AI call');
@@ -69,6 +73,31 @@ class ExecuteMultiCoinTrading extends Command
             }
 
             $this->info("📊 {$coinsAvailableForTrading}/{$totalCoins} coins available for trading");
+
+            // ========================================
+            // 🛡️ RISK MANAGEMENT CHECKS (UTC-BASED)
+            // ========================================
+
+            // 1. Check Sleep Mode (23:00-04:00 UTC)
+            $sleepModeCheck = $this->checkSleepMode();
+            if ($sleepModeCheck) {
+                $this->warn("😴 {$sleepModeCheck}");
+                return self::SUCCESS;
+            }
+
+            // 2. Check Daily Max Drawdown (8%)
+            $drawdownCheck = DailyStat::checkMaxDrawdown();
+            if ($drawdownCheck) {
+                $this->error("🚨 {$drawdownCheck}");
+                return self::SUCCESS;
+            }
+
+            // 3. Check Cluster Loss Cooldown (3 consecutive losses)
+            $clusterCheck = $this->checkClusterLossCooldown();
+            if ($clusterCheck) {
+                $this->warn("⏸️ {$clusterCheck}");
+                return self::SUCCESS;
+            }
 
             // Get AI decision
             $aiDecision = $this->ai->makeDecision($account);
@@ -355,6 +384,100 @@ class ExecuteMultiCoinTrading extends Command
             Log::warning("Failed to calculate volatility for {$symbol}: " . $e->getMessage());
             return 'medium'; // Fallback to medium on error
         }
+    }
+
+    /**
+     * Check if we're in sleep mode (low liquidity hours)
+     */
+    private function checkSleepMode(): ?string
+    {
+        $config = config('trading.sleep_mode');
+
+        if (!$config['enabled']) {
+            return null;
+        }
+
+        $currentHourUTC = now()->utc()->hour;
+        $startHour = $config['start_hour'];
+        $endHour = $config['end_hour'];
+
+        // Handle wrap-around (23:00 - 04:00)
+        $inSleepMode = false;
+        if ($startHour > $endHour) {
+            // Sleep mode wraps around midnight (e.g., 23:00 - 04:00)
+            $inSleepMode = $currentHourUTC >= $startHour || $currentHourUTC < $endHour;
+        } else {
+            // Normal range (e.g., 01:00 - 05:00)
+            $inSleepMode = $currentHourUTC >= $startHour && $currentHourUTC < $endHour;
+        }
+
+        if (!$inSleepMode) {
+            return null;
+        }
+
+        // We're in sleep mode
+        if (!$config['allow_new_trades']) {
+            // Check if we already have open positions
+            $openPositions = Position::where('is_open', true)->count();
+
+            // If we're at or over the sleep mode limit, don't allow new trades
+            if ($openPositions >= $config['max_positions']) {
+                return "Sleep mode active (UTC {$startHour}:00-{$endHour}:00). Max {$config['max_positions']} positions allowed, currently at {$openPositions}. No new trades.";
+            }
+
+            // We're in sleep mode but under position limit
+            return "Sleep mode active (UTC {$startHour}:00-{$endHour}:00). Limited trading - max {$config['max_positions']} positions.";
+        }
+
+        return null;
+    }
+
+    /**
+     * Check for cluster loss cooldown (consecutive losses trigger trading pause)
+     */
+    private function checkClusterLossCooldown(): ?string
+    {
+        $config = config('trading.cluster_loss_cooldown');
+
+        if (!$config['enabled']) {
+            return null;
+        }
+
+        // Look at recent closed positions
+        $lookbackTime = now()->subHours($config['lookback_hours']);
+        $recentPositions = Position::where('is_open', false)
+            ->where('closed_at', '>=', $lookbackTime)
+            ->orderBy('closed_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        if ($recentPositions->count() < $config['consecutive_losses_trigger']) {
+            return null;
+        }
+
+        // Check if we have N consecutive losses
+        $consecutiveLosses = 0;
+        foreach ($recentPositions as $position) {
+            if (($position->realized_pnl ?? 0) < 0) {
+                $consecutiveLosses++;
+            } else {
+                // Streak broken by a win
+                break;
+            }
+        }
+
+        if ($consecutiveLosses >= $config['consecutive_losses_trigger']) {
+            // Check if we're still in cooldown period
+            $lastLoss = $recentPositions->first();
+            $cooldownEnds = $lastLoss->closed_at->addHours($config['cooldown_hours']);
+
+            if (now()->lt($cooldownEnds)) {
+                $remainingHours = now()->diffInHours($cooldownEnds, false);
+                return "Cluster loss cooldown active ({$consecutiveLosses} consecutive losses). Trading paused for {$remainingHours}h to prevent emotional trading.";
+            }
+        }
+
+        return null;
     }
 
 }
