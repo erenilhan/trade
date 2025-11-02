@@ -200,16 +200,17 @@ class MultiCoinTradingController extends Controller
                 $leverage = $maxLeverage;
             }
 
-            $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
-            $targetPrice = $decision['target_price'] ?? $entryPrice * 1.05;
+            // SYSTEM CALCULATES entry/target/stop (AI just decides action)
+            $entryPrice = $this->binance->fetchTicker($symbol)['last'];
+            $targetPrice = $entryPrice * 1.06; // +6% profit target (trailing L2 will activate here)
 
-            // Dynamic stop loss based on leverage: max 8% P&L loss (increased from 6% for volatility tolerance)
-            // Formula: price_stop% = 8% / leverage
-            // Examples: 2x = 4% price stop, 3x = 2.67% price stop, 5x = 1.6% price stop
-            // Increased tolerance to reduce premature stop loss triggers (20 trades had 0% win rate with 6% limit)
-            $maxPnlLoss = 8.0; // Maximum P&L loss % (was 6.0)
-            $priceStopPercent = $maxPnlLoss / $leverage;
-            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($priceStopPercent / 100));
+            // Dynamic stop loss: max 15% P&L loss with 5% minimum price stop
+            // Formula: price_stop% = max(15% / leverage, 5%)
+            // Examples: 2x = 7.5% price stop, 3x = 5% price stop
+            // CRITICAL FIX: Previous 8% P&L caused 0% win rate (24 trades lost)
+            $maxPnlLoss = 15.0; // Maximum P&L loss %
+            $priceStopPercent = max($maxPnlLoss / $leverage, 5.0); // Never tighter than 5%
+            $stopPrice = $entryPrice * (1 - ($priceStopPercent / 100));
 
             // Calculate liquidation price
             $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage);
@@ -332,17 +333,18 @@ class MultiCoinTradingController extends Controller
                 $leverage = $maxLeverage;
             }
 
-            $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
+            // SYSTEM CALCULATES entry/target/stop (AI just decides action)
+            $entryPrice = $this->binance->fetchTicker($symbol)['last'];
             // SHORT: profit when price goes DOWN, stop when price goes UP
-            $targetPrice = $decision['target_price'] ?? $entryPrice * 0.95; // -5% target
+            $targetPrice = $entryPrice * 0.94; // -6% profit target (trailing L2 will activate here)
 
-            // Dynamic stop loss based on leverage: max 8% P&L loss (increased from 6% for volatility tolerance)
-            // Formula: price_stop% = 8% / leverage
-            // Examples: 2x = 4% price stop, 3x = 2.67% price stop, 5x = 1.6% price stop
-            // Increased tolerance to reduce premature stop loss triggers
-            $maxPnlLoss = 8.0; // Maximum P&L loss % (was 6.0)
-            $priceStopPercent = $maxPnlLoss / $leverage;
-            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($priceStopPercent / 100)); // SHORT: stop above entry
+            // Dynamic stop loss: max 15% P&L loss with 5% minimum price stop
+            // Formula: price_stop% = max(15% / leverage, 5%)
+            // Examples: 2x = 7.5% price stop, 3x = 5% price stop
+            // CRITICAL FIX: Previous 8% P&L caused 0% win rate (24 trades lost)
+            $maxPnlLoss = 15.0; // Maximum P&L loss %
+            $priceStopPercent = max($maxPnlLoss / $leverage, 5.0); // Never tighter than 5%
+            $stopPrice = $entryPrice * (1 + ($priceStopPercent / 100)); // SHORT: stop ABOVE entry
 
             // Calculate liquidation price for SHORT
             $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage, 'short');

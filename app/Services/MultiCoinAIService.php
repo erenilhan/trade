@@ -115,30 +115,58 @@ class MultiCoinAIService
                 continue;
             }
 
-            // PRE-FILTERING: Check if coin has potential setup (save AI tokens)
+            // PRE-FILTERING: Trend-based filtering (SMART - only check direction that makes sense)
             if ($enablePreFiltering) {
                 $data3m = $data['3m'];
                 $data4h = $data['4h'];
 
-                // Quick basic checks - if ALL fail, skip this coin
-                $priceAboveEma = $data3m['price'] > ($data3m['ema20'] * 1.003); // Price > EMA20 by 0.3%
-                $macdPositive = ($data3m['macd'] ?? 0) > ($data3m['macd_signal'] ?? 0);
-                $rsiOk = ($data3m['rsi7'] ?? 0) >= 35 && ($data3m['rsi7'] ?? 0) <= 75;
-                $trendOk = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0) * 0.999;
+                // Determine 4H trend direction first
+                $is4hUptrend = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0) && ($data4h['adx'] ?? 0) > 20;
+                $is4hDowntrend = ($data4h['ema20'] ?? 0) < ($data4h['ema50'] ?? 0) && ($data4h['adx'] ?? 0) > 20;
 
-                $passedChecks = 0;
-                if ($priceAboveEma) $passedChecks++;
-                if ($macdPositive) $passedChecks++;
-                if ($rsiOk) $passedChecks++;
-                if ($trendOk) $passedChecks++;
-
-                // Need at least 2 out of 4 criteria to send to AI
-                if ($passedChecks < 2) {
-                    Log::info("⏭️ Pre-filtered {$symbol} - only {$passedChecks}/4 criteria met");
+                // If 4H is sideways (ADX < 20), skip entirely
+                if (!$is4hUptrend && !$is4hDowntrend) {
+                    Log::info("⏭️ Pre-filtered {$symbol} - 4H sideways (ADX < 20)");
                     continue;
                 }
 
-                Log::info("✅ {$symbol} passed pre-filter ({$passedChecks}/4 criteria)");
+                // If 4H uptrend, ONLY check LONG criteria
+                if ($is4hUptrend) {
+                    $isPotentialLong = (
+                        $data3m['price'] <= $data3m['ema20'] * 1.02 &&  // Price 0-2% above EMA20
+                        $data3m['price'] >= $data3m['ema20'] &&
+                        ($data3m['macd'] ?? 0) > ($data3m['macd_signal'] ?? 0) &&
+                        ($data3m['macd'] ?? 0) > 0 &&
+                        ($data3m['rsi7'] ?? 0) >= 45 && ($data3m['rsi7'] ?? 0) <= 72 &&
+                        ($data3m['volume_ratio'] ?? 0) > 1.1
+                    );
+
+                    if (!$isPotentialLong) {
+                        Log::info("⏭️ Pre-filtered {$symbol} - LONG criteria not met");
+                        continue;
+                    }
+
+                    Log::info("✅ {$symbol} passed pre-filter (potential LONG)");
+                }
+
+                // If 4H downtrend, ONLY check SHORT criteria
+                else if ($is4hDowntrend) {
+                    $isPotentialShort = (
+                        $data3m['price'] >= $data3m['ema20'] * 0.98 &&  // Price 0-2% below EMA20
+                        $data3m['price'] <= $data3m['ema20'] &&
+                        ($data3m['macd'] ?? 0) < ($data3m['macd_signal'] ?? 0) &&
+                        ($data3m['macd'] ?? 0) < 0 &&
+                        ($data3m['rsi7'] ?? 0) >= 28 && ($data3m['rsi7'] ?? 0) <= 55 &&
+                        ($data3m['volume_ratio'] ?? 0) > 1.1
+                    );
+
+                    if (!$isPotentialShort) {
+                        Log::info("⏭️ Pre-filtered {$symbol} - SHORT criteria not met");
+                        continue;
+                    }
+
+                    Log::info("✅ {$symbol} passed pre-filter (potential SHORT)");
+                }
             }
 
             $data3m = $data['3m'];
@@ -199,10 +227,20 @@ class MultiCoinAIService
                 $data4h['adx'] ?? 0
             );
 
+            // ATR volatility warning (critical safety check)
+            $atrPercent = ($data4h['atr14'] / $data3m['price']) * 100;
+            $atrWarning = $atrPercent > 8 ? '⚠️ TOO VOLATILE → HOLD' : '✅ OK';
+
             $prompt .= sprintf(
-                "4H Trend: EMA20 > EMA50*0.999? %s, ADX > 20? %s\n\n",
+                "4H Trend: EMA20 > EMA50*0.999? %s, ADX > 20? %s\n",
                 ($data4h['ema20'] > ($data4h['ema50'] * 0.999)) ? 'YES (bullish)' : 'NO (bearish)',
                 (($data4h['adx'] ?? 0) > 20) ? 'YES (moderate+)' : 'NO (weak)'
+            );
+
+            $prompt .= sprintf(
+                "VOLATILITY CHECK: ATR %.2f%% %s\n\n",
+                $atrPercent,
+                $atrWarning
             );
         }
 
@@ -224,18 +262,19 @@ class MultiCoinAIService
         $prompt .= "Analyze ONLY the coins shown above (coins without open positions).\n";
         $prompt .= "Decide: BUY (LONG), SELL (SHORT), or HOLD for each coin.\n";
         $prompt .= "Trade with the trend - LONG in uptrends, SHORT in downtrends.\n";
-        $prompt .= "Always include: action, reasoning, confidence (0-1), entry_price, target_price, stop_price, invalidation, leverage.\n\n";
+        $prompt .= "Include ONLY: action, reasoning, confidence (0-1), leverage.\n";
+        $prompt .= "DO NOT include entry_price, target_price, stop_price, or invalidation (system calculates).\n\n";
 
         $prompt .= "LEVERAGE:\n";
         $prompt .= "- Always use 2x leverage (safe and proven)\n";
         $prompt .= "- Historical data shows 2x outperforms 3x and 5x\n\n";
 
         $prompt .= "RESPONSE FORMAT (strict JSON):\n";
-        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"buy|sell|hold","reasoning":"...","confidence":0.70,"leverage":2,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
+        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"buy|sell|hold","reasoning":"...","confidence":0.70,"leverage":2}],"chain_of_thought":"..."}\n';
         $prompt .= "\nACTIONS:\n";
         $prompt .= "- buy = LONG position (profit when price goes UP)\n";
         $prompt .= "- sell = SHORT position (profit when price goes DOWN)\n";
-        $prompt .= "- hold = No trade (criteria not met)\n";
+        $prompt .= "- hold = No trade (criteria not met or ATR > 8%)\n";
 
         return $prompt;
     }
@@ -305,11 +344,12 @@ SHORT ENTRY (5 simple rules - ALL must be true):
 4. 4H trend: EMA20 < EMA50 AND ADX > 20 (strong downtrend on higher timeframe)
 5. Volume Ratio > 1.1x (minimum institutional interest)
 
-HOLD IF:
-- Criteria not met
-- ATR > 8% (too volatile)
+HOLD IF (any of these):
+- Criteria not met for LONG or SHORT
+- ATR > 8% (too volatile - CRITICAL SAFETY CHECK)
 - Volume Ratio < 1.1x (too weak)
 - AI Confidence < 60%
+- 4H ADX < 20 (sideways, no clear trend)
 
 RISK MANAGEMENT:
 - Maximum 1-2 new positions per cycle (LONG or SHORT)
@@ -318,16 +358,20 @@ RISK MANAGEMENT:
 - Use 2x leverage for all trades (proven safe and effective)
 
 OUTPUT FORMAT:
-- Return JSON: {\"decisions\":[{\"symbol\":\"BTC/USDT\",\"action\":\"buy|sell|hold\",\"reasoning\":\"...\",\"confidence\":0.70,\"leverage\":2,\"entry_price\":null,\"target_price\":null,\"stop_price\":null,\"invalidation\":\"...\"}],\"chain_of_thought\":\"...\"}
+- Return JSON: {\"decisions\":[{\"symbol\":\"BTC/USDT\",\"action\":\"buy|sell|hold\",\"reasoning\":\"...\",\"confidence\":0.70,\"leverage\":2}],\"chain_of_thought\":\"...\"}
 - Actions: 'buy' (LONG), 'sell' (SHORT), 'hold'
 - Always set leverage = 2
+- DO NOT set entry_price, target_price, stop_price, or invalidation (system calculates automatically)
 
 IMPORTANT:
+- Your job: Decide action (buy/sell/hold) based on the 5 rules
+- System's job: Calculate entry, target, stop prices automatically
 - Exits handled by trailing stops (L2 at +6%, L3 at +9%, L4 at +12%)
 - Simple is better - 5 clear criteria beats 40 confusing rules
 - Trade WITH the 4H trend, time entry on 3m chart
 - Volume confirmation critical - no volume = no trade
-- Historical data: 60-74% confidence performs best (avoid 80%+ overconfidence)";
+- Historical data: 60-74% confidence performs best (avoid 80%+ overconfidence)
+- If ATR > 8%, ALWAYS return 'hold' regardless of other signals";
     }
 
     /**
