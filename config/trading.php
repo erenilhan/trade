@@ -28,9 +28,9 @@ return [
         'BCH/USDT' => 'Bitcoin Cash ($0.21B)',
         'DOT/USDT' => 'Polkadot ($0.20B)',
         'ZEN/USDT' => 'Horizen ($0.17B)',
-        'PEPE/USDT' => 'Pepe ($0.26B)',
         'LTC/USDT' => 'Litecoin ($0.15B)',
-        'MATIC/USDT' => 'Polygon ($0.14B)',
+        // 'PEPE/USDT' => 'Pepe ($0.26B)', // Not available on Binance Futures
+        // 'MATIC/USDT' => 'Polygon ($0.14B)', // Not available on Binance Futures
     ],
 
     /*

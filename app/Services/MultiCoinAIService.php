@@ -115,57 +115,52 @@ class MultiCoinAIService
                 continue;
             }
 
-            // PRE-FILTERING: Trend-based filtering (SMART - only check direction that makes sense)
+            // PRE-FILTERING: Relaxed filtering (check trend direction + basic signals)
             if ($enablePreFiltering) {
                 $data3m = $data['3m'];
                 $data4h = $data['4h'];
 
                 // Determine 4H trend direction first
-                $is4hUptrend = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0) && ($data4h['adx'] ?? 0) > 20;
-                $is4hDowntrend = ($data4h['ema20'] ?? 0) < ($data4h['ema50'] ?? 0) && ($data4h['adx'] ?? 0) > 20;
+                $is4hUptrend = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0);
+                $is4hDowntrend = ($data4h['ema20'] ?? 0) < ($data4h['ema50'] ?? 0);
+                $adxOk = ($data4h['adx'] ?? 0) > 18; // Relaxed from 20 to 18
 
-                // If 4H is sideways (ADX < 20), skip entirely
-                if (!$is4hUptrend && !$is4hDowntrend) {
-                    Log::info("⏭️ Pre-filtered {$symbol} - 4H sideways (ADX < 20)");
+                // If 4H ADX too weak (< 15), skip
+                if (($data4h['adx'] ?? 0) < 15) {
+                    Log::info("⏭️ Pre-filtered {$symbol} - 4H too weak (ADX < 15)");
                     continue;
                 }
 
-                // If 4H uptrend, ONLY check LONG criteria
+                // Count how many criteria are met (relaxed: need 3/5 instead of 5/5)
+                $longScore = 0;
+                $shortScore = 0;
+
+                // LONG scoring
                 if ($is4hUptrend) {
-                    $isPotentialLong = (
-                        $data3m['price'] <= $data3m['ema20'] * 1.02 &&  // Price 0-2% above EMA20
-                        $data3m['price'] >= $data3m['ema20'] &&
-                        ($data3m['macd'] ?? 0) > ($data3m['macd_signal'] ?? 0) &&
-                        ($data3m['macd'] ?? 0) > 0 &&
-                        ($data3m['rsi7'] ?? 0) >= 45 && ($data3m['rsi7'] ?? 0) <= 72 &&
-                        ($data3m['volume_ratio'] ?? 0) > 1.1
-                    );
-
-                    if (!$isPotentialLong) {
-                        Log::info("⏭️ Pre-filtered {$symbol} - LONG criteria not met");
-                        continue;
-                    }
-
-                    Log::info("✅ {$symbol} passed pre-filter (potential LONG)");
+                    if (($data3m['macd'] ?? 0) > ($data3m['macd_signal'] ?? 0)) $longScore++;
+                    if (($data3m['rsi7'] ?? 0) >= 40 && ($data3m['rsi7'] ?? 0) <= 75) $longScore++;
+                    if ($data3m['price'] >= $data3m['ema20'] * 0.98 && $data3m['price'] <= $data3m['ema20'] * 1.05) $longScore++;
+                    if ($adxOk) $longScore++;
+                    if (($data3m['volume_ratio'] ?? 0) > 1.0) $longScore++;
                 }
 
-                // If 4H downtrend, ONLY check SHORT criteria
-                else if ($is4hDowntrend) {
-                    $isPotentialShort = (
-                        $data3m['price'] >= $data3m['ema20'] * 0.98 &&  // Price 0-2% below EMA20
-                        $data3m['price'] <= $data3m['ema20'] &&
-                        ($data3m['macd'] ?? 0) < ($data3m['macd_signal'] ?? 0) &&
-                        ($data3m['macd'] ?? 0) < 0 &&
-                        ($data3m['rsi7'] ?? 0) >= 28 && ($data3m['rsi7'] ?? 0) <= 55 &&
-                        ($data3m['volume_ratio'] ?? 0) > 1.1
-                    );
+                // SHORT scoring
+                if ($is4hDowntrend) {
+                    if (($data3m['macd'] ?? 0) < ($data3m['macd_signal'] ?? 0)) $shortScore++;
+                    if (($data3m['rsi7'] ?? 0) >= 25 && ($data3m['rsi7'] ?? 0) <= 60) $shortScore++;
+                    if ($data3m['price'] <= $data3m['ema20'] * 1.02 && $data3m['price'] >= $data3m['ema20'] * 0.95) $shortScore++;
+                    if ($adxOk) $shortScore++;
+                    if (($data3m['volume_ratio'] ?? 0) > 1.0) $shortScore++;
+                }
 
-                    if (!$isPotentialShort) {
-                        Log::info("⏭️ Pre-filtered {$symbol} - SHORT criteria not met");
-                        continue;
-                    }
-
-                    Log::info("✅ {$symbol} passed pre-filter (potential SHORT)");
+                // Need at least 3/5 score to send to AI
+                if ($longScore >= 3) {
+                    Log::info("✅ {$symbol} passed pre-filter (potential LONG, score {$longScore}/5)");
+                } else if ($shortScore >= 3) {
+                    Log::info("✅ {$symbol} passed pre-filter (potential SHORT, score {$shortScore}/5)");
+                } else {
+                    Log::info("⏭️ Pre-filtered {$symbol} - Low score (LONG {$longScore}/5, SHORT {$shortScore}/5)");
+                    continue;
                 }
             }
 
