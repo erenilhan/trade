@@ -55,6 +55,11 @@ class DailyStat extends Model
      */
     public static function isInCooldown(): bool
     {
+        // Check if manual cooldown override is enabled
+        if (BotSetting::get('manual_cooldown_override', false)) {
+            return false;
+        }
+
         $today = self::today();
 
         if (!$today->max_drawdown_hit || !$today->cooldown_until) {

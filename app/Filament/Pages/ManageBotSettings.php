@@ -79,6 +79,8 @@ class ManageBotSettings extends Page implements HasForms
             'cluster_loss_cooldown_enabled' => BotSetting::get('cluster_loss_cooldown_enabled', true),
             'cluster_loss_consecutive_trigger' => BotSetting::get('cluster_loss_consecutive_trigger', 3),
             'cluster_loss_cooldown_hours' => BotSetting::get('cluster_loss_cooldown_hours', 24),
+            // Manual Cooldown Override
+            'manual_cooldown_override' => BotSetting::get('manual_cooldown_override', false),
         ];
     }
 
@@ -370,6 +372,19 @@ class ManageBotSettings extends Page implements HasForms
                                     ])
                                     ->columns(3)
                                     ->collapsible(),
+
+                                Section::make('🔓 Manual Cooldown Override')
+                                    ->description('Manually disable all cooldown systems (use with caution!)')
+                                    ->schema([
+                                        Toggle::make('manual_cooldown_override')
+                                            ->label('Disable All Cooldowns')
+                                            ->helperText('⚠️ WARNING: This will bypass all cooldown systems including dynamic cooldown, cluster loss cooldown, and daily max drawdown cooldown. Only use this if you know what you are doing!')
+                                            ->default(false)
+                                            ->live()
+                                            ->afterStateUpdated(fn($state) => $this->saveSetting('manual_cooldown_override', $state)),
+                                    ])
+                                    ->columns(1)
+                                    ->collapsible(),
                             ]),
                         Tab::make('Trailing Stops')
                             ->schema([
@@ -605,6 +620,8 @@ class ManageBotSettings extends Page implements HasForms
             'cluster_loss_cooldown_enabled' => 'Enable cooldown after consecutive losses',
             'cluster_loss_consecutive_trigger' => 'Number of consecutive losses to trigger cooldown',
             'cluster_loss_cooldown_hours' => 'Hours to pause trading after cluster losses',
+            // Manual Cooldown Override
+            'manual_cooldown_override' => 'Manually disable all cooldown systems (dangerous - use with caution)',
             default => ucfirst(str_replace('_', ' ', $key)),
         };
     }
@@ -666,6 +683,7 @@ class ManageBotSettings extends Page implements HasForms
             'daily_max_drawdown_cooldown_hours' => 'Drawdown Cooldown Hours',
             // Cluster Loss
             'cluster_loss_cooldown_enabled' => 'Cluster Loss Protection',
+            'manual_cooldown_override' => 'Manual Cooldown Override',
             'cluster_loss_consecutive_trigger' => 'Cluster Loss Trigger',
             'cluster_loss_cooldown_hours' => 'Cluster Cooldown Hours',
             default => ucfirst(str_replace('_', ' ', $key)),

@@ -168,16 +168,21 @@ class ExecuteMultiCoinTrading extends Command
         }
 
         // DYNAMIC COOLDOWN CHECK: Calculate based on volatility
-        $requiredCooldown = $this->calculateDynamicCooldown($symbol);
-        $lastTrade = Position::where('symbol', $symbol)
-            ->orderBy('opened_at', 'desc')
-            ->first();
+        // Check if manual cooldown override is enabled
+        if (!\App\Models\BotSetting::get('manual_cooldown_override', false)) {
+            $requiredCooldown = $this->calculateDynamicCooldown($symbol);
+            $lastTrade = Position::where('symbol', $symbol)
+                ->orderBy('opened_at', 'desc')
+                ->first();
 
-        if ($lastTrade && $lastTrade->opened_at->diffInMinutes(now()) < $requiredCooldown) {
-            $minutesAgo = $lastTrade->opened_at->diffInMinutes(now());
-            $this->warn("  ⚠️ Skipping {$symbol}: Cooldown active ({$minutesAgo}min ago, need {$requiredCooldown}min)");
-            Log::info("⏱️ Cooldown: Skipping {$symbol} - last trade {$minutesAgo}min ago, need {$requiredCooldown}min");
-            return;
+            if ($lastTrade && $lastTrade->opened_at->diffInMinutes(now()) < $requiredCooldown) {
+                $minutesAgo = $lastTrade->opened_at->diffInMinutes(now());
+                $this->warn("  ⚠️ Skipping {$symbol}: Cooldown active ({$minutesAgo}min ago, need {$requiredCooldown}min)");
+                Log::info("⏱️ Cooldown: Skipping {$symbol} - last trade {$minutesAgo}min ago, need {$requiredCooldown}min");
+                return;
+            }
+        } else {
+            Log::info("🔓 Manual cooldown override active - skipping dynamic cooldown for {$symbol}");
         }
 
         // DYNAMIC MARKET CAP DIVERSIFICATION: Limit positions per market cap segment
@@ -443,6 +448,12 @@ class ExecuteMultiCoinTrading extends Command
      */
     private function checkClusterLossCooldown(): ?string
     {
+        // Check if manual cooldown override is enabled
+        if (\App\Models\BotSetting::get('manual_cooldown_override', false)) {
+            Log::info("🔓 Manual cooldown override active - skipping cluster loss cooldown");
+            return null;
+        }
+
         $config = config('trading.cluster_loss_cooldown');
 
         if (!$config['enabled']) {

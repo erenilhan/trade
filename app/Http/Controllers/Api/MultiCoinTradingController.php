@@ -555,6 +555,12 @@ class MultiCoinTradingController extends Controller
      */
     private function checkClusterLossCooldown(): ?string
     {
+        // Check if manual cooldown override is enabled
+        if (BotSetting::get('manual_cooldown_override', false)) {
+            Log::info("🔓 Manual cooldown override active - skipping cluster loss cooldown");
+            return null;
+        }
+
         $config = config('trading.cluster_loss_cooldown');
 
         if (!$config['enabled']) {
