@@ -167,26 +167,11 @@ class MultiCoinAIService
                 ($data3m['macd'] > ($data3m['price'] * 0.0001)) ? 'YES' : 'NO'
             );
 
-            // Add new indicators
+            // Core volume indicator (simplified)
             $prompt .= sprintf(
-                "🆕 VOLUME & VOLATILITY:\n" .
-                "Volume Ratio (current/20MA): %.2fx %s\n" .
-                "Bollinger Bands: %%B=%.2f (0=lower, 0.5=middle, 1=upper), Width=%.2f%%\n" .
-                "  → Price=%.2f, BB_Upper=%.2f, BB_Middle=%.2f, BB_Lower=%.2f\n" .
-                "  → Position: %s\n" .
-                "Stochastic RSI: %%K=%.1f, %%D=%.1f %s\n\n",
+                "Volume Ratio (current/20MA): %.2fx %s\n\n",
                 $data3m['volume_ratio'] ?? 1.0,
-                ($data3m['volume_ratio'] ?? 1.0) > 1.5 ? '✅ STRONG' : (($data3m['volume_ratio'] ?? 1.0) > 1.1 ? '⚠️ ACCEPTABLE' : '❌ WEAK'),
-                $data3m['bb_percent_b'] ?? 0.5,
-                $data3m['bb_width'] ?? 0,
-                $data3m['price'],
-                $data3m['bb_upper'] ?? $data3m['price'],
-                $data3m['bb_middle'] ?? $data3m['price'],
-                $data3m['bb_lower'] ?? $data3m['price'],
-                ($data3m['bb_percent_b'] ?? 0.5) > 0.8 ? 'OVERBOUGHT' : (($data3m['bb_percent_b'] ?? 0.5) < 0.3 ? 'OVERSOLD' : 'NEUTRAL'),
-                $data3m['stoch_rsi_k'] ?? 50,
-                $data3m['stoch_rsi_d'] ?? 50,
-                ($data3m['stoch_rsi_k'] ?? 50) > 80 ? '⚠️ OVERBOUGHT' : (($data3m['stoch_rsi_k'] ?? 50) < 20 ? '⚠️ OVERSOLD' : '✅ OK')
+                ($data3m['volume_ratio'] ?? 1.0) > 1.5 ? '✅ STRONG' : (($data3m['volume_ratio'] ?? 1.0) > 1.1 ? '⚠️ OK' : '❌ WEAK')
             );
 
             $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'], 10) . "\n";
@@ -236,21 +221,21 @@ class MultiCoinAIService
 
         // Task instructions
         $prompt .= "YOUR TASK:\n";
-        $prompt .= "Analyze ONLY the coins shown above (coins without open positions). Decide BUY or HOLD for each based on technical indicators.\n";
+        $prompt .= "Analyze ONLY the coins shown above (coins without open positions).\n";
+        $prompt .= "Decide: BUY (LONG), SELL (SHORT), or HOLD for each coin.\n";
+        $prompt .= "Trade with the trend - LONG in uptrends, SHORT in downtrends.\n";
         $prompt .= "Always include: action, reasoning, confidence (0-1), entry_price, target_price, stop_price, invalidation, leverage.\n\n";
 
-        $prompt .= "LEVERAGE SELECTION:\n";
-        $prompt .= "Choose leverage (2-3x) based on:\n";
-        $prompt .= "- Signal strength: Strong signals = higher leverage (up to 3x MAX)\n";
-        $prompt .= "- Volatility: High ATR = lower leverage (2x), Low ATR = moderate leverage (3x)\n";
-        $prompt .= "- Trend strength: Strong ADX (>25) = can use 3x, Weak ADX = stick to 2x\n";
-        $prompt .= "- Risk level: Conservative = 2x, Moderate = 2-3x, Aggressive = 3x (MAX)\n";
-        $prompt .= "- IMPORTANT: Maximum leverage is 3x! Historical data shows 5x+ is net negative.\n";
-        $prompt .= "Example: Strong setup + low volatility + ADX>30 + high confidence = 3x leverage\n";
-        $prompt .= "Example: Weak signal + high volatility + low ADX = 2x leverage\n\n";
+        $prompt .= "LEVERAGE:\n";
+        $prompt .= "- Always use 2x leverage (safe and proven)\n";
+        $prompt .= "- Historical data shows 2x outperforms 3x and 5x\n\n";
 
         $prompt .= "RESPONSE FORMAT (strict JSON):\n";
-        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"hold|buy|sell","reasoning":"...","confidence":0.75,"leverage":5,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
+        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"buy|sell|hold","reasoning":"...","confidence":0.70,"leverage":2,"entry_price":null,"target_price":null,"stop_price":null,"invalidation":"..."}],"chain_of_thought":"..."}\n';
+        $prompt .= "\nACTIONS:\n";
+        $prompt .= "- buy = LONG position (profit when price goes UP)\n";
+        $prompt .= "- sell = SHORT position (profit when price goes DOWN)\n";
+        $prompt .= "- hold = No trade (criteria not met)\n";
 
         return $prompt;
     }
@@ -301,102 +286,48 @@ class MultiCoinAIService
             return $customPrompt;
         }
 
-        // Default prompt - OPTIMIZED day trading strategy with ENHANCED indicators and volume confirmation
-        return "You are a disciplined crypto day trader managing multiple cryptocurrencies. BALANCE between quality and quantity – aim for high-probability trades while maintaining adequate trade frequency.
+        // SIMPLIFIED strategy - back to basics that worked (KISS principle)
+        return "You are a crypto day trader. Trade LONG and SHORT based on simple, clear signals.
 
-⚠️ STRATEGY: LONG-ONLY. No shorting. Focus on high-probability bullish breakouts.
+⚠️ STRATEGY: Trade with the trend. LONG in uptrends, SHORT in downtrends. Simple and effective.
 
-BUY CRITERIA (ALL must be true for a NEW LONG entry):
-1. MACD(12,26,9) > MACD_signal AND MACD > 0 (confirmed bullish momentum) - PRIMARY SIGNAL
-2. RSI(7) between 35–75 (expanded range from previous 38-72)
-   → RSI <35: NEVER BUY (true oversold trap zone)
-   → RSI 35–45: ONLY if MACD rising + Volume > 20MA×1.5 (strong volume required)
-   → RSI 45–68: OPTIMAL ZONE for entries
-   → RSI 68–75: ACCEPTABLE if strong ADX + volume
-   → RSI >75: OVERBOUGHT – DO NOT BUY (correction imminent)
-3. Price relative to EMA20: within ±0.5% of EMA20 - MORE FLEXIBLE
-   → Allows for price to be slightly above/below EMA20 while still maintaining trend alignment
-4. 4H (240-min) trend confirmation: EMA20 > EMA50 AND EMA50 rising AND ADX(14) > 18 - MORE REALISTIC
-   (This ensures we trade WITH the bigger trend. Entry timing is on 3-min chart, but trend context is 4H.)
-   → Use ADX > 22 for high-confidence trades (≥80% confidence)
+LONG ENTRY (5 simple rules - ALL must be true):
+1. MACD > MACD_Signal AND MACD > 0 (bullish momentum)
+2. RSI(7) between 45-72 (healthy momentum, not overbought)
+3. Price 0-2% above EMA20 (riding uptrend)
+4. 4H trend: EMA20 > EMA50 AND ADX > 20 (strong uptrend on higher timeframe)
+5. Volume Ratio > 1.1x (minimum institutional interest)
 
-🆕 ENHANCED VOLUME & VOLATILITY FILTERS:
-5. **Volume Confirmation** (CRITICAL - most important filter):
-   → Volume Ratio (current/20MA) > 1.5x = STRONG BUY signal (institutional participation)
-   → Volume Ratio > 1.3x = ACCEPTABLE for high confidence (≥75%)
-   → Volume Ratio > 0.95x = MINIMUM for any trade (reduced from 1.1x to allow more opportunities)
-   → Volume Ratio 0.95x-1.1x = ACCEPTABLE if other signals are strong (RSI, MACD, ADX all bullish)
-   → Volume Ratio < 0.95x = HOLD (too weak volume)
+SHORT ENTRY (5 simple rules - ALL must be true):
+1. MACD < MACD_Signal AND MACD < 0 (bearish momentum)
+2. RSI(7) between 28-55 (healthy downward momentum, not oversold)
+3. Price 0-2% below EMA20 (riding downtrend)
+4. 4H trend: EMA20 < EMA50 AND ADX > 20 (strong downtrend on higher timeframe)
+5. Volume Ratio > 1.1x (minimum institutional interest)
 
-6. **Bollinger Bands Analysis**:
-   → %B (price position in bands): 0.3–0.8 = OPTIMAL (room to run)
-   → %B > 0.8 = OVERBOUGHT zone - only buy if Volume Ratio > 2.0x
-   → %B < 0.3 = OVERSOLD zone - AVOID (price near lower band)
-   → BB Width > 3% = High volatility - reduce position size by 25%
-   → BB Width < 1.5% = Squeeze - potential breakout opportunity
+HOLD IF:
+- Criteria not met
+- ATR > 8% (too volatile)
+- Volume Ratio < 1.1x (too weak)
+- AI Confidence < 60%
 
-7. **Stochastic RSI** (momentum confirmation):
-   → StochRSI %K between 20–80 = OPTIMAL
-   → StochRSI %K > 80 = OVERBOUGHT - require Volume Ratio > 1.8x
-   → StochRSI %K < 20 = OVERSOLD - AVOID (unless strong MACD + volume spike)
-
-8. AI Confidence ≥65% (was ≥70%) - ALLOW MORE TRADES AT SLIGHTLY LOWER CONFIDENCE
-   (Confidence = AI model's 0-1 score for signal quality based on all indicators combined)
-
-⚠️ CONFIDENCE-BASED RULES:
-   IF confidence ≥70%: Use expanded RSI range (35-75) and ±0.5% EMA20 tolerance
-   IF confidence ≥80%:
-      - Require ADX(14) > 28 (strong trend required - increased from 25)
-      - Require Volume Ratio > 1.6x (significant spike - increased from 1.5x)
-      - RSI must be 45-68 (optimal zone only - was >40, now more restrictive)
-      - %B must be 0.5-0.75 (optimal zone - was >0.4, now more restrictive)
-      - MACD histogram must be rising (not just MACD > Signal)
-      - StochRSI must be 40-70 (momentum zone - avoid extremes)
-   If confidence ≥80% but these extra filters fail → HOLD
-   
-   ⚠️ Historical data shows 80-84% confidence trades had only 28.6% win rate.
-   These stricter filters are essential for high confidence trades.
-
-🎯 IDEAL ENTRY SETUP (aim for this):
-- MACD histogram rising + MACD > Signal
-- RSI 50–65 (bullish momentum but not overbought)
-- Price 0.2–0.8% above EMA20 (riding the trend)
-- Volume Ratio > 1.5x (strong institutional interest)
-- %B between 0.5–0.7 (upper half of Bollinger Bands)
-- StochRSI 40–70 (momentum building)
-- 4H ADX > 22 (strong trend on higher timeframe)
-
-If ANY condition fails → HOLD. Better to miss a trade than take a bad one.
-
-DIVERSIFICATION & RISK MANAGEMENT:
-- Maximum 1–2 new LONG entries per cycle across ALL coins
-- Skip if 4+ positions already open (risk management)
-- Mix different market cap segments when possible (large/mid/small cap)
-- Avoid highly correlated positions (e.g., don't buy BTC+ETH+BNB all at once)
-
-LEVERAGE & STOP LOSS:
-- Leverage: 2x (default), 3x (only if ADX > 28 + Volume Ratio > 1.6x + RSI 45-68)
-- Stop loss calculation: entry_price × (1 – (0.08 / leverage)) - INCREASED from 6% to 8% P&L loss tolerance
-  Examples: 2x leverage = 4% price stop, 3x leverage = 2.67% price stop
-  This ensures maximum P&L loss is 8% (increased from 6% to reduce premature stop loss triggers)
-  Historical data: 20 trades hit stop loss with 0% win rate - need more volatility tolerance
+RISK MANAGEMENT:
+- Maximum 1-2 new positions per cycle (LONG or SHORT)
+- Skip if 4+ positions already open
+- Mix LONG and SHORT when possible (hedge risk)
+- Use 2x leverage for all trades (proven safe and effective)
 
 OUTPUT FORMAT:
-- Return ONLY valid JSON with 'decisions' array
-- Each decision must include: {symbol, action, confidence, reasoning, entry_price, target_price, stop_price, invalidation, leverage}
-- Actions: 'buy' or 'hold' (no other actions supported)
-- 'hold' = no new entry (criteria failed OR position already exists OR max positions reached)
+- Return JSON: {\"decisions\":[{\"symbol\":\"BTC/USDT\",\"action\":\"buy|sell|hold\",\"reasoning\":\"...\",\"confidence\":0.70,\"leverage\":2,\"entry_price\":null,\"target_price\":null,\"stop_price\":null,\"invalidation\":\"...\"}],\"chain_of_thought\":\"...\"}
+- Actions: 'buy' (LONG), 'sell' (SHORT), 'hold'
+- Always set leverage = 2
 
-NOTE: This prompt is for NEW ENTRIES ONLY. Existing positions are managed by separate exit logic (trailing stops at +6%, +8%, +12% levels - L1 disabled due to 0% win rate, take profit, trend invalidation).
-
-IMPORTANT REMINDERS:
-- Volume Ratio < 0.95x = REJECT (reduced threshold from 1.1x but still critical)
-- Volume Ratio 0.95x-1.1x = ACCEPTABLE only if RSI 45-68, MACD strong, ADX > 22
-- RSI <35 trades have 0% historical win rate – NEVER buy oversold dips
-- Confidence 80%+ without extra filters = 28.6% win rate – apply STRICT HIGH CONFIDENCE FILTER
-- Always validate 4H trend before 3-min entry – trading against 4H trend fails
-- %B > 0.9 (near upper band) often precedes pullback – be cautious
-- Trailing L1 disabled (0% win rate, 7 trades lost) - positions go straight to L2 at +6%";
+IMPORTANT:
+- Exits handled by trailing stops (L2 at +6%, L3 at +9%, L4 at +12%)
+- Simple is better - 5 clear criteria beats 40 confusing rules
+- Trade WITH the 4H trend, time entry on 3m chart
+- Volume confirmation critical - no volume = no trade
+- Historical data: 60-74% confidence performs best (avoid 80%+ overconfidence)";
     }
 
     /**

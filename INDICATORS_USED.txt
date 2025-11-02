@@ -1,0 +1,297 @@
+═══════════════════════════════════════════════════════════════
+  KULLANILAN İNDİKATÖRLER - Basitleştirilmiş Sistem
+═══════════════════════════════════════════════════════════════
+
+📊 TOPLAM: 6 CORE İNDİKATÖR (Basit ve Etkili)
+
+
+═══════════════════════════════════════════════════════════════
+1. MACD (Moving Average Convergence Divergence)
+═══════════════════════════════════════════════════════════════
+
+Parametreler: 12, 26, 9
+Timeframe: 3 dakika (3m)
+
+Ne Ölçüyor?
+→ Momentum (bullish/bearish)
+→ Trend değişimleri
+→ MACD Line ve Signal Line çaprazlamaları
+
+Nasıl Kullanılıyor?
+
+LONG için:
+  ✅ MACD > MACD_Signal (çaprazlama yukarı)
+  ✅ MACD > 0 (pozitif bölgede)
+  → Bullish momentum (yükseliş)
+
+SHORT için:
+  ✅ MACD < MACD_Signal (çaprazlama aşağı)
+  ✅ MACD < 0 (negatif bölgede)
+  → Bearish momentum (düşüş)
+
+Prompt'ta Gösterilen:
+- current_macd = 0.123
+- macd_signal = 0.098
+- macd_histogram = 0.025
+- macd_histogram_rising = YES/NO
+- MACD > Signal? YES/NO
+
+
+═══════════════════════════════════════════════════════════════
+2. RSI (Relative Strength Index)
+═══════════════════════════════════════════════════════════════
+
+Parametreler: 7 period
+Timeframe: 3 dakika (3m)
+
+Ne Ölçüyor?
+→ Overbought/oversold seviyeleri
+→ Momentum gücü
+→ Potansiyel geri dönüşler
+
+Nasıl Kullanılıyor?
+
+LONG için:
+  ✅ RSI 45-72 arası
+  ❌ RSI < 45: Çok zayıf (oversold trap)
+  ❌ RSI > 72: Çok güçlü (overbought, düzeltme yakın)
+
+SHORT için:
+  ✅ RSI 28-55 arası
+  ❌ RSI > 55: Çok güçlü (overbought trap)
+  ❌ RSI < 28: Çok zayıf (oversold, sıçrama yakın)
+
+Prompt'ta Gösterilen:
+- current_rsi (7 period) = 52.3
+- RSI7: [48.2, 50.1, 52.3, 54.1, 52.8, ...] (son 10 mum)
+
+
+═══════════════════════════════════════════════════════════════
+3. EMA (Exponential Moving Average)
+═══════════════════════════════════════════════════════════════
+
+Parametreler: 20 ve 50 period
+Timeframe: 3 dakika (3m) ve 4 saat (4h)
+
+Ne Ölçüyor?
+→ Trend direction (hangi yön?)
+→ Support/resistance seviyeleri
+→ Trend gücü
+
+Nasıl Kullanılıyor?
+
+3m için:
+  LONG:
+    ✅ Price 0-2% above EMA20
+    → Fiyat EMA20'nin üstünde (uptrend)
+
+  SHORT:
+    ✅ Price 0-2% below EMA20
+    → Fiyat EMA20'nin altında (downtrend)
+
+4h için (trend confirmation):
+  LONG:
+    ✅ EMA20 > EMA50
+    → 4 saatlik uptrend
+
+  SHORT:
+    ✅ EMA20 < EMA50
+    → 4 saatlik downtrend
+
+Prompt'ta Gösterilen:
+3m:
+- current_price = 42,350
+- current_ema20 = 42,100
+- EMA20: [42,050, 42,080, 42,100, 42,120, ...] (son 10 mum)
+
+4h:
+- 4H: EMA20 = 42,500
+- 4H: EMA50 = 42,200
+- 4H Trend: EMA20 > EMA50*0.999? YES (bullish)
+
+
+═══════════════════════════════════════════════════════════════
+4. ADX (Average Directional Index)
+═══════════════════════════════════════════════════════════════
+
+Parametreler: 14 period
+Timeframe: 4 saat (4h)
+
+Ne Ölçüyor?
+→ Trend strength (trend ne kadar güçlü?)
+→ Trendin varlığı (var mı yok mu?)
+→ NOT: Yönü göstermez (sadece güç)
+
+Nasıl Kullanılıyor?
+
+Hem LONG hem SHORT için:
+  ✅ ADX > 20: Moderate trend (işlem yapılabilir)
+  ✅ ADX > 25: Strong trend (güçlü)
+  ❌ ADX < 20: Weak trend (işlem yapma, sideways)
+
+High-confidence trades için:
+  ✅ ADX > 22 (daha güçlü trend gerekli)
+
+Prompt'ta Gösterilen:
+- 4H: ADX(14) = 24.5
+- ADX > 20? YES (moderate+)
+
+
+═══════════════════════════════════════════════════════════════
+5. Volume Ratio (Hacim Oranı)
+═══════════════════════════════════════════════════════════════
+
+Parametreler: Current Volume / 20-period MA
+Timeframe: 3 dakika (3m)
+
+Ne Ölçüyor?
+→ Institutional interest (kurumsal ilgi)
+→ Hacim artışı/azalışı
+→ Breakout confirmation
+
+Nasıl Kullanılıyor?
+
+Hem LONG hem SHORT için:
+  ✅ Volume Ratio > 1.1x: Minimum (işlem yapılabilir)
+  ✅ Volume Ratio > 1.5x: Strong (güçlü işlem)
+  ❌ Volume Ratio < 1.1x: Too weak (işlem yapma)
+
+Bu EN ÖNEMLİ filtrelerden biri!
+→ Yüksek hacim = Kurumsal katılım
+→ Düşük hacim = Retail, güvenilmez
+
+Prompt'ta Gösterilen:
+- Volume Ratio (current/20MA): 1.4x ✅ OK
+  veya
+- Volume Ratio (current/20MA): 0.9x ❌ WEAK
+
+
+═══════════════════════════════════════════════════════════════
+6. ATR (Average True Range)
+═══════════════════════════════════════════════════════════════
+
+Parametreler: 14 period
+Timeframe: 4 saat (4h)
+
+Ne Ölçüyor?
+→ Volatility (piyasa ne kadar volatil?)
+→ Risk seviyesi
+→ Potansiyel fiyat hareketi büyüklüğü
+
+Nasıl Kullanılıyor?
+
+Hem LONG hem SHORT için:
+  ❌ ATR > 8%: Too volatile (çok riskli, işlem yapma)
+  ✅ ATR < 8%: Normal volatility (işlem yapılabilir)
+
+Bu bir GUARD koşulu:
+→ Aşırı volatilitede işlem yapma
+→ Stop loss'u kolayca tetikler
+
+Prompt'ta Gösterilen:
+- 4H: ATR = 5.2%
+  veya
+- 4H: ATR = 9.3% (sistem HOLD karar verir)
+
+
+═══════════════════════════════════════════════════════════════
+  EK BİLGİLER (Prompt'ta gösterilen ama karar için kullanılmayan)
+═══════════════════════════════════════════════════════════════
+
+7. Funding Rate
+→ Perpetual futures'ta long/short dengesini gösterir
+→ Sadece bilgi amaçlı, karar kriteri DEĞİL
+
+8. Open Interest
+→ Açık pozisyon sayısı
+→ Sadece bilgi amaçlı, karar kriteri DEĞİL
+
+9. Price Series (son 10 mum)
+→ Fiyat geçmişi görsel context için
+→ Karar kriteri DEĞİL
+
+
+═══════════════════════════════════════════════════════════════
+  ÇIKARILAN (GEREKSİZ) İNDİKATÖRLER
+═══════════════════════════════════════════════════════════════
+
+Aşağıdaki indikatörler ARTIK KULLANILMIYOR:
+
+❌ Ichimoku Cloud (Tenkan, Kijun, Cloud)
+   → Çok karmaşık (5 çizgi)
+   → EMA zaten trend veriyor
+
+❌ SuperTrend
+   → Lagging indicator
+   → EMA zaten trend veriyor
+
+❌ VWAP (Volume Weighted Average Price)
+   → Günlük indikatör
+   → 3m timeframe'de anlamsız
+
+❌ OBV (On-Balance Volume)
+   → Volume Ratio zaten var
+   → Redundant
+
+❌ Williams %R
+   → RSI ile %90 korelasyonlu
+   → Redundant
+
+❌ Stochastic RSI
+   → RSI'ın RSI'ı
+   → Gereksiz karmaşıklık
+
+❌ Bollinger Bands (%B, Width)
+   → Aşırı detay
+   → Gürültü yaratıyor
+
+
+═══════════════════════════════════════════════════════════════
+  ÖZET: ENTRY KRİTERLERİ
+═══════════════════════════════════════════════════════════════
+
+LONG ENTRY (5 kriter - hepsi TRUE):
+1. ✅ MACD > MACD_Signal AND MACD > 0
+2. ✅ RSI(7) between 45-72
+3. ✅ Price 0-2% above EMA20
+4. ✅ 4H: EMA20 > EMA50 AND ADX > 20
+5. ✅ Volume Ratio > 1.1x
+
+SHORT ENTRY (5 kriter - hepsi TRUE):
+1. ✅ MACD < MACD_Signal AND MACD < 0
+2. ✅ RSI(7) between 28-55
+3. ✅ Price 0-2% below EMA20
+4. ✅ 4H: EMA20 < EMA50 AND ADX > 20
+5. ✅ Volume Ratio > 1.1x
+
+HOLD IF:
+- Kriterler karşılanmadı
+- ATR > 8% (çok volatil)
+- Volume Ratio < 1.1x (çok zayıf)
+- AI Confidence < 60%
+
+
+═══════════════════════════════════════════════════════════════
+  NEDEN BU 6 İNDİKATÖR?
+═══════════════════════════════════════════════════════════════
+
+✅ MACD       → Momentum (ana sinyal)
+✅ RSI        → Overbought/oversold (timing)
+✅ EMA        → Trend direction (hangi yön?)
+✅ ADX        → Trend strength (ne kadar güçlü?)
+✅ Volume     → Institutional confirmation (güvenilir mi?)
+✅ ATR        → Volatility guard (çok riskli mi?)
+
+Her biri UNIQUE bilgi veriyor!
+Çakışan sinyal YOK!
+Basit ve etkili!
+
+
+═══════════════════════════════════════════════════════════════
+  MOTTO: "Keep It Simple, Stupid" (KISS)
+═══════════════════════════════════════════════════════════════
+
+Eskiden basit ve iyiydi → Karmaşık oldu → Bozuldu
+Şimdi tekrar basit → Tekrar iyi olacak!
+
+🚀 6 indikatör + 5 kriter = Basit ve etkili strateji!
