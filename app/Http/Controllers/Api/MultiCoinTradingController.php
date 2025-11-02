@@ -395,6 +395,22 @@ class MultiCoinTradingController extends Controller
                 'opened_at' => now(),
             ]);
 
+            // Record SELL (SHORT) trade in trades table
+            \App\Models\Trade::create([
+                'order_id' => $order['id'],
+                'symbol' => $symbol,
+                'side' => 'sell',
+                'type' => 'market',
+                'amount' => $order['filled'] ?? $quantity,
+                'price' => $actualEntryPrice,
+                'cost' => ($order['filled'] ?? $quantity) * $actualEntryPrice,
+                'leverage' => $leverage,
+                'stop_loss' => $stopPrice,
+                'take_profit' => $targetPrice,
+                'status' => 'filled',
+                'response_data' => json_encode($order),
+            ]);
+
             Log::info("✅ {$symbol}: SELL (SHORT) executed", [
                 'quantity' => $quantity,
                 'entry_price' => $entryPrice,

@@ -7,6 +7,8 @@ $app->make('Illuminate\Contracts\Console\Kernel')->bootstrap();
 
 use App\Models\Position;
 use App\Models\BotSetting;
+use App\Models\TradeLog;
+use App\Services\MarketDataService;
 
 echo "\n";
 echo "╔════════════════════════════════════════════════════════════════╗\n";
@@ -186,6 +188,138 @@ foreach ($recent as $pos) {
         str_pad(number_format($pos->realized_pnl, 2), 8),
         $pos->closed_at->format('Y-m-d H:i')
     );
+}
+
+// High-Profitability Indicators Analysis
+echo "═══ YÜKSEK KÂRLILIK İNDİKATÖRLERİ ANALİZİ ═══\n";
+
+// Get recent AI decisions with market data
+$recentDecisions = TradeLog::where('created_at', '>=', now()->subDays(7))
+    ->whereNotNull('decision_data')
+    ->get();
+
+$indicatorPerformance = [
+    'ichimoku_above_cloud' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'ichimoku_below_cloud' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'supertrend_up' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'supertrend_down' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'vwap_above' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'vwap_below' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'obv_bullish' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'obv_bearish' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'williams_oversold' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+    'williams_overbought' => ['trades' => 0, 'wins' => 0, 'pnl' => 0],
+];
+
+foreach ($recentDecisions as $decision) {
+    $decisionData = $decision->decision_data;
+    $resultData = $decision->result_data;
+
+    if (isset($decisionData['action']) && $decisionData['action'] === 'buy' && isset($resultData['pnl'])) {
+        $pnl = $resultData['pnl'] ?? 0;
+        $isWin = $pnl > 0;
+
+        // Analyze Ichimoku
+        if (isset($decisionData['technical_analysis'])) {
+            $analysis = $decisionData['technical_analysis'];
+            if (strpos($analysis, 'ABOVE CLOUD') !== false) {
+                $indicatorPerformance['ichimoku_above_cloud']['trades']++;
+                $indicatorPerformance['ichimoku_above_cloud']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['ichimoku_above_cloud']['wins']++;
+            } elseif (strpos($analysis, 'BELOW CLOUD') !== false) {
+                $indicatorPerformance['ichimoku_below_cloud']['trades']++;
+                $indicatorPerformance['ichimoku_below_cloud']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['ichimoku_below_cloud']['wins']++;
+            }
+
+            // Analyze SuperTrend
+            if (strpos($analysis, 'UPTREND') !== false) {
+                $indicatorPerformance['supertrend_up']['trades']++;
+                $indicatorPerformance['supertrend_up']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['supertrend_up']['wins']++;
+            } elseif (strpos($analysis, 'DOWNTREND') !== false) {
+                $indicatorPerformance['supertrend_down']['trades']++;
+                $indicatorPerformance['supertrend_down']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['supertrend_down']['wins']++;
+            }
+
+            // Analyze VWAP
+            if (strpos($analysis, 'ABOVE VWAP') !== false) {
+                $indicatorPerformance['vwap_above']['trades']++;
+                $indicatorPerformance['vwap_above']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['vwap_above']['wins']++;
+            } elseif (strpos($analysis, 'BELOW VWAP') !== false) {
+                $indicatorPerformance['vwap_below']['trades']++;
+                $indicatorPerformance['vwap_below']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['vwap_below']['wins']++;
+            }
+
+            // Analyze OBV
+            if (strpos($analysis, 'OBV:') !== false && strpos($analysis, 'BULLISH') !== false) {
+                $indicatorPerformance['obv_bullish']['trades']++;
+                $indicatorPerformance['obv_bullish']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['obv_bullish']['wins']++;
+            } elseif (strpos($analysis, 'OBV:') !== false && strpos($analysis, 'BEARISH') !== false) {
+                $indicatorPerformance['obv_bearish']['trades']++;
+                $indicatorPerformance['obv_bearish']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['obv_bearish']['wins']++;
+            }
+
+            // Analyze Williams %R
+            if (strpos($analysis, 'Williams') !== false && strpos($analysis, 'OVERSOLD') !== false) {
+                $indicatorPerformance['williams_oversold']['trades']++;
+                $indicatorPerformance['williams_oversold']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['williams_oversold']['wins']++;
+            } elseif (strpos($analysis, 'Williams') !== false && strpos($analysis, 'OVERBOUGHT') !== false) {
+                $indicatorPerformance['williams_overbought']['trades']++;
+                $indicatorPerformance['williams_overbought']['pnl'] += $pnl;
+                if ($isWin) $indicatorPerformance['williams_overbought']['wins']++;
+            }
+        }
+    }
+}
+
+echo "🏆 YÜKSEK KÂRLILIK İNDİKATÖRLERİ PERFORMANSI (Son 7 gün):\n\n";
+
+foreach ($indicatorPerformance as $indicator => $data) {
+    if ($data['trades'] > 0) {
+        $winRate = ($data['wins'] / $data['trades']) * 100;
+        $avgPnl = $data['pnl'] / $data['trades'];
+        $indicatorName = str_replace('_', ' ', ucfirst($indicator));
+
+        echo sprintf(
+            "%s: %d trade, %.1f%% WR, $%s ort. P&L\n",
+            str_pad($indicatorName, 20),
+            $data['trades'],
+            $winRate,
+            number_format($avgPnl, 2)
+        );
+    }
+}
+
+echo "\n💡 ÖNERİLER:\n";
+$ichimokuAboveRate = $indicatorPerformance['ichimoku_above_cloud']['trades'] > 0 ?
+    ($indicatorPerformance['ichimoku_above_cloud']['wins'] / $indicatorPerformance['ichimoku_above_cloud']['trades']) * 100 : 0;
+$ichimokuBelowRate = $indicatorPerformance['ichimoku_below_cloud']['trades'] > 0 ?
+    ($indicatorPerformance['ichimoku_below_cloud']['wins'] / $indicatorPerformance['ichimoku_below_cloud']['trades']) * 100 : 0;
+
+if ($ichimokuAboveRate > 60) {
+    echo "- Ichimoku ABOVE CLOUD sinyalleri çok başarılı! Öncelik verin.\n";
+}
+if ($ichimokuBelowRate < 30) {
+    echo "- Ichimoku BELOW CLOUD sinyalleri zayıf. Bunları önleyin.\n";
+}
+
+$supertrendUpRate = $indicatorPerformance['supertrend_up']['trades'] > 0 ?
+    ($indicatorPerformance['supertrend_up']['wins'] / $indicatorPerformance['supertrend_up']['trades']) * 100 : 0;
+if ($supertrendUpRate > 65) {
+    echo "- SuperTrend UPTREND sinyalleri yüksek başarı oranına sahip.\n";
+}
+
+$vwapAboveRate = $indicatorPerformance['vwap_above']['trades'] > 0 ?
+    ($indicatorPerformance['vwap_above']['wins'] / $indicatorPerformance['vwap_above']['trades']) * 100 : 0;
+if ($vwapAboveRate > 60) {
+    echo "- VWAP ABOVE sinyalleri güçlü. Kurumsal alımları işaret ediyor.\n";
 }
 
 echo "\n";
