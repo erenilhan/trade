@@ -183,12 +183,42 @@ class MultiCoinAIService
                 $data3m['rsi7']
             );
 
-            $prompt .= sprintf(
-                "MACD > Signal? %s, MACD Histogram Rising? %s, MACD > (price * 0.0001)? %s\n\n",
-                ($data3m['macd'] > ($data3m['macd_signal'] ?? 0)) ? 'YES' : 'NO',
-                $macdHistogramRising ? 'YES ✅' : 'NO',
-                ($data3m['macd'] > ($data3m['price'] * 0.0001)) ? 'YES' : 'NO'
-            );
+            // RSI direction check
+            $rsi = $data3m['rsi7'];
+            if ($rsi >= 45 && $rsi <= 72) {
+                $prompt .= "RSI STATUS: ✅ IN LONG RANGE (45-72, current: {$rsi}) - healthy for LONG\n";
+            } elseif ($rsi >= 28 && $rsi <= 55) {
+                $prompt .= "RSI STATUS: ✅ IN SHORT RANGE (28-55, current: {$rsi}) - healthy for SHORT\n";
+            } elseif ($rsi < 28) {
+                $prompt .= "RSI STATUS: ⚠️ OVERSOLD (< 28, current: {$rsi}) - too weak, avoid SHORT (bounce risk)\n";
+            } else {
+                $prompt .= "RSI STATUS: ⚠️ OVERBOUGHT (> 72, current: {$rsi}) - too strong, avoid LONG (pullback risk)\n";
+            }
+
+            // Price position relative to EMA20
+            $priceVsEma = (($data3m['price'] - $data3m['ema20']) / $data3m['ema20']) * 100;
+            if ($priceVsEma >= 0 && $priceVsEma <= 2) {
+                $prompt .= sprintf("PRICE POSITION: ✅ %.2f%% above EMA20 - good for LONG (riding uptrend)\n", $priceVsEma);
+            } elseif ($priceVsEma < 0 && $priceVsEma >= -2) {
+                $prompt .= sprintf("PRICE POSITION: ✅ %.2f%% below EMA20 - good for SHORT (riding downtrend)\n", abs($priceVsEma));
+            } elseif ($priceVsEma > 2) {
+                $prompt .= sprintf("PRICE POSITION: ⚠️ %.2f%% above EMA20 - too extended for LONG\n", $priceVsEma);
+            } else {
+                $prompt .= sprintf("PRICE POSITION: ⚠️ %.2f%% below EMA20 - too extended for SHORT\n", abs($priceVsEma));
+            }
+            $prompt .= "\n";
+
+            // Direction-aware MACD check (helps AI know which criteria to evaluate)
+            $macdBullish = $data3m['macd'] > ($data3m['macd_signal'] ?? 0);
+            $macdPositive = $data3m['macd'] > 0;
+
+            if ($macdBullish && $macdPositive) {
+                $prompt .= "MACD STATUS: ✅ BULLISH (MACD > Signal AND > 0) - **LONG signal** - evaluate LONG criteria\n\n";
+            } elseif (!$macdBullish && $data3m['macd'] < 0) {
+                $prompt .= "MACD STATUS: ✅ BEARISH (MACD < Signal AND < 0) - **SHORT signal** - evaluate SHORT criteria\n\n";
+            } else {
+                $prompt .= "MACD STATUS: ⚠️ NEUTRAL (mixed signals) - HOLD or low confidence\n\n";
+            }
 
             // Core volume indicator (simplified)
             $prompt .= sprintf(
@@ -226,11 +256,19 @@ class MultiCoinAIService
             $atrPercent = ($data4h['atr14'] / $data3m['price']) * 100;
             $atrWarning = $atrPercent > 8 ? '⚠️ TOO VOLATILE → HOLD' : '✅ OK';
 
-            $prompt .= sprintf(
-                "4H Trend: EMA20 > EMA50*0.999? %s, ADX > 20? %s\n",
-                ($data4h['ema20'] > ($data4h['ema50'] * 0.999)) ? 'YES (bullish)' : 'NO (bearish)',
-                (($data4h['adx'] ?? 0) > 20) ? 'YES (moderate+)' : 'NO (weak)'
-            );
+            // Direction-aware 4H trend check (critical for determining LONG vs SHORT)
+            $is4hUptrend = $data4h['ema20'] > ($data4h['ema50'] * 0.999);
+            $adxStrong = ($data4h['adx'] ?? 0) > 20;
+
+            if ($is4hUptrend && $adxStrong) {
+                $prompt .= "4H TREND: ✅ BULLISH UPTREND (EMA20 > EMA50, ADX > 20) - **Favor LONG positions**\n";
+            } elseif (!$is4hUptrend && $adxStrong) {
+                $prompt .= "4H TREND: ✅ BEARISH DOWNTREND (EMA20 < EMA50, ADX > 20) - **Favor SHORT positions**\n";
+            } elseif ($is4hUptrend && !$adxStrong) {
+                $prompt .= "4H TREND: ⚠️ WEAK UPTREND (EMA20 > EMA50, ADX < 20) - Sideways, prefer HOLD\n";
+            } else {
+                $prompt .= "4H TREND: ⚠️ WEAK DOWNTREND (EMA20 < EMA50, ADX < 20) - Sideways, prefer HOLD\n";
+            }
 
             $prompt .= sprintf(
                 "VOLATILITY CHECK: ATR %.2f%% %s\n\n",
@@ -255,8 +293,13 @@ class MultiCoinAIService
         // Task instructions
         $prompt .= "YOUR TASK:\n";
         $prompt .= "Analyze ONLY the coins shown above (coins without open positions).\n";
-        $prompt .= "Decide: BUY (LONG), SELL (SHORT), or HOLD for each coin.\n";
-        $prompt .= "Trade with the trend - LONG in uptrends, SHORT in downtrends.\n";
+        $prompt .= "Decide: BUY (LONG), SELL (SHORT), or HOLD for each coin.\n\n";
+
+        $prompt .= "⚠️ CRITICAL: Check the correct criteria for each coin!\n";
+        $prompt .= "- If you see 'BEARISH DOWNTREND' + 'SHORT signal' → Evaluate the 5 SHORT criteria\n";
+        $prompt .= "- If you see 'BULLISH UPTREND' + 'LONG signal' → Evaluate the 5 LONG criteria\n";
+        $prompt .= "- DO NOT ignore SHORT opportunities! Bearish market = SHORT opportunity, not \"no trade\"\n\n";
+
         $prompt .= "Include ONLY: action, reasoning, confidence (0-1), leverage.\n";
         $prompt .= "DO NOT include entry_price, target_price, stop_price, or invalidation (system calculates).\n\n";
 
@@ -324,6 +367,13 @@ class MultiCoinAIService
         return "You are a crypto day trader. Trade LONG and SHORT based on simple, clear signals.
 
 ⚠️ STRATEGY: Trade with the trend. LONG in uptrends, SHORT in downtrends. Simple and effective.
+
+⚠️ IMPORTANT DIRECTION LOGIC:
+- When you see '**LONG signal**' or 'Favor LONG positions' → Check the 5 LONG criteria
+- When you see '**SHORT signal**' or 'Favor SHORT positions' → Check the 5 SHORT criteria
+- When you see 'BEARISH DOWNTREND' → This is GOOD for SHORT (not bad!)
+- When you see 'BULLISH UPTREND' → This is GOOD for LONG (not bad!)
+- DO NOT only check LONG criteria - check BOTH directions based on market trend!
 
 LONG ENTRY (5 simple rules - ALL must be true):
 1. MACD > MACD_Signal AND MACD > 0 (bullish momentum)

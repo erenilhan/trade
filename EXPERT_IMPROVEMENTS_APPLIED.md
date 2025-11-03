@@ -290,6 +290,7 @@ Sonra: AI açıkça volatiliteyi görecek ve ATR > 8%'de HOLD diyecek
 7. ✅ **ATR kontrolü AI'da** (volatilite koruması)
 8. ✅ **Otomatik target/stop** (risk kontrolü)
 9. ✅ **Basit AI response** (sadece action + reasoning)
+10. ✅ **Direction-aware prompts** (AI'nın SHORT'u görmemesi sorunu) **[YENİ - 2025-11-03]**
 
 ### Toplam İyileştirme:
 - Stop loss 0% WR sorunu → Çözüldü (15% P&L, min 5% stop)
@@ -299,6 +300,127 @@ Sonra: AI açıkça volatiliteyi görecek ve ATR > 8%'de HOLD diyecek
 - Token israfı → Çözüldü (%80 tasarruf)
 - Tutarsız target/stop → Çözüldü (sistem hesaplıyor)
 - Yanlış yön işlemleri → Çözüldü (trend-based filtering)
+- **AI sadece LONG kontrol ediyor → Çözüldü (direction-aware prompts)** ✅ **[YENİ]**
+
+---
+
+## ✅ 10. Direction-Aware Prompts (AI'nın SHORT'u Görmemesi Sorunu) **[YENİ - 2025-11-03]**
+
+### Problem:
+**AI sadece LONG kriterlerini kontrol ediyordu, SHORT'ları hiç görmüyordu!**
+
+Dashboard'da görülen reasoning'ler:
+```
+❌ "RSI(7)=23.34 below LONG range (45-72)"
+   → Olması gereken: "RSI(7)=23.34 IN SHORT RANGE (28-55) ✅"
+
+❌ "MACD=-0.596 <0 (not bullish)"
+   → Olması gereken: "MACD=-0.596 <0 BEARISH - SHORT signal! ✅"
+
+❌ "4H trend bearish (EMA20<EMA50)"
+   → Olması gereken: "4H BEARISH DOWNTREND - Favor SHORT! ✅"
+```
+
+### Root Cause:
+Prompt LONG-biased yapıdaydı:
+```
+MACD > Signal? NO          ← "Failed check" gibi görünüyor
+EMA20 > EMA50? NO (bearish) ← "Not suitable" gibi görünüyor
+```
+
+AI "NO" gördüğünde "kriterleri sağlamıyor" diye yorumluyor, ama aslında bu SHORT sinyali!
+
+### Çözüm:
+Prompt'u **DIRECTION-AWARE** (yön bilincinde) yaptık:
+
+**1. RSI Direction Awareness:**
+```php
+if ($rsi >= 45 && $rsi <= 72) {
+    "RSI STATUS: ✅ IN LONG RANGE (45-72, current: {$rsi}) - healthy for LONG"
+} elseif ($rsi >= 28 && $rsi <= 55) {
+    "RSI STATUS: ✅ IN SHORT RANGE (28-55, current: {$rsi}) - healthy for SHORT"
+}
+```
+
+**2. Price Position Awareness:**
+```php
+if ($priceVsEma >= 0 && $priceVsEma <= 2) {
+    "PRICE POSITION: ✅ above EMA20 - good for LONG (riding uptrend)"
+} elseif ($priceVsEma < 0 && $priceVsEma >= -2) {
+    "PRICE POSITION: ✅ below EMA20 - good for SHORT (riding downtrend)"
+}
+```
+
+**3. MACD Direction Awareness:**
+```php
+if ($macdBullish && $macdPositive) {
+    "MACD STATUS: ✅ BULLISH - **LONG signal** - evaluate LONG criteria"
+} elseif (!$macdBullish && $macd < 0) {
+    "MACD STATUS: ✅ BEARISH - **SHORT signal** - evaluate SHORT criteria"
+}
+```
+
+**4. 4H Trend Direction Awareness:**
+```php
+if ($is4hUptrend && $adxStrong) {
+    "4H TREND: ✅ BULLISH UPTREND - **Favor LONG positions**"
+} elseif (!$is4hUptrend && $adxStrong) {
+    "4H TREND: ✅ BEARISH DOWNTREND - **Favor SHORT positions**"
+}
+```
+
+**5. Enhanced System Prompt:**
+```
+⚠️ IMPORTANT DIRECTION LOGIC:
+- When you see '**LONG signal**' → Check the 5 LONG criteria
+- When you see '**SHORT signal**' → Check the 5 SHORT criteria
+- When you see 'BEARISH DOWNTREND' → This is GOOD for SHORT (not bad!)
+- DO NOT only check LONG criteria - check BOTH directions!
+```
+
+**6. Enhanced Task Instructions:**
+```
+⚠️ CRITICAL: Check the correct criteria for each coin!
+- If you see 'BEARISH DOWNTREND' + 'SHORT signal' → Evaluate the 5 SHORT criteria
+- DO NOT ignore SHORT opportunities! Bearish market = SHORT opportunity!
+```
+
+### Avantajları:
+- ✅ AI artık SHORT fırsatlarını görecek
+- ✅ Bearish market = SHORT profit (kaçırılan %50 fırsat yakalanacak)
+- ✅ "NO" yerine "✅ SHORT signal" görüyor
+- ✅ Net talimat: hangi kriterleri kontrol etmesi gerektiğini biliyor
+
+### Örnek: Bearish Market (SHORT Fırsat)
+**AI'nın göreceği (yeni format):**
+```
+RSI STATUS: ✅ IN SHORT RANGE (28-55, current: 34.50) - healthy for SHORT
+PRICE POSITION: ✅ 0.70% below EMA20 - good for SHORT (riding downtrend)
+MACD STATUS: ✅ BEARISH (MACD < Signal AND < 0) - **SHORT signal** - evaluate SHORT criteria
+Volume Ratio: 1.4x ✅ STRONG
+4H TREND: ✅ BEARISH DOWNTREND (EMA20 < EMA50, ADX > 24) - **Favor SHORT positions**
+VOLATILITY CHECK: ATR 5.2% ✅ OK
+```
+
+**AI'nın vereceği karar:**
+```json
+{
+  "symbol": "BTC/USDT",
+  "action": "sell",
+  "reasoning": "BEARISH setup: All 5 SHORT criteria met - MACD bearish, RSI in SHORT range, price below EMA20, 4H downtrend with strong ADX, volume 1.4x",
+  "confidence": 0.72,
+  "leverage": 2
+}
+```
+
+### Kod Konumu:
+- Lines 186-209: RSI + Price position awareness
+- Lines 211-221: MACD direction awareness
+- Lines 234-246: 4H trend direction awareness
+- Lines 366-371: Enhanced system prompt
+- Lines 298-301: Enhanced task instructions
+
+**Dosya:** `app/Services/MultiCoinAIService.php`
 
 ---
 
