@@ -115,10 +115,19 @@ class MultiCoinAIService
                 continue;
             }
 
-            // PRE-FILTERING: Relaxed filtering (check trend direction + basic signals)
+            // PRE-FILTERING: Hybrid filtering (time-aware + volume-aware)
             if ($enablePreFiltering) {
                 $data3m = $data['3m'];
                 $data4h = $data['4h'];
+
+                // Dynamic volume threshold based on trading hours
+                $currentHour = now()->hour; // UTC hour
+                $isUSHours = $currentHour >= 13 && $currentHour <= 22; // US trading hours (13:00-22:00 UTC)
+
+                // US hours: more lenient (1.0x), Off-hours: stricter (1.2x)
+                $minVolumeRatio = $isUSHours ? 1.0 : 1.2;
+
+                Log::info("⏰ Current hour: {$currentHour} UTC, US Hours: " . ($isUSHours ? 'YES' : 'NO') . ", Min Volume: {$minVolumeRatio}x");
 
                 // Determine 4H trend direction first
                 $is4hUptrend = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0);
@@ -131,7 +140,14 @@ class MultiCoinAIService
                     continue;
                 }
 
-                // Count how many criteria are met (relaxed: need 3/5 instead of 5/5)
+                // Check volume first (critical for liquidity)
+                $volumeRatio = $data3m['volume_ratio'] ?? 0;
+                if ($volumeRatio < $minVolumeRatio) {
+                    Log::info("⏭️ Pre-filtered {$symbol} - Volume {$volumeRatio}x < {$minVolumeRatio}x minimum");
+                    continue;
+                }
+
+                // Count how many criteria are met (need 3/5)
                 $longScore = 0;
                 $shortScore = 0;
 
@@ -141,7 +157,7 @@ class MultiCoinAIService
                     if (($data3m['rsi7'] ?? 0) >= 40 && ($data3m['rsi7'] ?? 0) <= 75) $longScore++;
                     if ($data3m['price'] >= $data3m['ema20'] * 0.98 && $data3m['price'] <= $data3m['ema20'] * 1.05) $longScore++;
                     if ($adxOk) $longScore++;
-                    if (($data3m['volume_ratio'] ?? 0) > 1.0) $longScore++;
+                    $longScore++; // Volume already checked above
                 }
 
                 // SHORT scoring
@@ -150,14 +166,14 @@ class MultiCoinAIService
                     if (($data3m['rsi7'] ?? 0) >= 25 && ($data3m['rsi7'] ?? 0) <= 60) $shortScore++;
                     if ($data3m['price'] <= $data3m['ema20'] * 1.02 && $data3m['price'] >= $data3m['ema20'] * 0.95) $shortScore++;
                     if ($adxOk) $shortScore++;
-                    if (($data3m['volume_ratio'] ?? 0) > 1.0) $shortScore++;
+                    $shortScore++; // Volume already checked above
                 }
 
                 // Need at least 3/5 score to send to AI
                 if ($longScore >= 3) {
-                    Log::info("✅ {$symbol} passed pre-filter (potential LONG, score {$longScore}/5)");
+                    Log::info("✅ {$symbol} passed pre-filter (potential LONG, score {$longScore}/5, volume {$volumeRatio}x)");
                 } else if ($shortScore >= 3) {
-                    Log::info("✅ {$symbol} passed pre-filter (potential SHORT, score {$shortScore}/5)");
+                    Log::info("✅ {$symbol} passed pre-filter (potential SHORT, score {$shortScore}/5, volume {$volumeRatio}x)");
                 } else {
                     Log::info("⏭️ Pre-filtered {$symbol} - Low score (LONG {$longScore}/5, SHORT {$shortScore}/5)");
                     continue;
@@ -220,11 +236,22 @@ class MultiCoinAIService
                 $prompt .= "MACD STATUS: ⚠️ NEUTRAL (mixed signals) - HOLD or low confidence\n\n";
             }
 
-            // Core volume indicator (simplified)
+            // Core volume indicator with quality assessment
+            $volumeRatio = $data3m['volume_ratio'] ?? 1.0;
+            if ($volumeRatio >= 1.5) {
+                $volumeStatus = '✅ EXCELLENT (high liquidity, full position OK)';
+            } elseif ($volumeRatio >= 1.2) {
+                $volumeStatus = '✅ GOOD (normal liquidity, standard position)';
+            } elseif ($volumeRatio >= 1.0) {
+                $volumeStatus = '⚠️ ACCEPTABLE (moderate liquidity, prefer smaller position)';
+            } else {
+                $volumeStatus = '❌ WEAK (low liquidity, high risk - HOLD recommended)';
+            }
+
             $prompt .= sprintf(
                 "Volume Ratio (current/20MA): %.2fx %s\n\n",
-                $data3m['volume_ratio'] ?? 1.0,
-                ($data3m['volume_ratio'] ?? 1.0) > 1.5 ? '✅ STRONG' : (($data3m['volume_ratio'] ?? 1.0) > 1.1 ? '⚠️ OK' : '❌ WEAK')
+                $volumeRatio,
+                $volumeStatus
             );
 
             $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'], 10) . "\n";
@@ -380,21 +407,28 @@ LONG ENTRY (5 simple rules - ALL must be true):
 2. RSI(7) between 45-72 (healthy momentum, not overbought)
 3. Price 0-2% above EMA20 (riding uptrend)
 4. 4H trend: EMA20 > EMA50 AND ADX > 20 (strong uptrend on higher timeframe)
-5. Volume Ratio > 1.1x (minimum institutional interest)
+5. Volume Ratio ≥ 1.0x (minimum liquidity - coins below this already filtered out)
 
 SHORT ENTRY (5 simple rules - ALL must be true):
 1. MACD < MACD_Signal AND MACD < 0 (bearish momentum)
 2. RSI(7) between 28-55 (healthy downward momentum, not oversold)
 3. Price 0-2% below EMA20 (riding downtrend)
 4. 4H trend: EMA20 < EMA50 AND ADX > 20 (strong downtrend on higher timeframe)
-5. Volume Ratio > 1.1x (minimum institutional interest)
+5. Volume Ratio ≥ 1.0x (minimum liquidity - coins below this already filtered out)
+
+VOLUME QUALITY TIERS (impacts risk):
+- Volume ≥ 1.5x: EXCELLENT - High liquidity, low slippage risk, full confidence
+- Volume 1.2-1.5x: GOOD - Normal liquidity, standard risk
+- Volume 1.0-1.2x: ACCEPTABLE - Moderate liquidity, slightly elevated risk
+- Volume < 1.0x: WEAK - Already filtered out by system
 
 HOLD IF (any of these):
 - Criteria not met for LONG or SHORT
 - ATR > 8% (too volatile - CRITICAL SAFETY CHECK)
-- Volume Ratio < 1.1x (too weak)
+- Volume marked as WEAK (< 1.0x - should already be filtered)
 - AI Confidence < 60%
 - 4H ADX < 20 (sideways, no clear trend)
+- Volume 1.0-1.2x AND other signals not strong (prefer higher volume)
 
 RISK MANAGEMENT:
 - Maximum 1-2 new positions per cycle (LONG or SHORT)
