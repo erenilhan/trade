@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trading Dashboard</title>
-    
+
     <!-- Include Tailwind CSS from CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Include Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    
+
     <!-- Enable dark mode support -->
     <script>
         tailwind.config = {
@@ -31,247 +31,184 @@
             }
         }
     </script>
-    
-    <style type="text/tailwindcss">
-        @layer base {
-            body {
-                @apply transition-colors duration-300;
-            }
+
+    <style>
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-button.active {
+            border-bottom: 3px solid #3b82f6;
+            color: #3b82f6;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .tab-content.active {
+            animation: fadeIn 0.3s ease-in-out;
         }
     </style>
 </head>
-<body class="bg-dark-900 text-gray-200 min-h-screen transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <header class="flex justify-between items-center py-4 border-b border-dark-700 mb-6">
-            <div class="flex items-center space-x-4">
-                <h1 class="text-xl font-bold text-white">Trading Dashboard</h1>
-                <button id="menu-toggle" class="text-gray-200 hover:text-white focus:outline-none">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                    </svg>
+<body class="bg-dark-900 text-gray-200 min-h-screen">
+    <!-- Header -->
+    <header class="bg-dark-800 border-b border-dark-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <!-- Logo & Title -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <span class="text-xl font-bold">🤖</span>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-white">AI Trading Bot</h1>
+                        <p class="text-xs text-gray-400">Multi-Coin Futures</p>
+                    </div>
+                </div>
+
+                <!-- Right Side Actions -->
+                <div class="flex items-center space-x-3">
+                    <!-- Bot Status -->
+                    <div class="relative group">
+                        <div class="status-badge inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-red-900/50 text-red-300" id="bot-status">
+                            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                            <span class="hidden sm:inline">Offline</span>
+                        </div>
+                        <div id="bot-status-tooltip" class="absolute bottom-full right-0 mb-2 px-3 py-2 text-sm text-gray-200 bg-dark-800 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 whitespace-nowrap">
+                            Last run: Not available
+                        </div>
+                    </div>
+
+                    <!-- AI Model Badge -->
+                    <div class="hidden md:flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-indigo-900/50 text-indigo-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <span id="ai-model-text" class="text-xs">Loading...</span>
+                    </div>
+
+                    <!-- Admin Link -->
+                    @auth
+                    <a href="/admin" class="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-purple-900/50 text-purple-300 hover:bg-purple-900/70 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="hidden sm:inline">Admin</span>
+                    </a>
+                    @endauth
+
+                    <!-- Analytics Link -->
+                    <a href="{{ route('analytics') }}" class="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900/70 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        <span class="hidden sm:inline">Analytics</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="flex space-x-1 overflow-x-auto pb-px">
+                <button class="tab-button active px-4 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors whitespace-nowrap" data-tab="overview">
+                    📊 Overview
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors whitespace-nowrap" data-tab="performance">
+                    📈 Performance
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors whitespace-nowrap" data-tab="markets">
+                    📡 Markets
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors whitespace-nowrap" data-tab="ai">
+                    🤖 AI Decisions
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors whitespace-nowrap" data-tab="system">
+                    ⚙️ System
+                </button>
+                <button class="tab-button px-4 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors whitespace-nowrap" data-tab="risk">
+                    🛡️ Risk
                 </button>
             </div>
-            
-            <div class="flex items-center space-x-4">
-                <!-- Admin Dashboard Link (if authenticated) -->
-                @auth
-                <a href="/admin" class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-purple-900/50 text-purple-300 hover:bg-purple-900/70 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span>Admin</span>
-                </a>
-                @endauth
-
-                <!-- AI Model Badge -->
-                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-indigo-900/50 text-indigo-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                    <span id="ai-model-text">Loading...</span>
-                </div>
-
-                <!-- Current Strategy Button -->
-                <button id="strategy-btn" class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-purple-900/50 text-purple-300 hover:bg-purple-900/70 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>Strategy</span>
-                </button>
-
-                <!-- Performance Analytics Button -->
-                <a href="{{ route('analytics') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-indigo-900/50 text-indigo-300 hover:bg-indigo-900/70 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    <span>Analytics</span>
-                </a>
-
-                <!-- Bot Status with Tooltip -->
-                <div class="relative group">
-                    <div class="status-badge inactive inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-red-900/50 text-red-300" id="bot-status">
-                        <span class="status-dot w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                        <span>Bot Offline</span>
-                    </div>
-                    <div id="bot-status-tooltip" class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 text-sm text-gray-200 bg-dark-800 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600">
-                        Last run: Not available
-                        <div class="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-dark-800"></div>
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <!-- Stats Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
-            <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
-                <div class="stat-value text-3xl font-bold text-green-400" id="total-value">$0.00</div>
-                <div class="stat-label text-sm text-gray-400 mt-1">Total Value</div>
-            </div>
-            <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
-                <div class="stat-value text-3xl font-bold text-blue-400" id="cash-value">$0.00</div>
-                <div class="stat-label text-sm text-gray-400 mt-1">Cash</div>
-            </div>
-            <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
-                <div class="stat-value text-3xl font-bold text-yellow-400" id="roi-value">0%</div>
-                <div class="stat-label text-sm text-gray-400 mt-1">ROI</div>
-            </div>
-            <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
-                <div class="stat-value text-2xl font-bold" id="total-pnl-value">$0.00</div>
-                <div class="stat-label text-sm text-gray-400 mt-1">Total P&L</div>
-            </div>
-            <div class="stat-card bg-dark-800 rounded-lg p-6 text-center">
-                <div class="stat-value text-3xl font-bold text-purple-400" id="win-rate">0%</div>
-                <div class="stat-label text-sm text-gray-400 mt-1">Win Rate</div>
-            </div>
-            <div class="stat-card bg-dark-800 rounded-lg p-6 text-center relative group cursor-help">
-                <div class="stat-value text-2xl font-bold text-emerald-400" id="trailing-stops">0</div>
-                <div class="stat-label text-sm text-gray-400 mt-1">🛡️ Protected</div>
-                <div class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-4 py-3 bg-dark-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-72 shadow-xl">
-                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-dark-900"></div>
-                    <div class="font-bold mb-2 text-emerald-400">🛡️ Risk Management</div>
-
-                    <div class="text-gray-300 text-xs mb-3">
-                        <div class="font-semibold text-orange-400 mb-1">⚡ Dynamic Stop Loss:</div>
-                        <div class="text-gray-400 ml-4">Max loss: <span class="text-white font-bold">6% P&L</span></div>
-                        <div class="text-gray-400 ml-4">2x leverage → 3% price stop</div>
-                        <div class="text-gray-400 ml-4">3x leverage → 2% price stop</div>
-                        <div class="text-gray-400 ml-4">5x leverage → 1.2% price stop</div>
-                    </div>
-
-                    <div class="text-gray-300 text-xs space-y-1 border-t border-dark-700 pt-2">
-                        <div class="font-semibold text-emerald-400 mb-1">🛡️ Trailing Stops:</div>
-                        <div><span class="text-yellow-400">L1:</span> Hit +4.5% → stop at -0.5%</div>
-                        <div><span class="text-green-400">L2:</span> Hit +6% → stop at +2%</div>
-                        <div><span class="text-emerald-400">L3:</span> Hit +9% → stop at +5%</div>
-                        <div><span class="text-teal-400">L4:</span> Hit +13% → stop at +8%</div>
-                    </div>
-
-                    <div class="text-gray-400 text-xs mt-2 pt-2 border-t border-dark-700">
-                        <span class="text-white font-bold" id="trailing-stops-count">0</span> positions protected
-                    </div>
-                </div>
-            </div>
         </div>
+    </header>
 
-        <!-- Risk Management Status -->
-        <div class="mb-8" id="risk-management-section">
-            <h2 class="text-xl font-semibold text-white mb-4">🛡️ Risk Management</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Sleep Mode -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- Overview Tab -->
+        <div id="tab-overview" class="tab-content active">
+            <!-- Stats Overview -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
                 <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-medium text-gray-400">🌙 Sleep Mode</h3>
-                        <span id="sleep-mode-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
-                    </div>
-                    <div id="sleep-mode-details" class="text-sm text-gray-300 space-y-1"></div>
+                    <div class="text-2xl font-bold text-green-400" id="total-value">$0.00</div>
+                    <div class="text-xs text-gray-400 mt-1">Total Value</div>
                 </div>
-
-                <!-- Daily Drawdown -->
                 <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-medium text-gray-400">📉 Daily Drawdown</h3>
-                        <span id="drawdown-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
-                    </div>
-                    <div id="drawdown-details" class="text-sm text-gray-300 space-y-1"></div>
+                    <div class="text-2xl font-bold text-blue-400" id="cash-value">$0.00</div>
+                    <div class="text-xs text-gray-400 mt-1">Available Cash</div>
                 </div>
-
-                <!-- Cluster Loss Cooldown -->
                 <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-medium text-gray-400">⏸️ Cluster Loss</h3>
-                        <span id="cluster-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
+                    <div class="text-2xl font-bold text-yellow-400" id="roi-value">0%</div>
+                    <div class="text-xs text-gray-400 mt-1">ROI</div>
+                </div>
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
+                    <div class="text-2xl font-bold" id="total-pnl-value">$0.00</div>
+                    <div class="text-xs text-gray-400 mt-1">Total P&L</div>
+                </div>
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
+                    <div class="text-2xl font-bold text-purple-400" id="win-rate">0%</div>
+                    <div class="text-xs text-gray-400 mt-1">Win Rate</div>
+                </div>
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700 relative group cursor-help">
+                    <div class="text-2xl font-bold text-emerald-400" id="trailing-stops">0</div>
+                    <div class="text-xs text-gray-400 mt-1">🛡️ Protected</div>
+                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-4 py-3 bg-dark-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-72 shadow-xl">
+                        <div class="font-bold mb-2 text-emerald-400">🛡️ Risk Management</div>
+                        <div class="text-gray-300 text-xs mb-3">
+                            <div class="font-semibold text-orange-400 mb-1">⚡ Dynamic Stop Loss</div>
+                            <div class="text-gray-400 ml-4">Max loss: 6% P&L</div>
+                        </div>
+                        <div class="text-gray-300 text-xs space-y-1 border-t border-dark-700 pt-2">
+                            <div class="font-semibold text-emerald-400 mb-1">🛡️ Trailing Stops:</div>
+                            <div>L1: +4.5% → stop at -0.5%</div>
+                            <div>L2: +6% → stop at +2%</div>
+                            <div>L3: +9% → stop at +5%</div>
+                            <div>L4: +13% → stop at +8%</div>
+                        </div>
                     </div>
-                    <div id="cluster-details" class="text-sm text-gray-300 space-y-1"></div>
+                </div>
+            </div>
+
+            <!-- Open Positions -->
+            <div>
+                <h2 class="text-lg font-semibold text-white mb-4">Open Positions</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="open-positions">
+                    <div class="text-center py-8 text-gray-400 col-span-full">Loading positions...</div>
                 </div>
             </div>
         </div>
 
-        <!-- PNL Performance Chart -->
-        <div class="mb-8">
-            <h2 class="text-xl font-semibold text-white mb-4">📊 Performance (Last 7 Days)</h2>
-            <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
-                <canvas id="pnlChart" class="w-full" height="100"></canvas>
-            </div>
-        </div>
-
-        <!-- How It Works -->
-        <div class="mb-8">
-            <h2 class="text-xl font-semibold text-white mb-4">🤖 How It Works</h2>
-            <div class="bg-gradient-to-br from-dark-800 to-dark-900 rounded-lg p-6 border border-dark-700">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <!-- Step 1 -->
-                    <div class="text-center">
-                        <div class="w-16 h-16 mx-auto mb-4 bg-blue-900/50 rounded-full flex items-center justify-center">
-                            <span class="text-2xl">📡</span>
-                        </div>
-                        <h3 class="text-lg font-semibold text-blue-400 mb-2">1. Data Collection</h3>
-                        <p class="text-sm text-gray-400">
-                            Every 3 minutes, collect market data for 6 coins (BTC, ETH, SOL, BNB, XRP, DOGE)
-                        </p>
-                    </div>
-
-                    <!-- Step 2 -->
-                    <div class="text-center">
-                        <div class="w-16 h-16 mx-auto mb-4 bg-purple-900/50 rounded-full flex items-center justify-center">
-                            <span class="text-2xl">📈</span>
-                        </div>
-                        <h3 class="text-lg font-semibold text-purple-400 mb-2">2. Technical Analysis</h3>
-                        <p class="text-sm text-gray-400">
-                            Calculate 10+ indicators: EMA, MACD, RSI, ATR, Volume, Funding Rate, Open Interest
-                        </p>
-                    </div>
-
-                    <!-- Step 3 -->
-                    <div class="text-center">
-                        <div class="w-16 h-16 mx-auto mb-4 bg-green-900/50 rounded-full flex items-center justify-center">
-                            <span class="text-2xl">🤖</span>
-                        </div>
-                        <h3 class="text-lg font-semibold text-green-400 mb-2">3. AI Decision</h3>
-                        <p class="text-sm text-gray-400">
-                            AI analyzes all data and decides: BUY, HOLD, CLOSE or STOP for each coin
-                        </p>
-                    </div>
-
-                    <!-- Step 4 -->
-                    <div class="text-center">
-                        <div class="w-16 h-16 mx-auto mb-4 bg-orange-900/50 rounded-full flex items-center justify-center">
-                            <span class="text-2xl">⚡</span>
-                        </div>
-                        <h3 class="text-lg font-semibold text-orange-400 mb-2">4. Trade Execution</h3>
-                        <p class="text-sm text-gray-400">
-                            Execute trades with 2x leverage, set stop-loss & take-profit, monitor 24/7
-                        </p>
-                    </div>
+        <!-- Performance Tab -->
+        <div id="tab-performance" class="tab-content">
+            <!-- PNL Chart -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold text-white mb-4">Performance Chart (Last 7 Days)</h2>
+                <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+                    <canvas id="pnlChart" height="80"></canvas>
                 </div>
+            </div>
 
-                <!-- Additional Info -->
-                <div class="mt-6 pt-6 border-t border-dark-700">
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                        <div>
-                            <div class="text-2xl font-bold text-blue-400">10min</div>
-                            <div class="text-xs text-gray-500">AI Analysis Cycle</div>
-                        </div>
-                        <div>
-                            <div class="text-2xl font-bold text-green-400">1min</div>
-                            <div class="text-xs text-gray-500">Position Monitoring</div>
-                        </div>
-                        <div>
-                            <div class="text-2xl font-bold text-purple-400">6</div>
-                            <div class="text-xs text-gray-500">Cryptocurrencies</div>
-                        </div>
-                        <div>
-                            <div class="text-2xl font-bold text-orange-400">2x</div>
-                            <div class="text-xs text-gray-500">Max Leverage</div>
-                        </div>
+            <!-- Closed Positions -->
+            <div>
+                <h2 class="text-lg font-semibold text-white mb-4">Recent Closed Positions</h2>
+                <div class="bg-dark-800 rounded-lg overflow-hidden border border-dark-700">
+                    <div id="closed-positions">
+                        <div class="text-center py-8 text-gray-400">Loading...</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Market Indicators -->
-        <div class="mb-8">
-            <h2 class="text-xl font-semibold text-white mb-4">📊 Live Market Indicators</h2>
+        <!-- Markets Tab -->
+        <div id="tab-markets" class="tab-content">
+            <h2 class="text-lg font-semibold text-white mb-4">Live Market Indicators</h2>
             <div class="bg-dark-800 rounded-lg overflow-hidden border border-dark-700">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
@@ -289,9 +226,7 @@
                         </thead>
                         <tbody id="market-indicators" class="divide-y divide-dark-700">
                             <tr>
-                                <td colspan="8" class="px-4 py-8 text-center text-gray-400">
-                                    Loading indicators...
-                                </td>
+                                <td colspan="8" class="px-4 py-8 text-center text-gray-400">Loading indicators...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -299,864 +234,391 @@
             </div>
         </div>
 
-        <!-- Open Positions -->
-        <div class="mb-8">
-            <h2 class="text-xl font-semibold text-white mb-4">Open Positions</h2>
-            <div class="positions-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="open-positions">
-                <div class="loading text-center py-8 text-gray-400">Loading positions...</div>
-            </div>
-        </div>
-
-        <!-- Closed Positions -->
-        <div class="mb-8">
-            <h2 class="text-xl font-semibold text-white mb-4">Closed Positions (Last 10)</h2>
-            <div class="bg-dark-800 rounded-lg overflow-hidden">
-                <div class="history-body p-4" id="closed-positions">
-                    <div class="loading text-center py-8 text-gray-400">Loading positions...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- AI Logs Section -->
-        <div class="mb-8">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold text-white">Recent AI Decisions (Last 10)</h2>
-                <div class="text-sm text-gray-400">
-                    <span>Provider: </span><span id="ai-provider" class="text-blue-400">-</span> |
-                    <span>Last run: </span><span id="last-ai-run" class="text-blue-400">N/A</span>
-                </div>
-            </div>
-
-            <div class="bg-dark-800 rounded-lg overflow-hidden">
-                <div class="history-body p-4" id="ai-logs">
-                    <div class="loading text-center py-8 text-gray-400">Loading AI logs...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Why Not Bought Section -->
-        <div class="mb-8">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold text-white">❌ Why Not Bought (Last AI Run)</h2>
-                <div class="text-sm text-gray-400">
-                    <span>HOLD decisions from AI analysis</span>
-                </div>
-            </div>
-
-            <div class="bg-dark-800 rounded-lg overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-dark-700 text-xs uppercase">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-gray-400">Symbol</th>
-                                <th class="px-4 py-3 text-left text-gray-400">Confidence</th>
-                                <th class="px-4 py-3 text-left text-gray-400">Reason</th>
-                            </tr>
-                        </thead>
-                        <tbody id="hold-reasons" class="divide-y divide-dark-700">
-                            <tr>
-                                <td colspan="3" class="px-4 py-8 text-center text-gray-400">
-                                    Loading HOLD reasons...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- AI Decision Detail Modal -->
-        <div id="ai-modal" class="modal fixed inset-0 z-50 hidden bg-black/50">
-            <div class="modal-content bg-dark-800 rounded-lg mx-auto my-20 p-6 w-11/12 max-w-2xl relative max-h-[80vh] overflow-y-auto">
-                <button id="close-ai-modal" class="close absolute top-4 right-4 text-2xl text-white hover:text-gray-300">&times;</button>
-                <h2 class="text-2xl font-bold text-white mb-4">AI Decision Details</h2>
-                <div id="ai-modal-content">
-                    <!-- Modal content will be populated by JavaScript -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Strategy Modal -->
-        <div id="strategy-modal" class="modal fixed inset-0 z-50 hidden bg-black/50">
-            <div class="modal-content bg-dark-800 rounded-lg mx-auto my-20 p-6 w-11/12 max-w-3xl relative max-h-[80vh] overflow-y-auto">
-                <button id="close-strategy-modal" class="close absolute top-4 right-4 text-2xl text-white hover:text-gray-300">&times;</button>
-                <h2 class="text-2xl font-bold text-white mb-4">📋 Current Trading Strategy</h2>
-                <div class="bg-dark-700 rounded-lg p-6 space-y-6">
-                    <div class="strategy-section">
-                        <h3 class="text-lg font-semibold text-purple-400 mb-3">BUY Criteria (ALL must be true)</h3>
-                        <ul class="space-y-2 text-gray-300">
-                            <li class="flex items-start gap-2">
-                                <span class="text-green-400 mt-1">✓</span>
-                                <span><strong>Price > EMA20</strong> by at least 0.3% (early entry)</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-green-400 mt-1">✓</span>
-                                <span><strong>MACD > Signal</strong> AND MACD > price × 0.00005 (looser momentum)</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-green-400 mt-1">✓</span>
-                                <span><strong>RSI between 35-75</strong> (catches rally starts, was 40-70)</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-green-400 mt-1">✓</span>
-                                <span><strong>4H Trend:</strong> EMA20 > EMA50 × 0.999 AND ADX(14) > 20 (moderate trend, was >25)</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-green-400 mt-1">✓</span>
-                                <span><strong>Volume Confirmation:</strong> Volume > 20MA × 0.9 AND > previous bar × 1.05</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-green-400 mt-1">✓</span>
-                                <span><strong>AI Confidence > 70%</strong> (balanced threshold)</span>
-                            </li>
-                        </ul>
+        <!-- AI Decisions Tab -->
+        <div id="tab-ai" class="tab-content">
+            <div class="space-y-6">
+                <!-- AI Logs -->
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-white">Recent AI Decisions</h2>
+                        <div class="text-sm text-gray-400">
+                            Last run: <span id="last-ai-run" class="text-blue-400">N/A</span>
+                        </div>
                     </div>
-
-                    <div class="strategy-section border-t border-dark-600 pt-6">
-                        <h3 class="text-lg font-semibold text-red-400 mb-3">EXIT Strategy</h3>
-                        <ul class="space-y-2 text-gray-300">
-                            <li class="flex items-start gap-2">
-                                <span class="text-yellow-400 mt-1">🎯</span>
-                                <span><strong>Take Profit:</strong> +5% gain target</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-red-400 mt-1">🛑</span>
-                                <span><strong>Stop Loss:</strong> -3% maximum loss</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-orange-400 mt-1">⚠️</span>
-                                <span><strong>Trend Invalidation:</strong> Close if 2+ signals (Price < EMA20, MACD < 0, 4H ADX < 20, 4H trend reversed) AND P&L < 2%</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-blue-400 mt-1">🔒</span>
-                                <span><strong>Multi-Level Trailing Stop:</strong> Automatically protect profits as position grows</span>
-                            </li>
-                            <li class="ml-8 text-sm text-gray-400">
-                                Level 1 @ +3% profit → Stop moves to -1% (reduce risk)<br>
-                                Level 2 @ +5% profit → Stop moves to breakeven (0%)<br>
-                                Level 3 @ +8% profit → Stop moves to +3% (lock profit)<br>
-                                Level 4 @ +12% profit → Stop moves to +6% (lock big profit)
-                            </li>
-                        </ul>
+                    <div class="bg-dark-800 rounded-lg overflow-hidden border border-dark-700">
+                        <div id="ai-logs" class="p-4">
+                            <div class="text-center py-8 text-gray-400">Loading AI logs...</div>
+                        </div>
                     </div>
+                </div>
 
-                    <div class="strategy-section border-t border-dark-600 pt-6">
-                        <h3 class="text-lg font-semibold text-blue-400 mb-3">Risk Management</h3>
-                        <ul class="space-y-2 text-gray-300">
-                            <li class="flex items-start gap-2">
-                                <span class="text-blue-400 mt-1">📊</span>
-                                <span><strong>Leverage:</strong> Fixed 2x (safe leverage)</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-blue-400 mt-1">💰</span>
-                                <span><strong>Position Size:</strong> ~$20 per trade</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-blue-400 mt-1">⏰</span>
-                                <span><strong>Trading Frequency:</strong> Every 10 minutes (AI analysis)</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-blue-400 mt-1">🔄</span>
-                                <span><strong>Monitoring:</strong> Every 1 minute (price updates, position monitoring)</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="text-blue-400 mt-1">🎲</span>
-                                <span><strong>Max Positions:</strong> One position per coin (10 coins max)</span>
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div class="strategy-section border-t border-dark-600 pt-6">
-                        <h3 class="text-lg font-semibold text-green-400 mb-3">Technical Indicators</h3>
-                        <ul class="space-y-2 text-gray-300 text-sm">
-                            <li><strong>EMA 20/50:</strong> Trend direction (3m and 4H timeframes)</li>
-                            <li><strong>MACD (12,26,9):</strong> Momentum with signal line crossover</li>
-                            <li><strong>RSI (7,14):</strong> Overbought/oversold conditions</li>
-                            <li><strong>ATR (3,14):</strong> Volatility measurement</li>
-                            <li><strong>ADX (14):</strong> Trend strength (Wilder's smoothing)</li>
-                            <li><strong>Volume:</strong> 20-period MA confirmation</li>
-                        </ul>
+                <!-- HOLD Reasons -->
+                <div>
+                    <h2 class="text-lg font-semibold text-white mb-4">Why Not Bought (Last AI Run)</h2>
+                    <div class="bg-dark-800 rounded-lg overflow-hidden border border-dark-700">
+                        <table class="w-full">
+                            <thead class="bg-dark-700 text-xs uppercase">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-gray-400">Symbol</th>
+                                    <th class="px-4 py-3 text-left text-gray-400">Confidence</th>
+                                    <th class="px-4 py-3 text-left text-gray-400">Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hold-reasons" class="divide-y divide-dark-700">
+                                <tr>
+                                    <td colspan="3" class="px-4 py-8 text-center text-gray-400">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Menu Modal -->
-        <div id="menu-modal" class="menu-modal fixed inset-0 z-[60] hidden bg-black/50">
-            <div class="menu-modal-content bg-dark-800 rounded-lg mx-auto my-20 p-6 w-11/12 max-w-md relative">
-                <button id="close-menu" class="menu-close absolute top-4 right-4 text-2xl text-white hover:text-gray-300">&times;</button>
-                <h2 class="text-2xl font-bold text-white mb-6 text-center">Navigation Menu</h2>
-                <ul class="space-y-4">
-                    <li><a href="/" class="block p-3 rounded-md hover:bg-dark-700 transition-colors text-gray-200">Home</a></li>
-                    <li><a href="/documentation" class="block p-3 rounded-md hover:bg-dark-700 transition-colors text-gray-200">Documentation</a></li>
-                    <li><a href="/about" class="block p-3 rounded-md hover:bg-dark-700 transition-colors text-gray-200">About Me</a></li>
-                    <li><a href="https://github.com/erenilhan/trade" target="_blank" class="block p-3 rounded-md hover:bg-dark-700 transition-colors text-gray-200">GitHub Repository</a></li>
-                </ul>
+        <!-- System Tab -->
+        <div id="tab-system" class="tab-content">
+            <h2 class="text-lg font-semibold text-white mb-4">How The System Works</h2>
+            <div class="bg-gradient-to-br from-dark-800 to-dark-900 rounded-lg p-6 border border-dark-700">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-blue-900/50 rounded-full flex items-center justify-center">
+                            <span class="text-3xl">📡</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-blue-400 mb-2">Data Collection</h3>
+                        <p class="text-sm text-gray-400">Every 3 minutes, collect market data for 6 cryptocurrencies</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-purple-900/50 rounded-full flex items-center justify-center">
+                            <span class="text-3xl">📈</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-purple-400 mb-2">Technical Analysis</h3>
+                        <p class="text-sm text-gray-400">Calculate 10+ indicators: EMA, MACD, RSI, ATR, Volume</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-green-900/50 rounded-full flex items-center justify-center">
+                            <span class="text-3xl">🤖</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-green-400 mb-2">AI Decision</h3>
+                        <p class="text-sm text-gray-400">AI analyzes data and decides: BUY, HOLD, CLOSE, or STOP</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-orange-900/50 rounded-full flex items-center justify-center">
+                            <span class="text-3xl">⚡</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-orange-400 mb-2">Execution</h3>
+                        <p class="text-sm text-gray-400">Execute trades with 2x leverage and 24/7 monitoring</p>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6 border-t border-dark-700">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-400">10min</div>
+                        <div class="text-xs text-gray-500">AI Analysis Cycle</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-400">1min</div>
+                        <div class="text-xs text-gray-500">Position Monitoring</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-purple-400">6</div>
+                        <div class="text-xs text-gray-500">Cryptocurrencies</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-orange-400">2x</div>
+                        <div class="text-xs text-gray-500">Max Leverage</div>
+                    </div>
+                </div>
+
+                <!-- Strategy Details -->
+                <div class="mt-6 pt-6 border-t border-dark-700">
+                    <button id="strategy-detail-btn" class="w-full flex items-center justify-between px-4 py-3 bg-dark-700 hover:bg-dark-600 rounded-lg transition-colors">
+                        <span class="font-semibold text-white">📋 View Detailed Trading Strategy</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risk Tab -->
+        <div id="tab-risk" class="tab-content">
+            <h2 class="text-lg font-semibold text-white mb-4">Risk Management Status</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Sleep Mode -->
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-gray-400">🌙 Sleep Mode</h3>
+                        <span id="sleep-mode-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
+                    </div>
+                    <div id="sleep-mode-details" class="text-sm text-gray-300 space-y-1"></div>
+                </div>
+
+                <!-- Daily Drawdown -->
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-gray-400">📉 Daily Drawdown</h3>
+                        <span id="drawdown-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
+                    </div>
+                    <div id="drawdown-details" class="text-sm text-gray-300 space-y-1"></div>
+                </div>
+
+                <!-- Cluster Loss -->
+                <div class="bg-dark-800 rounded-lg p-4 border border-dark-700">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-gray-400">⏸️ Cluster Loss</h3>
+                        <span id="cluster-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
+                    </div>
+                    <div id="cluster-details" class="text-sm text-gray-300 space-y-1"></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Strategy Detail Modal -->
+    <div id="strategy-modal" class="modal fixed inset-0 z-50 hidden bg-black/50">
+        <div class="modal-content bg-dark-800 rounded-lg mx-auto my-20 p-6 w-11/12 max-w-3xl relative max-h-[80vh] overflow-y-auto">
+            <button id="close-strategy-modal" class="absolute top-4 right-4 text-2xl text-white hover:text-gray-300">&times;</button>
+            <h2 class="text-2xl font-bold text-white mb-4">📋 Trading Strategy Details</h2>
+            <div class="bg-dark-700 rounded-lg p-6 space-y-6">
+                <div>
+                    <h3 class="text-lg font-semibold text-green-400 mb-3">BUY Criteria (ALL must be true)</h3>
+                    <ul class="space-y-2 text-gray-300 text-sm">
+                        <li>✓ Price > EMA20 by at least 0.3%</li>
+                        <li>✓ MACD > Signal AND MACD > price × 0.00005</li>
+                        <li>✓ RSI between 35-75</li>
+                        <li>✓ 4H Trend: EMA20 > EMA50 × 0.999 AND ADX(14) > 20</li>
+                        <li>✓ Volume > 20MA × 0.9 AND > previous bar × 1.05</li>
+                        <li>✓ AI Confidence > 70%</li>
+                    </ul>
+                </div>
+                <div class="border-t border-dark-600 pt-6">
+                    <h3 class="text-lg font-semibold text-red-400 mb-3">EXIT Strategy</h3>
+                    <ul class="space-y-2 text-gray-300 text-sm">
+                        <li>🎯 Take Profit: +5% gain</li>
+                        <li>🛑 Stop Loss: -3% maximum</li>
+                        <li>⚠️ Trend Invalidation: Multiple signals + P&L < 2%</li>
+                        <li>🔒 Multi-Level Trailing Stop</li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- AI Decision Modal -->
+    <div id="ai-modal" class="modal fixed inset-0 z-50 hidden bg-black/50">
+        <div class="modal-content bg-dark-800 rounded-lg mx-auto my-20 p-6 w-11/12 max-w-2xl relative max-h-[80vh] overflow-y-auto">
+            <button id="close-ai-modal" class="absolute top-4 right-4 text-2xl text-white hover:text-gray-300">&times;</button>
+            <h2 class="text-2xl font-bold text-white mb-4">AI Decision Details</h2>
+            <div id="ai-modal-content"></div>
+        </div>
+    </div>
+
+    <footer class="mt-12 py-8 text-center border-t border-dark-700">
+        <p class="text-gray-500 text-sm">Eren Ilhan | erenilhan1@gmail.com</p>
+        <a href="https://erenilhan.com" target="_blank" class="text-blue-500 hover:text-blue-400 text-sm mt-2 inline-block">erenilhan.com</a>
+    </footer>
+
     <script>
         const API_URL = '/api/dashboard/data';
+        let pnlChartInstance = null;
 
+        // Tab switching
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const tab = button.dataset.tab;
+
+                // Update buttons
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+
+                // Update content
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.getElementById(`tab-${tab}`).classList.add('active');
+            });
+        });
+
+        // Helper functions
         function formatMoney(value) {
-            return '$' + parseFloat(value).toFixed(2);
+            return '$' + parseFloat(value || 0).toFixed(2);
         }
 
         function formatPercent(value) {
             return (parseFloat(value) || 0).toFixed(2) + '%';
         }
 
-        let pnlChartInstance = null; // Store chart instance globally
-
         function renderDashboard(data) {
-            const { account, positions, closed_positions, ai_logs, hold_reasons, last_ai_run, ai_provider, ai_model, stats, pnl_chart, market_indicators } = data;
+            const { account, positions, closed_positions, ai_logs, hold_reasons, last_ai_run, ai_model, stats, pnl_chart, market_indicators } = data;
 
-            // Update account stats
+            // Update stats
             document.getElementById('total-value').textContent = formatMoney(account.total_value);
             document.getElementById('cash-value').textContent = formatMoney(account.cash);
             document.getElementById('roi-value').textContent = formatPercent(account.roi);
             document.getElementById('win-rate').textContent = formatPercent(stats.win_rate);
 
-            // Count positions with trailing stops
             const protectedCount = positions.filter(p => p.trailing_level).length;
             document.getElementById('trailing-stops').textContent = protectedCount;
 
-            // Update Total P&L (realized + unrealized)
-            const realizedPnl = account.realized_pnl || 0;
-            const unrealizedPnl = account.total_pnl || 0;
-            const totalPnl = realizedPnl + unrealizedPnl;
+            const totalPnl = (account.realized_pnl || 0) + (account.total_pnl || 0);
             const totalPnlEl = document.getElementById('total-pnl-value');
-            const pnlColor = totalPnl >= 0 ? 'text-green-400' : 'text-red-400';
-            totalPnlEl.className = `stat-value text-2xl font-bold ${pnlColor}`;
+            totalPnlEl.className = `text-2xl font-bold ${totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`;
             totalPnlEl.textContent = (totalPnl >= 0 ? '+' : '') + formatMoney(totalPnl);
 
-            // Update AI Model display
-            const aiModelText = document.getElementById('ai-model-text');
-            if (ai_model) {
-                aiModelText.textContent = ai_model;
-            } else {
-                aiModelText.textContent = 'No model';
-            }
+            // Update AI model
+            document.getElementById('ai-model-text').textContent = ai_model || 'N/A';
 
             // Update bot status
             const botStatus = document.getElementById('bot-status');
-            const botStatusTooltip = document.getElementById('bot-status-tooltip');
-
-            botStatusTooltip.textContent = `Last run: ${last_ai_run || 'Not available'}`;
-
             if (stats.bot_enabled) {
-                botStatus.className = 'status-badge active inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-green-900/50 text-green-300';
-                botStatus.innerHTML = '<span class="status-dot w-2 h-2 rounded-full bg-green-500 animate-pulse"></span><span>Bot Active</span>';
-            } else {
-                botStatus.className = 'status-badge inactive inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-red-900/50 text-red-300';
-                botStatus.innerHTML = '<span class="status-dot w-2 h-2 rounded-full bg-red-500 animate-pulse"></span><span>Bot Offline</span>';
+                botStatus.className = 'status-badge inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-green-900/50 text-green-300';
+                botStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span><span class="hidden sm:inline">Active</span>';
             }
 
-            // Update AI provider info
-            if (ai_logs && ai_logs.length > 0) {
-                const firstLog = ai_logs[0];
-                document.getElementById('ai-provider').textContent = firstLog.provider || 'N/A';
-            }
+            // Render positions
+            renderPositions(positions);
+            renderClosedPositions(closed_positions);
 
-            // Render open positions
-            const openPositionsEl = document.getElementById('open-positions');
+            if (pnl_chart) renderPnlChart(pnl_chart);
+            if (market_indicators) renderMarketIndicators(market_indicators);
+
+            renderAiLogs(ai_logs);
+            renderHoldReasons(hold_reasons);
+            renderRiskManagement(data.risk_management);
+
+            document.getElementById('last-ai-run').textContent = last_ai_run;
+        }
+
+        function renderPositions(positions) {
+            const container = document.getElementById('open-positions');
             if (positions.length === 0) {
-                openPositionsEl.innerHTML = '<div class="empty-state text-center py-8 text-gray-400">No open positions</div>';
-            } else {
-                openPositionsEl.innerHTML = positions.map(pos => {
+                container.innerHTML = '<div class="text-center py-8 text-gray-400 col-span-full">No open positions</div>';
+                return;
+            }
+
+            container.innerHTML = positions.map(pos => {
+                const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
+                const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
+                const invested = (pos.position_size || (pos.quantity * pos.entry_price)) / pos.leverage;
+
+                let trailingBadge = '';
+                if (pos.trailing_level) {
+                    const colors = {1: 'bg-yellow-600', 2: 'bg-green-600', 3: 'bg-emerald-600', 4: 'bg-teal-600'};
+                    const emojis = {1: '🛡️', 2: '✅', 3: '🔒', 4: '💎'};
+                    trailingBadge = `<div class="${colors[pos.trailing_level]} text-white px-2 py-1 rounded-full text-xs font-semibold">${emojis[pos.trailing_level]} L${pos.trailing_level}</div>`;
+                }
+
+                return `
+                    <div class="bg-dark-800 border border-dark-700 rounded-lg p-4 hover:border-blue-500/50 transition-colors">
+                        <div class="flex justify-between items-center pb-2 mb-3 border-b border-dark-700">
+                            <div class="font-semibold text-lg text-white">${pos.symbol}</div>
+                            <div class="flex gap-2">
+                                ${trailingBadge}
+                                <div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
+                            </div>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">💵 Capital</span>
+                                <span class="text-yellow-400 font-semibold">${formatMoney(invested)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Entry</span>
+                                <span class="text-white">${formatMoney(pos.entry_price)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Current</span>
+                                <span class="text-white font-semibold">${formatMoney(pos.current_price)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">P&L</span>
+                                <span class="${pnlColor} font-bold">${pnlEmoji} ${formatMoney(pos.pnl)} (${formatPercent(pos.pnl_percent)})</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderClosedPositions(positions) {
+            const container = document.getElementById('closed-positions');
+            if (positions.length === 0) {
+                container.innerHTML = '<div class="text-center py-8 text-gray-400">No closed positions</div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="grid grid-cols-6 bg-dark-700 text-gray-300 font-semibold p-3 text-sm">
+                    <div>Symbol</div>
+                    <div>Entry</div>
+                    <div>Leverage</div>
+                    <div>P&L</div>
+                    <div>Closed</div>
+                    <div>Reason</div>
+                </div>
+                ${positions.map(pos => {
                     const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
                     const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
-
-                    let targetsHtml = '';
-                    if (pos.targets) {
-                        if (pos.targets.profit_target) {
-                            const distPct = pos.targets.distance_to_profit_pct?.toFixed(2) || '0.00';
-                            const priceNeeded = pos.targets.profit_needed?.toFixed(2) || '0.00';
-                            const priceNeededAbs = Math.abs(parseFloat(priceNeeded));
-                            const distanceText = parseFloat(distPct) > 0
-                                ? `${distPct}% to go ($${priceNeededAbs})`
-                                : `Target reached!`;
-
-                            targetsHtml += `
-                                <div class="position-row flex justify-between py-1 bg-green-900/20 px-2 rounded mt-2">
-                                    <span class="position-label text-green-400 text-sm">🎯 Target</span>
-                                    <span class="position-value text-green-300 text-sm">
-                                        $${pos.targets.profit_target.toFixed(2)}
-                                    </span>
-                                </div>
-                                <div class="position-row flex justify-between py-1 px-2 text-xs">
-                                    <span class="text-gray-500">Distance:</span>
-                                    <span class="text-green-400 font-semibold">${distanceText}</span>
-                                </div>
-                            `;
-                        }
-                        if (pos.targets.stop_loss) {
-                            const stopPct = pos.targets.distance_to_stop_pct?.toFixed(2) || '0.00';
-                            const stopDist = pos.targets.stop_distance?.toFixed(2) || '0.00';
-                            const stopDistAbs = Math.abs(parseFloat(stopDist));
-                            const bufferText = parseFloat(stopPct) > 0
-                                ? `${stopPct}% buffer ($${stopDistAbs})`
-                                : `⚠️ At stop level!`;
-
-                            targetsHtml += `
-                                <div class="position-row flex justify-between py-1 bg-red-900/20 px-2 rounded mt-1">
-                                    <span class="position-label text-red-400 text-sm">🛑 Stop</span>
-                                    <span class="position-value text-red-300 text-sm">
-                                        $${pos.targets.stop_loss.toFixed(2)}
-                                    </span>
-                                </div>
-                                <div class="position-row flex justify-between py-1 px-2 text-xs">
-                                    <span class="text-gray-500">Buffer:</span>
-                                    <span class="text-red-400 font-semibold">${bufferText}</span>
-                                </div>
-                            `;
-                        }
-                    }
-
-                    const positionSize = pos.position_size || (pos.quantity * pos.entry_price);
-                    const invested = positionSize / pos.leverage; // Real capital used (with leverage)
-
-                    // Trailing stop badge with detailed tooltip
-                    let trailingBadge = '';
-                    if (pos.trailing_level) {
-                        const trailingInfo = {
-                            1: {
-                                text: 'T-Stop L1',
-                                color: 'bg-yellow-600',
-                                emoji: '🛡️',
-                                title: 'Level 1 Protection Active',
-                                desc: 'Position reached +3% profit. Stop loss moved to -1% (entry price - 1%). Max loss now limited to $' + (pos.entry_price * 0.01 * pos.quantity * pos.leverage).toFixed(2)
-                            },
-                            2: {
-                                text: 'T-Stop L2',
-                                color: 'bg-green-600',
-                                emoji: '✅',
-                                title: 'Breakeven Protection',
-                                desc: 'Position reached +5% profit. Stop loss at entry price (0%). You cannot lose money anymore!'
-                            },
-                            3: {
-                                text: 'T-Stop L3',
-                                color: 'bg-emerald-600',
-                                emoji: '🔒',
-                                title: 'Profit Locked +3%',
-                                desc: 'Position reached +8% profit. Stop loss moved to +3%. Minimum profit guaranteed: $' + (pos.entry_price * 0.03 * pos.quantity * pos.leverage).toFixed(2)
-                            },
-                            4: {
-                                text: 'T-Stop L4',
-                                color: 'bg-teal-600',
-                                emoji: '💎',
-                                title: 'Big Profit Locked +6%',
-                                desc: 'Position reached +12% profit. Stop loss moved to +6%. Minimum profit guaranteed: $' + (pos.entry_price * 0.06 * pos.quantity * pos.leverage).toFixed(2)
-                            }
-                        };
-                        const badge = trailingInfo[pos.trailing_level];
-                        trailingBadge = `
-                            <div class="relative group inline-block">
-                                <div class="${badge.color} text-white px-2 py-1 rounded-full text-xs font-semibold cursor-help flex items-center gap-1">
-                                    <span>${badge.emoji}</span>
-                                    <span>${badge.text}</span>
-                                </div>
-                                <div class="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-dark-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-50 border border-dark-600 w-64 shadow-xl">
-                                    <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-dark-900"></div>
-                                    <div class="font-bold mb-1 text-yellow-400">${badge.title}</div>
-                                    <div class="text-gray-300">${badge.desc}</div>
-                                </div>
-                            </div>
-                        `;
-                    }
-
                     return `
-                        <div class="position-card bg-dark-800 border border-dark-700 rounded-lg p-4 hover:shadow-lg transition-shadow">
-                            <div class="position-header flex justify-between items-center pb-2 mb-2 border-b border-dark-700">
-                                <div class="symbol font-semibold text-lg text-white">${pos.symbol}</div>
-                                <div class="flex gap-2">
-                                    ${trailingBadge}
-                                    <div class="leverage-badge bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
-                                </div>
-                            </div>
-                            <div class="position-row flex justify-between py-1">
-                                <span class="position-label text-gray-400">💵 Capital</span>
-                                <span class="position-value text-yellow-400 font-semibold">${formatMoney(invested)}</span>
-                            </div>
-                            <div class="position-row flex justify-between py-1">
-                                <span class="position-label text-gray-400">Entry</span>
-                                <span class="position-value text-white">${formatMoney(pos.entry_price)}</span>
-                            </div>
-                            <div class="position-row flex justify-between py-1">
-                                <span class="position-label text-gray-400">Current</span>
-                                <span class="position-value text-white font-semibold">${formatMoney(pos.current_price)}</span>
-                            </div>
-                            <div class="position-row flex justify-between py-1">
-                                <span class="position-label text-gray-400">P&L</span>
-                                <span class="position-value ${pnlColor} font-bold">
-                                    ${pnlEmoji} ${formatMoney(pos.pnl)} (${formatPercent(pos.pnl_percent)})
-                                </span>
-                            </div>
-                            ${targetsHtml}
-                            <div class="position-row flex justify-between py-1 mt-2 pt-2 border-t border-dark-700">
-                                <span class="position-label text-gray-500 text-xs">Liq Price</span>
-                                <span class="position-value text-gray-400 text-xs">${pos.liquidation_price ? formatMoney(pos.liquidation_price) : 'N/A'}</span>
-                            </div>
-                            <div class="position-row flex justify-between py-1">
-                                <span class="position-label text-gray-500 text-xs">Opened</span>
-                                <span class="position-value text-gray-400 text-xs">${pos.opened_at || 'N/A'}</span>
-                            </div>
-                            <div class="position-row flex justify-between py-1">
-                                <span class="position-label text-gray-500 text-xs">🔄 Updated</span>
-                                <span class="position-value text-blue-400 text-xs font-semibold">${pos.price_updated_at || 'Never'}</span>
-                            </div>
+                        <div class="grid grid-cols-6 p-3 border-b border-dark-700 hover:bg-dark-700/30 text-sm">
+                            <div class="font-medium text-white">${pos.symbol}</div>
+                            <div class="text-gray-300">${formatMoney(pos.entry_price)}</div>
+                            <div class="text-blue-400">${pos.leverage}x</div>
+                            <div class="${pnlColor} font-semibold">${pnlEmoji} ${formatMoney(pos.pnl)}</div>
+                            <div class="text-gray-400 text-xs">${pos.closed_at || 'N/A'}</div>
+                            <div class="text-gray-400 text-xs">${pos.close_reason || '-'}</div>
                         </div>
                     `;
-                }).join('');
-            }
-
-            // Render closed positions
-            const closedPositionsEl = document.getElementById('closed-positions');
-            if (closed_positions.length === 0) {
-                closedPositionsEl.innerHTML = '<div class="empty-state text-center py-8 text-gray-400">No closed positions</div>';
-            } else {
-                closedPositionsEl.innerHTML = `
-                    <div class="grid grid-cols-6 bg-dark-700 text-gray-300 font-semibold p-3 text-sm">
-                        <div>Symbol</div>
-                        <div>💵 Invested</div>
-                        <div>Entry</div>
-                        <div>Leverage</div>
-                        <div>💸 P&L</div>
-                        <div>📅 Closed</div>
-                    </div>
-                    ${closed_positions.map(pos => {
-                        const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
-                        const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
-                        const positionSize = pos.position_size || (pos.quantity * pos.entry_price);
-                        const invested = positionSize / pos.leverage; // Real capital used (with leverage)
-
-                        // Determine close reason with proper icons
-                        let closeReason = '-';
-                        let reasonColor = 'text-gray-500';
-                        if (pos.close_reason) {
-                            switch (pos.close_reason) {
-                                case 'take_profit':
-                                    closeReason = '🎯 Take Profit';
-                                    reasonColor = 'text-green-400';
-                                    break;
-                                case 'stop_loss':
-                                    closeReason = '🛑 Stop Loss';
-                                    reasonColor = 'text-red-400';
-                                    break;
-                                case 'trailing_stop_l1':
-                                    closeReason = '🔒 Trailing L1';
-                                    reasonColor = 'text-yellow-400';
-                                    break;
-                                case 'trailing_stop_l2':
-                                    closeReason = '🔒 Trailing L2';
-                                    reasonColor = 'text-yellow-400';
-                                    break;
-                                case 'trailing_stop_l3':
-                                    closeReason = '🔒🔒 Trailing L3';
-                                    reasonColor = 'text-blue-400';
-                                    break;
-                                case 'trailing_stop_l4':
-                                    closeReason = '🔒🔒🔒 Trailing L4';
-                                    reasonColor = 'text-blue-400';
-                                    break;
-                                case 'manual':
-                                    closeReason = '👤 Manual';
-                                    reasonColor = 'text-gray-400';
-                                    break;
-                                case 'liquidated':
-                                    closeReason = '⚠️ Liquidated';
-                                    reasonColor = 'text-red-600';
-                                    break;
-                                case 'other':
-                                    closeReason = '❓ Other';
-                                    reasonColor = 'text-gray-400';
-                                    break;
-                                default:
-                                    closeReason = pos.pnl >= 0 ? '🎯 Take Profit' : '🛑 Stop Loss';
-                                    reasonColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
-                            }
-                        } else {
-                            // Fallback for old positions without close_reason
-                            closeReason = pos.pnl >= 0 ? '🎯 Take Profit' : '🛑 Stop Loss';
-                            reasonColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
-                        }
-
-                        return `
-                            <div class="grid grid-cols-6 p-3 border-b border-dark-700 hover:bg-dark-700/30 text-sm">
-                                <div class="font-medium text-white">${pos.symbol}</div>
-                                <div class="text-yellow-400 font-semibold">${formatMoney(invested)}</div>
-                                <div class="text-gray-300">${formatMoney(pos.entry_price)}</div>
-                                <div class="text-blue-400">${pos.leverage}x</div>
-                                <div class="${pnlColor} font-semibold">
-                                    ${pnlEmoji} ${formatMoney(pos.pnl)} (${formatPercent(pos.pnl_percent)})
-                                </div>
-                                <div>
-                                    <div class="text-gray-400 text-xs">${pos.closed_at || 'N/A'}</div>
-                                    <div class="${reasonColor} text-xs mt-1 font-medium">${closeReason}</div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                `;
-            }
-
-            // Render AI logs
-            const aiLogsEl = document.getElementById('ai-logs');
-            if (ai_logs.length === 0) {
-                aiLogsEl.innerHTML = '<div class="empty-state text-center py-8 text-gray-400">No AI logs available</div>';
-            } else {
-                // Process decisions from AI logs (limit to 10 total decisions)
-                let aiLogItems = [];
-                let decisionCount = 0;
-                let totalCoinsAnalyzed = 0;
-                let preFilteredCount = 0;
-                const maxDecisions = 10;
-
-                for (const log of ai_logs) {
-                    if (decisionCount >= maxDecisions) break;
-
-                    // Check if this run had no decisions (pre-filtered or market too quiet)
-                    if (!log.decisions || log.decisions.length === 0) {
-                        // AI ran but made no decisions - show info message
-                        aiLogItems.push(`
-                            <div class="col-span-5 bg-dark-700/50 p-4 border-b border-dark-700 rounded">
-                                <div class="flex items-center gap-3">
-                                    <div class="text-blue-400 text-2xl">ℹ️</div>
-                                    <div>
-                                        <div class="text-gray-300 font-semibold">AI Analysis Completed - No Trades</div>
-                                        <div class="text-gray-400 text-sm mt-1">
-                                            ${log.created_at} - All coins filtered out (low confidence setups) or market volatility too low
-                                        </div>
-                                        <div class="text-yellow-400 text-xs mt-2">
-                                            ✅ Pre-filtering active: Only quality setups sent to AI
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `);
-                        decisionCount++; // Count as one "item" in display
-                        continue;
-                    }
-
-                    totalCoinsAnalyzed += log.decisions.length;
-
-                    for (const decision of log.decisions) {
-                        if (decisionCount >= maxDecisions) break;
-                        // Color code actions
-                        let actionClass = 'text-gray-400';
-                        let actionBadge = decision.action.toUpperCase();
-                        if (decision.action === 'buy') {
-                            actionClass = 'text-green-400 font-bold';
-                            actionBadge = '🟢 BUY';
-                        } else if (decision.action === 'close_profitable') {
-                            actionClass = 'text-blue-400 font-bold';
-                            actionBadge = '🔵 CLOSE';
-                        } else if (decision.action === 'stop_loss') {
-                            actionClass = 'text-red-400 font-bold';
-                            actionBadge = '🔴 STOP';
-                        } else if (decision.action === 'hold') {
-                            actionClass = 'text-yellow-400';
-                            actionBadge = '⚪ HOLD';
-                        }
-
-                        aiLogItems.push(`
-                            <div class="history-item grid grid-cols-5 p-3 border-b border-dark-700 hover:bg-dark-700/50 cursor-pointer ai-decision"
-                                 data-provider="${log.provider.replace(/"/g, '&quot;')}"
-                                 data-decision="${encodeURIComponent(JSON.stringify(decision))}"
-                                 data-created-at="${log.created_at.replace(/"/g, '&quot;')}">
-                                <div class="font-medium text-white">${decision.symbol}</div>
-                                <div class="${actionClass}">${actionBadge}</div>
-                                <div class="text-gray-300">${(decision.confidence * 100).toFixed(0)}%</div>
-                                <div class="text-gray-400 text-sm">${log.created_at}</div>
-                                <div class="text-gray-400 truncate text-sm" title="${decision.reasoning}">${decision.reasoning.substring(0, 50)}...</div>
-                            </div>
-                        `);
-                        decisionCount++;
-                    }
-                }
-
-                // Add info banner at the top if we have decisions
-                let infoBanner = '';
-                if (totalCoinsAnalyzed > 0 && totalCoinsAnalyzed < 15) {
-                    preFilteredCount = 15 - totalCoinsAnalyzed;
-                    infoBanner = `
-                        <div class="bg-blue-900/20 border border-blue-800 p-3 mb-3 rounded">
-                            <div class="flex items-center gap-2 text-blue-300 text-sm">
-                                <span>⚡</span>
-                                <span><strong>Pre-filtering active:</strong> ${totalCoinsAnalyzed} coins analyzed, ${preFilteredCount} filtered out (saved ~${Math.round((preFilteredCount / 15) * 100)}% AI tokens)</span>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                aiLogsEl.innerHTML = `
-                    ${infoBanner}
-                    <div class="grid grid-cols-5 bg-dark-700 text-gray-300 font-semibold p-3">
-                        <div>Symbol</div>
-                        <div>Action</div>
-                        <div>Confidence</div>
-                        <div>Time</div>
-                        <div>Reasoning</div>
-                    </div>
-                    ${aiLogItems.join('')}
-                `;
-            }
-
-            // Render HOLD reasons (Why Not Bought)
-            const holdReasonsEl = document.getElementById('hold-reasons');
-            if (!hold_reasons || hold_reasons.length === 0) {
-                holdReasonsEl.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-400">No HOLD decisions in last AI run</td></tr>';
-            } else {
-                holdReasonsEl.innerHTML = hold_reasons.map(hold => {
-                    const confidenceClass = hold.confidence >= 70 ? 'text-yellow-400' : 'text-gray-400';
-                    return `
-                        <tr class="hover:bg-dark-700/50">
-                            <td class="px-4 py-3 font-medium text-white">${hold.symbol}</td>
-                            <td class="px-4 py-3 ${confidenceClass}">${hold.confidence}%</td>
-                            <td class="px-4 py-3 text-gray-300 text-sm">${hold.reason}</td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-
-            // Last AI run
-            document.getElementById('last-ai-run').textContent = last_ai_run;
-
-            // Render PNL Chart
-            if (pnl_chart && pnl_chart.length > 0) {
-                renderPnlChart(pnl_chart);
-            }
-
-            // Render Market Indicators
-            if (market_indicators && market_indicators.length > 0) {
-                renderMarketIndicators(market_indicators);
-            }
-
-            // 🛡️ Render Risk Management Status
-            if (data.risk_management) {
-                const { sleep_mode, daily_drawdown, cluster_loss } = data.risk_management;
-
-                // Sleep Mode
-                const sleepBadge = document.getElementById('sleep-mode-badge');
-                const sleepDetails = document.getElementById('sleep-mode-details');
-
-                if (sleep_mode.enabled) {
-                    if (sleep_mode.active) {
-                        sleepBadge.className = 'px-2 py-1 text-xs rounded-md bg-yellow-900/50 text-yellow-300';
-                        sleepBadge.textContent = '🌙 Active';
-                        sleepDetails.innerHTML = `
-                            <div class="text-yellow-300">Low liquidity hours</div>
-                            <div class="text-gray-400 text-xs">UTC: ${sleep_mode.hours_utc}</div>
-                            <div class="text-gray-400 text-xs">Max ${sleep_mode.max_positions} positions allowed</div>
-                            <div class="text-gray-400 text-xs">Current hour: ${sleep_mode.current_utc_hour}:00 UTC</div>
-                        `;
-                    } else {
-                        sleepBadge.className = 'px-2 py-1 text-xs rounded-md bg-green-900/50 text-green-300';
-                        sleepBadge.textContent = '✅ Normal';
-                        sleepDetails.innerHTML = `
-                            <div class="text-green-300">Full trading hours</div>
-                            <div class="text-gray-400 text-xs">Sleep: UTC ${sleep_mode.hours_utc}</div>
-                            <div class="text-gray-400 text-xs">Current: ${sleep_mode.current_utc_hour}:00 UTC</div>
-                        `;
-                    }
-                } else {
-                    sleepBadge.className = 'px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-400';
-                    sleepBadge.textContent = 'Disabled';
-                    sleepDetails.innerHTML = '<div class="text-gray-400">Sleep mode disabled</div>';
-                }
-
-                // Daily Drawdown
-                const drawdownBadge = document.getElementById('drawdown-badge');
-                const drawdownDetails = document.getElementById('drawdown-details');
-
-                if (daily_drawdown.enabled) {
-                    const currentPnl = daily_drawdown.current_pnl_percent;
-                    const maxAllowed = daily_drawdown.max_allowed_percent;
-                    const pnlColor = currentPnl < 0 ? 'text-red-300' : 'text-green-300';
-
-                    if (daily_drawdown.limit_hit) {
-                        drawdownBadge.className = 'px-2 py-1 text-xs rounded-md bg-red-900/50 text-red-300';
-                        drawdownBadge.textContent = '🚨 Limit Hit';
-                        drawdownDetails.innerHTML = `
-                            <div class="text-red-300">Trading paused!</div>
-                            <div class="text-gray-400 text-xs">Cooldown: ${daily_drawdown.cooldown_until}</div>
-                            <div class="text-gray-400 text-xs">Today's P&L: <span class="${pnlColor}">${currentPnl.toFixed(2)}%</span></div>
-                        `;
-                    } else {
-                        const usedPct = Math.abs(currentPnl / maxAllowed) * 100;
-                        const badgeColor = usedPct > 75 ? 'bg-orange-900/50 text-orange-300' :
-                                          usedPct > 50 ? 'bg-yellow-900/50 text-yellow-300' :
-                                          'bg-green-900/50 text-green-300';
-                        drawdownBadge.className = `px-2 py-1 text-xs rounded-md ${badgeColor}`;
-                        drawdownBadge.textContent = `${Math.abs(currentPnl).toFixed(1)}% / ${maxAllowed}%`;
-                        drawdownDetails.innerHTML = `
-                            <div class="${pnlColor}">Today: ${currentPnl.toFixed(2)}%</div>
-                            <div class="text-gray-400 text-xs">Limit: ${maxAllowed}%</div>
-                            <div class="text-gray-400 text-xs">Trades: ${daily_drawdown.trades_today} (${daily_drawdown.wins_today}W/${daily_drawdown.losses_today}L)</div>
-                        `;
-                    }
-                } else {
-                    drawdownBadge.className = 'px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-400';
-                    drawdownBadge.textContent = 'Disabled';
-                    drawdownDetails.innerHTML = '<div class="text-gray-400">Drawdown protection disabled</div>';
-                }
-
-                // Cluster Loss
-                const clusterBadge = document.getElementById('cluster-badge');
-                const clusterDetails = document.getElementById('cluster-details');
-
-                if (cluster_loss.enabled) {
-                    if (cluster_loss.in_cooldown) {
-                        clusterBadge.className = 'px-2 py-1 text-xs rounded-md bg-red-900/50 text-red-300';
-                        clusterBadge.textContent = '⏸️ Cooldown';
-                        clusterDetails.innerHTML = `
-                            <div class="text-red-300">Trading paused</div>
-                            <div class="text-gray-400 text-xs">Consecutive losses detected</div>
-                            <div class="text-gray-400 text-xs">Preventing emotional trading</div>
-                        `;
-                    } else {
-                        clusterBadge.className = 'px-2 py-1 text-xs rounded-md bg-green-900/50 text-green-300';
-                        clusterBadge.textContent = '✅ OK';
-                        clusterDetails.innerHTML = `
-                            <div class="text-green-300">No cluster losses</div>
-                            <div class="text-gray-400 text-xs">Trigger: ${cluster_loss.trigger_count} consecutive losses</div>
-                            <div class="text-gray-400 text-xs">Monitoring active</div>
-                        `;
-                    }
-                } else {
-                    clusterBadge.className = 'px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-400';
-                    clusterBadge.textContent = 'Disabled';
-                    clusterDetails.innerHTML = '<div class="text-gray-400">Cluster loss protection disabled</div>';
-                }
-            }
+                }).join('')}
+            `;
         }
 
         function renderPnlChart(chartData) {
             const ctx = document.getElementById('pnlChart').getContext('2d');
-
-            // Destroy previous chart if it exists
-            if (pnlChartInstance) {
-                pnlChartInstance.destroy();
-            }
-
-            const labels = chartData.map(d => d.date);
-            const dailyPnl = chartData.map(d => d.daily_pnl);
-            const cumulativePnl = chartData.map(d => d.cumulative_pnl);
+            if (pnlChartInstance) pnlChartInstance.destroy();
 
             pnlChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: 'Daily P&L',
-                            data: dailyPnl,
-                            borderColor: 'rgb(59, 130, 246)',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Cumulative P&L',
-                            data: cumulativePnl,
-                            borderColor: 'rgb(34, 197, 94)',
-                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.4,
-                            yAxisID: 'y1'
-                        }
-                    ]
+                    labels: chartData.map(d => d.date),
+                    datasets: [{
+                        label: 'Daily P&L',
+                        data: chartData.map(d => d.daily_pnl),
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: 'Cumulative P&L',
+                        data: chartData.map(d => d.cumulative_pnl),
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
                     plugins: {
                         legend: {
-                            display: true,
-                            position: 'top',
-                            labels: {
-                                color: '#9ca3af',
-                                font: {
-                                    size: 12
-                                }
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                            titleColor: '#fff',
-                            bodyColor: '#9ca3af',
-                            borderColor: '#374151',
-                            borderWidth: 1,
-                            padding: 12,
-                            displayColors: true,
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += '$' + context.parsed.y.toFixed(2);
-                                    }
-                                    return label;
-                                }
-                            }
+                            labels: { color: '#9ca3af', font: { size: 12 } }
                         }
                     },
                     scales: {
                         x: {
-                            grid: {
-                                color: '#374151',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#9ca3af',
-                                font: {
-                                    size: 11
-                                }
-                            }
+                            grid: { color: '#374151' },
+                            ticks: { color: '#9ca3af', font: { size: 11 } }
                         },
                         y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            grid: {
-                                color: '#374151',
-                                drawBorder: false
-                            },
+                            grid: { color: '#374151' },
                             ticks: {
                                 color: '#9ca3af',
-                                font: {
-                                    size: 11
-                                },
-                                callback: function(value) {
-                                    return '$' + value.toFixed(0);
-                                }
-                            }
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            grid: {
-                                drawOnChartArea: false,
-                            },
-                            ticks: {
-                                color: '#9ca3af',
-                                font: {
-                                    size: 11
-                                },
-                                callback: function(value) {
-                                    return '$' + value.toFixed(0);
-                                }
+                                font: { size: 11 },
+                                callback: value => '$' + value.toFixed(0)
                             }
                         }
                     }
@@ -1166,251 +628,159 @@
 
         function renderMarketIndicators(indicators) {
             const tbody = document.getElementById('market-indicators');
-
             if (indicators.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No market data available</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No market data</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = indicators.map(ind => {
-                // Safe number conversion helper
-                const toNum = (val) => val ? parseFloat(val) : 0;
+            const toNum = (val) => val ? parseFloat(val) : 0;
 
-                // Determine trend color
+            tbody.innerHTML = indicators.map(ind => {
                 const ema20 = toNum(ind.ema20);
                 const ema50 = toNum(ind.ema50);
                 const trendUp = ema20 > ema50 && ema50 > 0;
                 const trendColor = trendUp ? 'text-green-400' : 'text-red-400';
-                const trendEmoji = trendUp ? '📈' : '📉';
                 const emaDiff = ema50 > 0 ? ((ema20 / ema50 * 100) - 100).toFixed(2) : '0.00';
 
-                // MACD color
                 const macd = toNum(ind.macd);
                 const macdSignal = toNum(ind.macd_signal);
                 const macdPositive = macd > macdSignal;
                 const macdColor = macdPositive ? 'text-green-400' : 'text-red-400';
-                const macdDiff = (macd - macdSignal).toFixed(2);
 
-                // RSI color
                 const rsi = toNum(ind.rsi);
                 let rsiColor = 'text-yellow-400';
-                if (rsi < 30) rsiColor = 'text-green-400';  // Oversold
-                else if (rsi > 70) rsiColor = 'text-red-400';  // Overbought
-                const rsiDisplay = rsi > 0 ? rsi.toFixed(1) : 'N/A';
-
-                // Volume
-                const volume = toNum(ind.volume);
-                const volumeDisplay = volume > 0 ? (volume / 1000000).toFixed(2) + 'M' : 'N/A';
-
-                // 4H Trend
-                let trend4h = 'N/A';
-                let trend4hColor = 'text-gray-400';
-                if (ind.trend_4h) {
-                    const trend4hEma20 = toNum(ind.trend_4h.ema20);
-                    const trend4hEma50 = toNum(ind.trend_4h.ema50);
-                    const trend4hUp = trend4hEma20 > trend4hEma50 && trend4hEma50 > 0;
-                    trend4hColor = trend4hUp ? 'text-green-400' : 'text-red-400';
-                    const adx = ind.trend_4h.adx ? toNum(ind.trend_4h.adx).toFixed(1) : 'N/A';
-                    trend4h = `${trend4hUp ? '🟢' : '🔴'} ADX: ${adx}`;
-                }
+                if (rsi < 30) rsiColor = 'text-green-400';
+                else if (rsi > 70) rsiColor = 'text-red-400';
 
                 return `
                     <tr class="hover:bg-dark-700/50">
                         <td class="px-4 py-3 font-medium text-white">${ind.symbol}</td>
-                        <td class="px-4 py-3 text-gray-300">${formatMoney(ind.price || 0)}</td>
-                        <td class="px-4 py-3 ${trendColor}">
-                            ${trendEmoji} ${emaDiff}%
-                        </td>
-                        <td class="px-4 py-3 ${macdColor}">
-                            ${macdPositive ? '🟢' : '🔴'} ${macdDiff}
-                        </td>
-                        <td class="px-4 py-3 ${rsiColor}">
-                            ${rsiDisplay}
-                        </td>
-                        <td class="px-4 py-3 text-gray-300">
-                            ${volumeDisplay}
-                        </td>
-                        <td class="px-4 py-3 ${trend4hColor}">
-                            ${trend4h}
-                        </td>
-                        <td class="px-4 py-3 text-gray-400 text-xs">
-                            ${ind.updated_at || 'N/A'}
-                        </td>
+                        <td class="px-4 py-3 text-gray-300">${formatMoney(ind.price)}</td>
+                        <td class="px-4 py-3 ${trendColor}">${trendUp ? '📈' : '📉'} ${emaDiff}%</td>
+                        <td class="px-4 py-3 ${macdColor}">${macdPositive ? '🟢' : '🔴'} ${(macd - macdSignal).toFixed(2)}</td>
+                        <td class="px-4 py-3 ${rsiColor}">${rsi > 0 ? rsi.toFixed(1) : 'N/A'}</td>
+                        <td class="px-4 py-3 text-gray-300">${toNum(ind.volume) > 0 ? (toNum(ind.volume) / 1000000).toFixed(2) + 'M' : 'N/A'}</td>
+                        <td class="px-4 py-3 text-gray-400">${ind.trend_4h ? '🟢' : 'N/A'}</td>
+                        <td class="px-4 py-3 text-gray-400 text-xs">${ind.updated_at || 'N/A'}</td>
                     </tr>
                 `;
             }).join('');
+        }
+
+        function renderAiLogs(logs) {
+            const container = document.getElementById('ai-logs');
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="text-center py-8 text-gray-400">No AI logs</div>';
+                return;
+            }
+
+            let items = [];
+            for (const log of logs.slice(0, 10)) {
+                if (!log.decisions || log.decisions.length === 0) continue;
+                for (const decision of log.decisions.slice(0, 3)) {
+                    const actionColors = {
+                        buy: 'text-green-400',
+                        close_profitable: 'text-blue-400',
+                        stop_loss: 'text-red-400',
+                        hold: 'text-yellow-400'
+                    };
+                    items.push(`
+                        <div class="flex justify-between items-center py-2 border-b border-dark-700">
+                            <div class="font-medium text-white">${decision.symbol}</div>
+                            <div class="${actionColors[decision.action] || 'text-gray-400'}">${decision.action.toUpperCase()}</div>
+                            <div class="text-gray-400">${(decision.confidence * 100).toFixed(0)}%</div>
+                            <div class="text-gray-500 text-xs">${log.created_at}</div>
+                        </div>
+                    `);
+                }
+            }
+            container.innerHTML = items.join('');
+        }
+
+        function renderHoldReasons(reasons) {
+            const tbody = document.getElementById('hold-reasons');
+            if (!reasons || reasons.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-gray-400">No HOLD decisions</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = reasons.map(hold => `
+                <tr class="hover:bg-dark-700/50">
+                    <td class="px-4 py-3 font-medium text-white">${hold.symbol}</td>
+                    <td class="px-4 py-3 text-yellow-400">${hold.confidence}%</td>
+                    <td class="px-4 py-3 text-gray-300 text-sm">${hold.reason}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderRiskManagement(risk) {
+            if (!risk) return;
+
+            const { sleep_mode, daily_drawdown, cluster_loss } = risk;
+
+            // Sleep Mode
+            const sleepBadge = document.getElementById('sleep-mode-badge');
+            const sleepDetails = document.getElementById('sleep-mode-details');
+            if (sleep_mode.active) {
+                sleepBadge.className = 'px-2 py-1 text-xs rounded-md bg-yellow-900/50 text-yellow-300';
+                sleepBadge.textContent = '🌙 Active';
+                sleepDetails.innerHTML = `<div class="text-yellow-300">Low liquidity hours</div><div class="text-xs text-gray-400">UTC: ${sleep_mode.hours_utc}</div>`;
+            } else {
+                sleepBadge.className = 'px-2 py-1 text-xs rounded-md bg-green-900/50 text-green-300';
+                sleepBadge.textContent = '✅ Normal';
+                sleepDetails.innerHTML = `<div class="text-green-300">Full trading hours</div>`;
+            }
+
+            // Daily Drawdown
+            const drawdownBadge = document.getElementById('drawdown-badge');
+            const drawdownDetails = document.getElementById('drawdown-details');
+            if (daily_drawdown.limit_hit) {
+                drawdownBadge.className = 'px-2 py-1 text-xs rounded-md bg-red-900/50 text-red-300';
+                drawdownBadge.textContent = '🚨 Limit Hit';
+                drawdownDetails.innerHTML = `<div class="text-red-300">Trading paused</div>`;
+            } else {
+                drawdownBadge.className = 'px-2 py-1 text-xs rounded-md bg-green-900/50 text-green-300';
+                drawdownBadge.textContent = '✅ OK';
+                drawdownDetails.innerHTML = `<div class="text-green-300">Within limits</div>`;
+            }
+
+            // Cluster Loss
+            const clusterBadge = document.getElementById('cluster-badge');
+            const clusterDetails = document.getElementById('cluster-details');
+            if (cluster_loss.in_cooldown) {
+                clusterBadge.className = 'px-2 py-1 text-xs rounded-md bg-red-900/50 text-red-300';
+                clusterBadge.textContent = '⏸️ Cooldown';
+                clusterDetails.innerHTML = `<div class="text-red-300">Trading paused</div>`;
+            } else {
+                clusterBadge.className = 'px-2 py-1 text-xs rounded-md bg-green-900/50 text-green-300';
+                clusterBadge.textContent = '✅ OK';
+                clusterDetails.innerHTML = `<div class="text-green-300">No cluster losses</div>`;
+            }
         }
 
         async function loadData() {
             try {
                 const response = await fetch(API_URL);
                 const result = await response.json();
-
                 if (result.success) {
                     renderDashboard(result.data);
-                } else {
-                    console.error('Error:', result.error);
                 }
             } catch (error) {
                 console.error('Failed to load data:', error);
             }
         }
 
-        // Modal functionality
-        function openAiModal(provider, decision, createdAt) {
-            const modal = document.getElementById('ai-modal');
-            const modalContent = document.getElementById('ai-modal-content');
-            
-            // Create detailed view of the decision
-            modalContent.innerHTML = `
-                <div class="decision-detail bg-dark-700 rounded-lg p-4 mb-6">
-                    <div class="decision-symbol text-xl font-bold text-white mb-4">${decision.symbol} AI Decision</div>
-                    
-                    <div class="decision-field flex justify-between py-2 border-b border-dark-600">
-                        <span class="decision-label w-32 text-gray-400">Provider:</span>
-                        <span class="decision-value text-white">${provider}</span>
-                    </div>
-                    
-                    <div class="decision-field flex justify-between py-2 border-b border-dark-600">
-                        <span class="decision-label w-32 text-gray-400">Action:</span>
-                        <span class="decision-value text-white">${decision.action}</span>
-                    </div>
-                    
-                    <div class="decision-field flex justify-between py-2 border-b border-dark-600">
-                        <span class="decision-label w-32 text-gray-400">Confidence:</span>
-                        <span class="decision-value text-white">${(decision.confidence * 100).toFixed(2)}%</span>
-                    </div>
-                    
-                    <div class="decision-field flex justify-between py-2 border-b border-dark-600">
-                        <span class="decision-label w-32 text-gray-400">Created:</span>
-                        <span class="decision-value text-white">${createdAt}</span>
-                    </div>
-                    
-                    ${decision.entry_price ? `
-                    <div class="decision-field flex justify-between py-2 border-b border-dark-600">
-                        <span class="decision-label w-32 text-gray-400">Entry Price:</span>
-                        <span class="decision-value text-white">${formatMoney(decision.entry_price)}</span>
-                    </div>
-                    ` : ''}
-                    
-                    ${decision.target_price ? `
-                    <div class="decision-field flex justify-between py-2 border-b border-dark-600">
-                        <span class="decision-label w-32 text-gray-400">Target Price:</span>
-                        <span class="decision-value text-white">${formatMoney(decision.target_price)}</span>
-                    </div>
-                    ` : ''}
-                    
-                    ${decision.stop_price ? `
-                    <div class="decision-field flex justify-between py-2 border-b border-dark-600">
-                        <span class="decision-label w-32 text-gray-400">Stop Price:</span>
-                        <span class="decision-value text-white">${formatMoney(decision.stop_price)}</span>
-                    </div>
-                    ` : ''}
-                    
-                    ${decision.invalidation ? `
-                    <div class="decision-field flex justify-between py-2 border-b border-dark-600">
-                        <span class="decision-label w-32 text-gray-400">Invalidation:</span>
-                        <span class="decision-value text-white">${decision.invalidation}</span>
-                    </div>
-                    ` : ''}
-                    
-                    <div class="decision-reasoning bg-dark-600 rounded p-3 mt-4 italic">
-                        <strong class="text-gray-300">Reasoning:</strong><br>
-                        <span class="text-gray-200">${decision.reasoning}</span>
-                    </div>
-                </div>
-            `;
-            
-            // Show the modal
-            modal.classList.remove('hidden');
-        }
-        
-        // Set up event listeners after a short delay to ensure DOM is loaded
-        setTimeout(function() {
-            // Initial load
-            loadData();
-            
-            // Auto refresh every 60 seconds
-            setInterval(loadData, 60000);
-            
-            // AI decision click handlers
-            document.addEventListener('click', function(e) {
-                if (e.target.closest('.ai-decision')) {
-                    const decisionElement = e.target.closest('.ai-decision');
-                    const provider = decisionElement.getAttribute('data-provider');
-                    const decision = JSON.parse(decodeURIComponent(decisionElement.getAttribute('data-decision')));
-                    const createdAt = decisionElement.getAttribute('data-created-at');
-                    
-                    openAiModal(provider, decision, createdAt);
-                }
-            });
-            
-            // Close AI modal
-            document.getElementById('close-ai-modal').addEventListener('click', function() {
-                document.getElementById('ai-modal').classList.add('hidden');
-            });
-            
-            // Close AI modal when clicking outside
-            document.getElementById('ai-modal').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    this.classList.add('hidden');
-                }
-            });
+        // Modal handlers
+        document.getElementById('strategy-detail-btn')?.addEventListener('click', () => {
+            document.getElementById('strategy-modal').classList.remove('hidden');
+        });
+        document.getElementById('close-strategy-modal')?.addEventListener('click', () => {
+            document.getElementById('strategy-modal').classList.add('hidden');
+        });
 
-            // Strategy button click handler
-            document.getElementById('strategy-btn').addEventListener('click', function() {
-                document.getElementById('strategy-modal').classList.remove('hidden');
-            });
-
-            // Close strategy modal
-            document.getElementById('close-strategy-modal').addEventListener('click', function() {
-                document.getElementById('strategy-modal').classList.add('hidden');
-            });
-
-            // Close strategy modal when clicking outside
-            document.getElementById('strategy-modal').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    this.classList.add('hidden');
-                }
-            });
-
-            // Menu toggle functionality
-            const menuToggle = document.getElementById('menu-toggle');
-            const menuModal = document.getElementById('menu-modal');
-            const closeMenu = document.getElementById('close-menu');
-            
-            if (menuToggle) {
-                menuToggle.addEventListener('click', function() {
-                    if (menuModal) menuModal.classList.remove('hidden');
-                });
-            }
-            
-            if (closeMenu) {
-                closeMenu.addEventListener('click', function() {
-                    if (menuModal) menuModal.classList.add('hidden');
-                });
-            }
-            
-            // Close menu modal when clicking outside
-            if (menuModal) {
-                menuModal.addEventListener('click', function(event) {
-                    if (event.target === this) {
-                        this.classList.add('hidden');
-                    }
-                });
-            }
-            
-
-        }, 100); // Small delay to ensure DOM is loaded
+        // Load data on start and refresh every minute
+        loadData();
+        setInterval(loadData, 60000);
     </script>
-    
-    <footer class="mt-12 py-8 text-center">
-        <p class="text-gray-500 text-sm">
-            Eren Ilhan <br>erenilhan1(at)gmail.com
-        </p>
-        <a href="https://erenilhan.com" target="_blank" class="block text-blue-500 hover:text-blue-400 text-sm mt-2">
-            erenilhan.com
-        </a>
-    </footer>
 </body>
 </html>
