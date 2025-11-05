@@ -1135,26 +1135,24 @@ class TradeDashboardController extends Controller
         $indicators = [];
 
         foreach ($symbols as $symbol) {
-            // Get latest 3m timeframe data
-            $latest3m = \App\Models\MarketData::where('symbol', $symbol)
-                ->where('timeframe', '3m')
-                ->orderBy('timestamp', 'desc')
-                ->first();
+            // Get latest 3m timeframe data using model's static method
+            $latest3m = \App\Models\MarketData::getLatest($symbol, '3m');
 
             // Get latest 4h timeframe data
-            $latest4h = \App\Models\MarketData::where('symbol', $symbol)
-                ->where('timeframe', '4h')
-                ->orderBy('timestamp', 'desc')
-                ->first();
+            $latest4h = \App\Models\MarketData::getLatest($symbol, '4h');
 
             if ($latest3m) {
+                // Get ADX from indicators JSON if available
+                $indicatorsData = $latest4h->indicators ?? [];
+                $adx = $indicatorsData['adx'] ?? null;
+
                 $indicators[] = [
                     'symbol' => $symbol,
-                    'price' => $latest3m->close,
+                    'price' => $latest3m->price,
                     'ema20' => $latest3m->ema20,
                     'ema50' => $latest3m->ema50,
                     'macd' => $latest3m->macd,
-                    'macd_signal' => $latest3m->macd_signal,
+                    'macd_signal' => $indicatorsData['macd_signal'] ?? 0,
                     'rsi' => $latest3m->rsi7,
                     'rsi14' => $latest3m->rsi14,
                     'atr' => $latest3m->atr3,
@@ -1164,9 +1162,9 @@ class TradeDashboardController extends Controller
                     'trend_4h' => $latest4h ? [
                         'ema20' => $latest4h->ema20,
                         'ema50' => $latest4h->ema50,
-                        'adx' => $latest4h->adx,
+                        'adx' => $adx,
                     ] : null,
-                    'updated_at' => $latest3m->timestamp->diffForHumans(),
+                    'updated_at' => $latest3m->data_timestamp?->diffForHumans() ?? 'Never',
                 ];
             }
         }
