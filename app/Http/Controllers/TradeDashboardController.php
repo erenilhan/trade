@@ -480,6 +480,12 @@ class TradeDashboardController extends Controller
                 ],
             ];
 
+            // Get PNL chart data (last 7 days)
+            $pnlChartData = $this->getPnlChartData();
+
+            // Get current market indicators for all symbols
+            $marketIndicators = $this->getMarketIndicators();
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -500,6 +506,8 @@ class TradeDashboardController extends Controller
                     'ai_provider' => $aiProvider,
                     'ai_model' => $aiModel,
                     'ai_performance' => $aiPerformance,
+                    'pnl_chart' => $pnlChartData,
+                    'market_indicators' => $marketIndicators,
                     'stats' => [
                         'open_positions' => $positions->count(),
                         'total_trades' => $totalWins + $totalLosses,
@@ -1086,5 +1094,83 @@ class TradeDashboardController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Get PNL chart data for last 7 days
+     */
+    private function getPnlChartData(): array
+    {
+        $days = 7;
+        $chartData = [];
+        $cumulativePnl = 0;
+
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $date = now()->subDays($i)->startOfDay();
+            $endDate = $date->copy()->endOfDay();
+
+            // Get closed positions for this day
+            $dailyPnl = Position::where('is_open', false)
+                ->whereBetween('closed_at', [$date, $endDate])
+                ->sum('realized_pnl');
+
+            $cumulativePnl += $dailyPnl;
+
+            $chartData[] = [
+                'date' => $date->format('M d'),
+                'daily_pnl' => round($dailyPnl, 2),
+                'cumulative_pnl' => round($cumulativePnl, 2),
+            ];
+        }
+
+        return $chartData;
+    }
+
+    /**
+     * Get current market indicators for all trading symbols
+     */
+    private function getMarketIndicators(): array
+    {
+        $symbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT'];
+        $indicators = [];
+
+        foreach ($symbols as $symbol) {
+            // Get latest 3m timeframe data
+            $latest3m = \App\Models\MarketData::where('symbol', $symbol)
+                ->where('timeframe', '3m')
+                ->orderBy('timestamp', 'desc')
+                ->first();
+
+            // Get latest 4h timeframe data
+            $latest4h = \App\Models\MarketData::where('symbol', $symbol)
+                ->where('timeframe', '4h')
+                ->orderBy('timestamp', 'desc')
+                ->first();
+
+            if ($latest3m) {
+                $indicators[] = [
+                    'symbol' => $symbol,
+                    'price' => $latest3m->close,
+                    'ema20' => $latest3m->ema20,
+                    'ema50' => $latest3m->ema50,
+                    'macd' => $latest3m->macd,
+                    'macd_signal' => $latest3m->macd_signal,
+                    'rsi' => $latest3m->rsi7,
+                    'rsi14' => $latest3m->rsi14,
+                    'atr' => $latest3m->atr3,
+                    'volume' => $latest3m->volume,
+                    'funding_rate' => $latest3m->funding_rate,
+                    'open_interest' => $latest3m->open_interest,
+                    'trend_4h' => $latest4h ? [
+                        'ema20' => $latest4h->ema20,
+                        'ema50' => $latest4h->ema50,
+                        'adx' => $latest4h->adx,
+                    ] : null,
+                    'updated_at' => $latest3m->timestamp->diffForHumans(),
+                ];
+            }
+        }
+
+        return $indicators;
     }
 }

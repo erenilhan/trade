@@ -7,6 +7,9 @@
     
     <!-- Include Tailwind CSS from CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Include Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
     <!-- Enable dark mode support -->
     <script>
@@ -50,6 +53,17 @@
             </div>
             
             <div class="flex items-center space-x-4">
+                <!-- Admin Dashboard Link (if authenticated) -->
+                @auth
+                <a href="/admin" class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-purple-900/50 text-purple-300 hover:bg-purple-900/70 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Admin</span>
+                </a>
+                @endauth
+
                 <!-- AI Model Badge -->
                 <div class="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-indigo-900/50 text-indigo-300">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -169,6 +183,118 @@
                         <span id="cluster-badge" class="px-2 py-1 text-xs rounded-md bg-gray-700 text-gray-300">Checking...</span>
                     </div>
                     <div id="cluster-details" class="text-sm text-gray-300 space-y-1"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PNL Performance Chart -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-white mb-4">📊 Performance (Last 7 Days)</h2>
+            <div class="bg-dark-800 rounded-lg p-6 border border-dark-700">
+                <canvas id="pnlChart" class="w-full" height="100"></canvas>
+            </div>
+        </div>
+
+        <!-- How It Works -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-white mb-4">🤖 How It Works</h2>
+            <div class="bg-gradient-to-br from-dark-800 to-dark-900 rounded-lg p-6 border border-dark-700">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <!-- Step 1 -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-blue-900/50 rounded-full flex items-center justify-center">
+                            <span class="text-2xl">📡</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-blue-400 mb-2">1. Data Collection</h3>
+                        <p class="text-sm text-gray-400">
+                            Every 3 minutes, collect market data for 6 coins (BTC, ETH, SOL, BNB, XRP, DOGE)
+                        </p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-purple-900/50 rounded-full flex items-center justify-center">
+                            <span class="text-2xl">📈</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-purple-400 mb-2">2. Technical Analysis</h3>
+                        <p class="text-sm text-gray-400">
+                            Calculate 10+ indicators: EMA, MACD, RSI, ATR, Volume, Funding Rate, Open Interest
+                        </p>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-green-900/50 rounded-full flex items-center justify-center">
+                            <span class="text-2xl">🤖</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-green-400 mb-2">3. AI Decision</h3>
+                        <p class="text-sm text-gray-400">
+                            AI analyzes all data and decides: BUY, HOLD, CLOSE or STOP for each coin
+                        </p>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-orange-900/50 rounded-full flex items-center justify-center">
+                            <span class="text-2xl">⚡</span>
+                        </div>
+                        <h3 class="text-lg font-semibold text-orange-400 mb-2">4. Trade Execution</h3>
+                        <p class="text-sm text-gray-400">
+                            Execute trades with 2x leverage, set stop-loss & take-profit, monitor 24/7
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Additional Info -->
+                <div class="mt-6 pt-6 border-t border-dark-700">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div>
+                            <div class="text-2xl font-bold text-blue-400">10min</div>
+                            <div class="text-xs text-gray-500">AI Analysis Cycle</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-green-400">1min</div>
+                            <div class="text-xs text-gray-500">Position Monitoring</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-purple-400">6</div>
+                            <div class="text-xs text-gray-500">Cryptocurrencies</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-orange-400">2x</div>
+                            <div class="text-xs text-gray-500">Max Leverage</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Market Indicators -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-white mb-4">📊 Live Market Indicators</h2>
+            <div class="bg-dark-800 rounded-lg overflow-hidden border border-dark-700">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-dark-700">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Symbol</th>
+                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Price</th>
+                                <th class="px-4 py-3 text-left text-gray-400 font-medium">EMA20/50</th>
+                                <th class="px-4 py-3 text-left text-gray-400 font-medium">MACD</th>
+                                <th class="px-4 py-3 text-left text-gray-400 font-medium">RSI(7)</th>
+                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Volume</th>
+                                <th class="px-4 py-3 text-left text-gray-400 font-medium">4H Trend</th>
+                                <th class="px-4 py-3 text-left text-gray-400 font-medium">Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody id="market-indicators" class="divide-y divide-dark-700">
+                            <tr>
+                                <td colspan="8" class="px-4 py-8 text-center text-gray-400">
+                                    Loading indicators...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -381,8 +507,10 @@
             return (parseFloat(value) || 0).toFixed(2) + '%';
         }
 
+        let pnlChartInstance = null; // Store chart instance globally
+
         function renderDashboard(data) {
-            const { account, positions, closed_positions, ai_logs, hold_reasons, last_ai_run, ai_provider, ai_model, stats } = data;
+            const { account, positions, closed_positions, ai_logs, hold_reasons, last_ai_run, ai_provider, ai_model, stats, pnl_chart, market_indicators } = data;
 
             // Update account stats
             document.getElementById('total-value').textContent = formatMoney(account.total_value);
@@ -795,6 +923,16 @@
             // Last AI run
             document.getElementById('last-ai-run').textContent = last_ai_run;
 
+            // Render PNL Chart
+            if (pnl_chart && pnl_chart.length > 0) {
+                renderPnlChart(pnl_chart);
+            }
+
+            // Render Market Indicators
+            if (market_indicators && market_indicators.length > 0) {
+                renderMarketIndicators(market_indicators);
+            }
+
             // 🛡️ Render Risk Management Status
             if (data.risk_management) {
                 const { sleep_mode, daily_drawdown, cluster_loss } = data.risk_management;
@@ -892,6 +1030,198 @@
                     clusterDetails.innerHTML = '<div class="text-gray-400">Cluster loss protection disabled</div>';
                 }
             }
+        }
+
+        function renderPnlChart(chartData) {
+            const ctx = document.getElementById('pnlChart').getContext('2d');
+
+            // Destroy previous chart if it exists
+            if (pnlChartInstance) {
+                pnlChartInstance.destroy();
+            }
+
+            const labels = chartData.map(d => d.date);
+            const dailyPnl = chartData.map(d => d.daily_pnl);
+            const cumulativePnl = chartData.map(d => d.cumulative_pnl);
+
+            pnlChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Daily P&L',
+                            data: dailyPnl,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Cumulative P&L',
+                            data: cumulativePnl,
+                            borderColor: 'rgb(34, 197, 94)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#9ca3af',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#9ca3af',
+                            borderColor: '#374151',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += '$' + context.parsed.y.toFixed(2);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: '#374151',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#9ca3af',
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: {
+                                color: '#374151',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#9ca3af',
+                                font: {
+                                    size: 11
+                                },
+                                callback: function(value) {
+                                    return '$' + value.toFixed(0);
+                                }
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                            ticks: {
+                                color: '#9ca3af',
+                                font: {
+                                    size: 11
+                                },
+                                callback: function(value) {
+                                    return '$' + value.toFixed(0);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderMarketIndicators(indicators) {
+            const tbody = document.getElementById('market-indicators');
+
+            if (indicators.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No market data available</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = indicators.map(ind => {
+                // Determine trend color
+                const trendUp = ind.ema20 > ind.ema50;
+                const trendColor = trendUp ? 'text-green-400' : 'text-red-400';
+                const trendEmoji = trendUp ? '📈' : '📉';
+
+                // MACD color
+                const macdPositive = ind.macd > ind.macd_signal;
+                const macdColor = macdPositive ? 'text-green-400' : 'text-red-400';
+
+                // RSI color
+                let rsiColor = 'text-yellow-400';
+                if (ind.rsi < 30) rsiColor = 'text-green-400';  // Oversold
+                else if (ind.rsi > 70) rsiColor = 'text-red-400';  // Overbought
+
+                // 4H Trend
+                let trend4h = 'N/A';
+                let trend4hColor = 'text-gray-400';
+                if (ind.trend_4h) {
+                    const trend4hUp = ind.trend_4h.ema20 > ind.trend_4h.ema50;
+                    trend4hColor = trend4hUp ? 'text-green-400' : 'text-red-400';
+                    const adx = ind.trend_4h.adx ? ind.trend_4h.adx.toFixed(1) : 'N/A';
+                    trend4h = `${trend4hUp ? '🟢' : '🔴'} ADX: ${adx}`;
+                }
+
+                return `
+                    <tr class="hover:bg-dark-700/50">
+                        <td class="px-4 py-3 font-medium text-white">${ind.symbol}</td>
+                        <td class="px-4 py-3 text-gray-300">${formatMoney(ind.price)}</td>
+                        <td class="px-4 py-3 ${trendColor}">
+                            ${trendEmoji} ${(ind.ema20 / ind.ema50 * 100 - 100).toFixed(2)}%
+                        </td>
+                        <td class="px-4 py-3 ${macdColor}">
+                            ${macdPositive ? '🟢' : '🔴'} ${(ind.macd - ind.macd_signal).toFixed(2)}
+                        </td>
+                        <td class="px-4 py-3 ${rsiColor}">
+                            ${ind.rsi.toFixed(1)}
+                        </td>
+                        <td class="px-4 py-3 text-gray-300">
+                            ${(ind.volume / 1000000).toFixed(2)}M
+                        </td>
+                        <td class="px-4 py-3 ${trend4hColor}">
+                            ${trend4h}
+                        </td>
+                        <td class="px-4 py-3 text-gray-400 text-xs">
+                            ${ind.updated_at}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         async function loadData() {
