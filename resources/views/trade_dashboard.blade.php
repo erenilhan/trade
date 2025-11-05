@@ -1173,51 +1173,68 @@
             }
 
             tbody.innerHTML = indicators.map(ind => {
+                // Safe number conversion helper
+                const toNum = (val) => val ? parseFloat(val) : 0;
+
                 // Determine trend color
-                const trendUp = ind.ema20 > ind.ema50;
+                const ema20 = toNum(ind.ema20);
+                const ema50 = toNum(ind.ema50);
+                const trendUp = ema20 > ema50 && ema50 > 0;
                 const trendColor = trendUp ? 'text-green-400' : 'text-red-400';
                 const trendEmoji = trendUp ? '📈' : '📉';
+                const emaDiff = ema50 > 0 ? ((ema20 / ema50 * 100) - 100).toFixed(2) : '0.00';
 
                 // MACD color
-                const macdPositive = ind.macd > ind.macd_signal;
+                const macd = toNum(ind.macd);
+                const macdSignal = toNum(ind.macd_signal);
+                const macdPositive = macd > macdSignal;
                 const macdColor = macdPositive ? 'text-green-400' : 'text-red-400';
+                const macdDiff = (macd - macdSignal).toFixed(2);
 
                 // RSI color
+                const rsi = toNum(ind.rsi);
                 let rsiColor = 'text-yellow-400';
-                if (ind.rsi < 30) rsiColor = 'text-green-400';  // Oversold
-                else if (ind.rsi > 70) rsiColor = 'text-red-400';  // Overbought
+                if (rsi < 30) rsiColor = 'text-green-400';  // Oversold
+                else if (rsi > 70) rsiColor = 'text-red-400';  // Overbought
+                const rsiDisplay = rsi > 0 ? rsi.toFixed(1) : 'N/A';
+
+                // Volume
+                const volume = toNum(ind.volume);
+                const volumeDisplay = volume > 0 ? (volume / 1000000).toFixed(2) + 'M' : 'N/A';
 
                 // 4H Trend
                 let trend4h = 'N/A';
                 let trend4hColor = 'text-gray-400';
                 if (ind.trend_4h) {
-                    const trend4hUp = ind.trend_4h.ema20 > ind.trend_4h.ema50;
+                    const trend4hEma20 = toNum(ind.trend_4h.ema20);
+                    const trend4hEma50 = toNum(ind.trend_4h.ema50);
+                    const trend4hUp = trend4hEma20 > trend4hEma50 && trend4hEma50 > 0;
                     trend4hColor = trend4hUp ? 'text-green-400' : 'text-red-400';
-                    const adx = ind.trend_4h.adx ? ind.trend_4h.adx.toFixed(1) : 'N/A';
+                    const adx = ind.trend_4h.adx ? toNum(ind.trend_4h.adx).toFixed(1) : 'N/A';
                     trend4h = `${trend4hUp ? '🟢' : '🔴'} ADX: ${adx}`;
                 }
 
                 return `
                     <tr class="hover:bg-dark-700/50">
                         <td class="px-4 py-3 font-medium text-white">${ind.symbol}</td>
-                        <td class="px-4 py-3 text-gray-300">${formatMoney(ind.price)}</td>
+                        <td class="px-4 py-3 text-gray-300">${formatMoney(ind.price || 0)}</td>
                         <td class="px-4 py-3 ${trendColor}">
-                            ${trendEmoji} ${(ind.ema20 / ind.ema50 * 100 - 100).toFixed(2)}%
+                            ${trendEmoji} ${emaDiff}%
                         </td>
                         <td class="px-4 py-3 ${macdColor}">
-                            ${macdPositive ? '🟢' : '🔴'} ${(ind.macd - ind.macd_signal).toFixed(2)}
+                            ${macdPositive ? '🟢' : '🔴'} ${macdDiff}
                         </td>
                         <td class="px-4 py-3 ${rsiColor}">
-                            ${ind.rsi.toFixed(1)}
+                            ${rsiDisplay}
                         </td>
                         <td class="px-4 py-3 text-gray-300">
-                            ${(ind.volume / 1000000).toFixed(2)}M
+                            ${volumeDisplay}
                         </td>
                         <td class="px-4 py-3 ${trend4hColor}">
                             ${trend4h}
                         </td>
                         <td class="px-4 py-3 text-gray-400 text-xs">
-                            ${ind.updated_at}
+                            ${ind.updated_at || 'N/A'}
                         </td>
                     </tr>
                 `;
