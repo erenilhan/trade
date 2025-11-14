@@ -124,19 +124,22 @@ class MultiCoinAIService
                 $currentHour = now()->hour; // UTC hour
                 $isUSHours = $currentHour >= 13 && $currentHour <= 22; // US trading hours (13:00-22:00 UTC)
 
-                // US hours: more lenient (1.0x), Off-hours: stricter (1.2x)
-                $minVolumeRatio = $isUSHours ? 1.0 : 1.2;
+                // 2025 OPTIMIZATION: Stricter volume filters
+                // US hours: stricter (1.3x), Off-hours: even stricter (1.5x)
+                $minVolumeRatio = $isUSHours ? 1.3 : 1.5;
 
                 Log::info("⏰ Current hour: {$currentHour} UTC, US Hours: " . ($isUSHours ? 'YES' : 'NO') . ", Min Volume: {$minVolumeRatio}x");
 
                 // Determine 4H trend direction first
                 $is4hUptrend = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0);
                 $is4hDowntrend = ($data4h['ema20'] ?? 0) < ($data4h['ema50'] ?? 0);
-                $adxOk = ($data4h['adx'] ?? 0) > 18; // Relaxed from 20 to 18
 
-                // If 4H ADX too weak (< 15), skip
-                if (($data4h['adx'] ?? 0) < 15) {
-                    Log::info("⏭️ Pre-filtered {$symbol} - 4H too weak (ADX < 15)");
+                // 2025 OPTIMIZATION: Stronger ADX requirement (25+)
+                $adxOk = ($data4h['adx'] ?? 0) > 25; // Increased from 18 to 25 for stronger trends
+
+                // If 4H ADX too weak (< 20), skip - NO weak trends
+                if (($data4h['adx'] ?? 0) < 20) {
+                    Log::info("⏭️ Pre-filtered {$symbol} - 4H too weak (ADX < 20)");
                     continue;
                 }
 
@@ -236,6 +239,35 @@ class MultiCoinAIService
                 $prompt .= "MACD STATUS: ⚠️ NEUTRAL (mixed signals) - HOLD or low confidence\n\n";
             }
 
+            // 2025 NEW: Bollinger Bands analysis
+            $bbUpper = $data3m['indicators']['bb_upper'] ?? 0;
+            $bbLower = $data3m['indicators']['bb_lower'] ?? 0;
+            $bbMiddle = $data3m['indicators']['bb_middle'] ?? 0;
+            $percentB = $data3m['indicators']['bb_percent_b'] ?? 0.5;
+
+            if ($percentB < 0.2) {
+                $prompt .= "BOLLINGER BANDS: ✅ OVERSOLD (%B < 0.2) - Price near lower band, potential LONG reversal\n";
+            } elseif ($percentB > 0.8) {
+                $prompt .= "BOLLINGER BANDS: ✅ OVERBOUGHT (%B > 0.8) - Price near upper band, potential SHORT reversal\n";
+            } elseif ($percentB >= 0.4 && $percentB <= 0.6) {
+                $prompt .= "BOLLINGER BANDS: ⚠️ NEUTRAL (%B in middle) - No clear signal\n";
+            } else {
+                $prompt .= sprintf("BOLLINGER BANDS: %s (%%.2f)\n", $percentB);
+            }
+            $prompt .= sprintf("  Upper: %.2f | Middle: %.2f | Lower: %.2f\n\n", $bbUpper, $bbMiddle, $bbLower);
+
+            // 2025 NEW: Supertrend confirmation
+            $supertrendBullish = $data3m['indicators']['supertrend_is_bullish'] ?? false;
+            $supertrendBearish = $data3m['indicators']['supertrend_is_bearish'] ?? false;
+
+            if ($supertrendBullish) {
+                $prompt .= "SUPERTREND: ✅ BULLISH TREND - Strong confirmation for LONG positions\n\n";
+            } elseif ($supertrendBearish) {
+                $prompt .= "SUPERTREND: ✅ BEARISH TREND - Strong confirmation for SHORT positions\n\n";
+            } else {
+                $prompt .= "SUPERTREND: ⚠️ NEUTRAL - Trend unclear\n\n";
+            }
+
             // Core volume indicator with quality assessment
             $volumeRatio = $data3m['volume_ratio'] ?? 1.0;
             if ($volumeRatio >= 1.5) {
@@ -284,17 +316,18 @@ class MultiCoinAIService
             $atrWarning = $atrPercent > 8 ? '⚠️ TOO VOLATILE → HOLD' : '✅ OK';
 
             // Direction-aware 4H trend check (critical for determining LONG vs SHORT)
+            // 2025 OPTIMIZATION: Stricter ADX requirement (25+)
             $is4hUptrend = $data4h['ema20'] > ($data4h['ema50'] * 0.999);
-            $adxStrong = ($data4h['adx'] ?? 0) > 20;
+            $adxStrong = ($data4h['adx'] ?? 0) > 25; // Increased from 20 to 25
 
             if ($is4hUptrend && $adxStrong) {
-                $prompt .= "4H TREND: ✅ BULLISH UPTREND (EMA20 > EMA50, ADX > 20) - **Favor LONG positions**\n";
+                $prompt .= "4H TREND: ✅ STRONG BULLISH UPTREND (EMA20 > EMA50, ADX > 25) - **Favor LONG positions**\n";
             } elseif (!$is4hUptrend && $adxStrong) {
-                $prompt .= "4H TREND: ✅ BEARISH DOWNTREND (EMA20 < EMA50, ADX > 20) - **Favor SHORT positions**\n";
+                $prompt .= "4H TREND: ✅ STRONG BEARISH DOWNTREND (EMA20 < EMA50, ADX > 25) - **Favor SHORT positions**\n";
             } elseif ($is4hUptrend && !$adxStrong) {
-                $prompt .= "4H TREND: ⚠️ WEAK UPTREND (EMA20 > EMA50, ADX < 20) - Sideways, prefer HOLD\n";
+                $prompt .= "4H TREND: ⚠️ WEAK UPTREND (EMA20 > EMA50, ADX < 25) - Too weak, prefer HOLD\n";
             } else {
-                $prompt .= "4H TREND: ⚠️ WEAK DOWNTREND (EMA20 < EMA50, ADX < 20) - Sideways, prefer HOLD\n";
+                $prompt .= "4H TREND: ⚠️ WEAK DOWNTREND (EMA20 < EMA50, ADX < 25) - Too weak, prefer HOLD\n";
             }
 
             $prompt .= sprintf(

@@ -118,6 +118,15 @@ class MultiCoinTradingController extends Controller
 
                 Log::info("🎯 Decision for {$symbol}", ['action' => $action, 'confidence' => $confidence]);
 
+                // 2025 FIX: Skip TOO HIGH confidence (inverse correlation detected!)
+                // Analytics show: 80-84% confidence = 28.6% win rate (WORST!)
+                // vs 60-69% confidence = 57.1% win rate (BEST!)
+                if ($confidence > 0.82 && in_array($action, ['buy', 'sell'])) {
+                    Log::warning("🚨 {$symbol}: Suspiciously HIGH confidence ({$confidence}) - Analytics show this is a trap! Overriding to HOLD");
+                    $results[$symbol] = ['action' => 'hold', 'reason' => 'Overconfident AI (inverse correlation risk)'];
+                    continue;
+                }
+
                 // Skip if confidence too low
                 if ($confidence < 0.60 && $action !== 'hold') {
                     Log::warning("⚠️ {$symbol}: Confidence too low ({$confidence}), overriding to hold");
@@ -125,10 +134,10 @@ class MultiCoinTradingController extends Controller
                     continue;
                 }
 
-                // Reduce leverage for risky 75-79% confidence range (historically poor performance)
-                if ($confidence >= 0.75 && $confidence < 0.80 && in_array($action, ['buy', 'sell'])) {
+                // Reduce leverage for risky 75-82% confidence range (historically poor performance)
+                if ($confidence >= 0.75 && $confidence < 0.82 && in_array($action, ['buy', 'sell'])) {
                     $decision['leverage'] = min($decision['leverage'] ?? 2, 2); // Cap at 2x for this range
-                    Log::warning("⚠️ {$symbol}: Confidence {$confidence} in risky range (75-79%), capping leverage at 2x");
+                    Log::warning("⚠️ {$symbol}: Confidence {$confidence} in risky range (75-82%), capping leverage at 2x");
                 }
 
                 // Execute action
@@ -204,12 +213,27 @@ class MultiCoinTradingController extends Controller
             $entryPrice = $this->binance->fetchTicker($symbol)['last'];
             $targetPrice = $entryPrice * 1.06; // +6% profit target (trailing L2 will activate here)
 
-            // Dynamic stop loss: max 15% P&L loss with 5% minimum price stop
-            // Formula: price_stop% = max(15% / leverage, 5%)
-            // Examples: 2x = 7.5% price stop, 3x = 5% price stop
-            // CRITICAL FIX: Previous 8% P&L caused 0% win rate (24 trades lost)
-            $maxPnlLoss = 15.0; // Maximum P&L loss %
-            $priceStopPercent = max($maxPnlLoss / $leverage, 5.0); // Never tighter than 5%
+            // 2025 OPTIMIZATION: ATR-based dynamic stop loss
+            // Get latest market data for ATR
+            $marketData = \App\Models\MarketData::where('symbol', $symbol)
+                ->where('timeframe', '4h')
+                ->orderBy('data_timestamp', 'desc')
+                ->first();
+
+            $atr14 = $marketData->indicators['atr14'] ?? null;
+
+            if ($atr14) {
+                // ATR-based stop: 2.5x ATR distance
+                $atrPercent = ($atr14 / $entryPrice) * 100;
+                $priceStopPercent = min(max($atrPercent * 2.5, 5.0), 15.0); // Min 5%, Max 15%
+                Log::info("🎯 {$symbol}: ATR-based stop loss: {$priceStopPercent}% (ATR: {$atrPercent}%)");
+            } else {
+                // Fallback to old formula if no ATR data
+                $maxPnlLoss = 15.0;
+                $priceStopPercent = max($maxPnlLoss / $leverage, 5.0);
+                Log::warning("⚠️ {$symbol}: No ATR data, using fallback stop loss: {$priceStopPercent}%");
+            }
+
             $stopPrice = $entryPrice * (1 - ($priceStopPercent / 100));
 
             // Calculate liquidation price

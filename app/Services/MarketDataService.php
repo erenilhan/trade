@@ -170,6 +170,7 @@ class MarketDataService
         $bollingerBands = $this->calculateBollingerBands($closes, 20, 2.0);
         $volumeMA = $this->calculateVolumeMA($volumes, 20);
         $stochRsi = $this->calculateStochasticRSI($closes, 14, 14);
+        $supertrend = $this->calculateSupertrend($highs, $lows, $closes, 10, 3.0);
 
         // Volume ratio (current volume vs 20-period average)
         $currentVolume = end($volumes);
@@ -205,6 +206,10 @@ class MarketDataService
             'volume_ratio' => round($volumeRatio, 4),
             'stoch_rsi_k' => $stochRsi['k'],
             'stoch_rsi_d' => $stochRsi['d'],
+            'supertrend_trend' => $supertrend['trend'],
+            'supertrend_value' => $supertrend['value'],
+            'supertrend_is_bullish' => $supertrend['is_bullish'],
+            'supertrend_is_bearish' => $supertrend['is_bearish'],
         ];
     }
 
@@ -666,6 +671,110 @@ class MarketDataService
         return [
             'k' => round($currentK, 4),
             'd' => round($d, 4),
+        ];
+    }
+
+    /**
+     * Calculate Supertrend Indicator
+     * Returns trend direction and value
+     *
+     * @param array $highs High prices
+     * @param array $lows Low prices
+     * @param array $closes Close prices
+     * @param int $period ATR period (default 10)
+     * @param float $multiplier ATR multiplier (default 3.0)
+     * @return array ['trend' => 1/-1, 'value' => float, 'is_bullish' => bool]
+     */
+    private function calculateSupertrend(array $highs, array $lows, array $closes, int $period = 10, float $multiplier = 3.0): array
+    {
+        $length = count($closes);
+        if ($length < $period) {
+            return [
+                'trend' => 0,
+                'value' => end($closes),
+                'is_bullish' => false,
+            ];
+        }
+
+        // Calculate ATR
+        $atr = $this->calculateATR($highs, $lows, $closes, $period);
+
+        // Calculate HL2 (average of high and low)
+        $hl2 = [];
+        for ($i = 0; $i < $length; $i++) {
+            $hl2[] = ($highs[$i] + $lows[$i]) / 2;
+        }
+
+        // Calculate basic upper and lower bands
+        $basicUpperband = [];
+        $basicLowerband = [];
+        $finalUpperband = [];
+        $finalLowerband = [];
+        $supertrend = [];
+        $trend = [];
+
+        for ($i = 0; $i < $length; $i++) {
+            $currentAtr = $this->calculateATR(
+                array_slice($highs, max(0, $i - $period + 1), $period),
+                array_slice($lows, max(0, $i - $period + 1), $period),
+                array_slice($closes, max(0, $i - $period + 1), $period),
+                min($i + 1, $period)
+            );
+
+            $basicUpperband[$i] = $hl2[$i] + ($multiplier * $currentAtr);
+            $basicLowerband[$i] = $hl2[$i] - ($multiplier * $currentAtr);
+
+            // Calculate final bands
+            if ($i == 0) {
+                $finalUpperband[$i] = $basicUpperband[$i];
+                $finalLowerband[$i] = $basicLowerband[$i];
+            } else {
+                $finalUpperband[$i] = ($basicUpperband[$i] < $finalUpperband[$i - 1] || $closes[$i - 1] > $finalUpperband[$i - 1])
+                    ? $basicUpperband[$i]
+                    : $finalUpperband[$i - 1];
+
+                $finalLowerband[$i] = ($basicLowerband[$i] > $finalLowerband[$i - 1] || $closes[$i - 1] < $finalLowerband[$i - 1])
+                    ? $basicLowerband[$i]
+                    : $finalLowerband[$i - 1];
+            }
+
+            // Determine trend
+            if ($i == 0) {
+                $trend[$i] = 1; // Start bullish
+                $supertrend[$i] = $finalLowerband[$i];
+            } else {
+                $prevTrend = $trend[$i - 1];
+
+                if ($prevTrend == 1) {
+                    // Was bullish
+                    if ($closes[$i] <= $finalLowerband[$i]) {
+                        $trend[$i] = -1; // Bearish
+                        $supertrend[$i] = $finalUpperband[$i];
+                    } else {
+                        $trend[$i] = 1; // Still bullish
+                        $supertrend[$i] = $finalLowerband[$i];
+                    }
+                } else {
+                    // Was bearish
+                    if ($closes[$i] >= $finalUpperband[$i]) {
+                        $trend[$i] = 1; // Bullish
+                        $supertrend[$i] = $finalLowerband[$i];
+                    } else {
+                        $trend[$i] = -1; // Still bearish
+                        $supertrend[$i] = $finalUpperband[$i];
+                    }
+                }
+            }
+        }
+
+        $currentTrend = end($trend);
+        $currentSupertrendValue = end($supertrend);
+
+        return [
+            'trend' => $currentTrend,
+            'value' => round($currentSupertrendValue, 8),
+            'is_bullish' => $currentTrend == 1,
+            'is_bearish' => $currentTrend == -1,
         ];
     }
 }
