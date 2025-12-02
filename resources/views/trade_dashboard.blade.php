@@ -197,10 +197,25 @@
 
             <!-- Closed Positions -->
             <div>
-                <h2 class="text-lg font-semibold text-white mb-4">Recent Closed Positions</h2>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-white">Recent Closed Positions</h2>
+                    <div class="text-sm text-gray-400">
+                        Showing <span id="closed-positions-count">0</span> positions
+                    </div>
+                </div>
                 <div class="bg-dark-800 rounded-lg overflow-hidden border border-dark-700">
                     <div id="closed-positions">
                         <div class="text-center py-8 text-gray-400">Loading...</div>
+                    </div>
+                    <!-- Pagination Controls -->
+                    <div id="pagination-controls" class="flex justify-center items-center gap-2 p-4 border-t border-dark-700 hidden">
+                        <button id="prev-page" onclick="prevPage()" class="px-3 py-1 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            Previous
+                        </button>
+                        <div id="page-numbers" class="flex gap-1"></div>
+                        <button id="next-page" onclick="nextPage()" class="px-3 py-1 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                            Next
+                        </button>
                     </div>
                 </div>
             </div>
@@ -424,6 +439,9 @@
     <script>
         const API_URL = '/api/dashboard/data';
         let pnlChartInstance = null;
+        let allClosedPositions = [];
+        let currentPage = 1;
+        const positionsPerPage = 50;
 
         // Tab switching
         document.querySelectorAll('.tab-button').forEach(button => {
@@ -542,12 +560,33 @@
         }
 
         function renderClosedPositions(positions) {
+            allClosedPositions = positions;
+            currentPage = 1; // Reset to first page
+            renderClosedPositionsPage();
+        }
+
+        function renderClosedPositionsPage() {
             const container = document.getElementById('closed-positions');
-            if (positions.length === 0) {
+            const paginationControls = document.getElementById('pagination-controls');
+            const countDisplay = document.getElementById('closed-positions-count');
+
+            if (allClosedPositions.length === 0) {
                 container.innerHTML = '<div class="text-center py-8 text-gray-400">No closed positions</div>';
+                paginationControls.classList.add('hidden');
+                countDisplay.textContent = '0';
                 return;
             }
 
+            // Calculate pagination
+            const totalPages = Math.ceil(allClosedPositions.length / positionsPerPage);
+            const startIdx = (currentPage - 1) * positionsPerPage;
+            const endIdx = Math.min(startIdx + positionsPerPage, allClosedPositions.length);
+            const currentPositions = allClosedPositions.slice(startIdx, endIdx);
+
+            // Update count display
+            countDisplay.textContent = `${startIdx + 1}-${endIdx} of ${allClosedPositions.length}`;
+
+            // Render table
             container.innerHTML = `
                 <div class="grid grid-cols-6 bg-dark-700 text-gray-300 font-semibold p-3 text-sm">
                     <div>Symbol</div>
@@ -557,7 +596,7 @@
                     <div>Closed</div>
                     <div>Reason</div>
                 </div>
-                ${positions.map(pos => {
+                ${currentPositions.map(pos => {
                     const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
                     const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
                     return `
@@ -572,6 +611,73 @@
                     `;
                 }).join('')}
             `;
+
+            // Show/hide pagination controls
+            if (totalPages > 1) {
+                paginationControls.classList.remove('hidden');
+                renderPaginationControls(totalPages);
+            } else {
+                paginationControls.classList.add('hidden');
+            }
+        }
+
+        function renderPaginationControls(totalPages) {
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
+            const pageNumbersContainer = document.getElementById('page-numbers');
+
+            // Update prev/next buttons
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage === totalPages;
+
+            // Generate page numbers (show max 7 pages)
+            let pages = [];
+            if (totalPages <= 7) {
+                pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+            } else {
+                if (currentPage <= 4) {
+                    pages = [1, 2, 3, 4, 5, '...', totalPages];
+                } else if (currentPage >= totalPages - 3) {
+                    pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+                } else {
+                    pages = [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+                }
+            }
+
+            pageNumbersContainer.innerHTML = pages.map(page => {
+                if (page === '...') {
+                    return '<span class="px-2 py-1 text-gray-500">...</span>';
+                }
+                const isActive = page === currentPage;
+                return `
+                    <button
+                        class="px-3 py-1 rounded ${isActive ? 'bg-blue-600 text-white' : 'bg-dark-700 hover:bg-dark-600 text-gray-300'}"
+                        onclick="goToPage(${page})"
+                    >
+                        ${page}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            renderClosedPositionsPage();
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(allClosedPositions.length / positionsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderClosedPositionsPage();
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderClosedPositionsPage();
+            }
         }
 
         function renderPnlChart(chartData) {

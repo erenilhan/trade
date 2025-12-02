@@ -351,10 +351,10 @@ class TradeDashboardController extends Controller
                 ];
             });
 
-            // Get closed positions (last 10)
+            // Get closed positions (last 200 for pagination)
             $closedPositions = Position::where('is_open', false)
                 ->orderBy('closed_at', 'desc')
-                ->limit(10)
+                ->limit(200)
                 ->get()
                 ->map(function ($pos) {
                     $pnl = (float) ($pos->realized_pnl ?? 0);
