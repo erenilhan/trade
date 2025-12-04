@@ -11,6 +11,7 @@ use App\Services\MarketDataService;
 use App\Models\AiLog;
 use App\Services\MockBinanceService;
 use Exception;
+use Illuminate\Http\Request;
 
 class TradeDashboardController extends Controller
 {
@@ -129,9 +130,15 @@ class TradeDashboardController extends Controller
     /**
      * Get dashboard data (real multi-coin system)
      */
-    public function getData()
+    public function getData(Request $request)
     {
         try {
+            $range = $request->input('range', '7');
+            $dateFrom = null;
+            if ($range !== 'all') {
+                $dateFrom = now()->subDays((int)$range);
+            }
+
             // Get balance
             $balance = $this->binance->fetchBalance();
             $totalValue = $balance['USDT']['total'] ?? 0;
@@ -141,7 +148,7 @@ class TradeDashboardController extends Controller
             $initialCapital = BotSetting::get('initial_capital', config('app.initial_capital', 1000));
 
             // Get active positions
-            $positions = Position::active()->get()->map(function ($pos) {
+            $activePositions = Position::active()->get()->map(function ($pos) {
                 $currentPrice = (float) $pos->current_price;
                 $entryPrice = (float) $pos->entry_price;
 
@@ -151,67 +158,25 @@ class TradeDashboardController extends Controller
                     $priceDiff = -$priceDiff;
                 }
                 $pnl = $priceDiff * $pos->quantity * $pos->leverage;
-                $pnlPercent = ($priceDiff / $entryPrice) * 100 * $pos->leverage;
+                $pnlPercent = ($entryPrice > 0) ? ($priceDiff / $entryPrice) * 100 * $pos->leverage : 0;
 
                 // Get exit plan targets
                 $exitPlan = $pos->exit_plan ?? [];
                 $profitTarget = isset($exitPlan['profit_target']) ? (float) $exitPlan['profit_target'] : null;
                 $stopLoss = isset($exitPlan['stop_loss']) ? (float) $exitPlan['stop_loss'] : null;
 
-                // Calculate distance to targets (handle SHORT positions)
-                $distanceToProfit = null;
-                $distanceToStop = null;
-                $profitNeeded = null;
-                $stopDistance = null;
-
-                if ($profitTarget) {
-                    if ($pos->side === 'short') {
-                        // SHORT: profit target is BELOW current price
-                        $distanceToProfit = (($currentPrice - $profitTarget) / $currentPrice) * 100;
-                        $profitNeeded = $currentPrice - $profitTarget;
-                    } else {
-                        // LONG: profit target is ABOVE current price
-                        $distanceToProfit = (($profitTarget - $currentPrice) / $currentPrice) * 100;
-                        $profitNeeded = $profitTarget - $currentPrice;
-                    }
-                }
-
-                if ($stopLoss) {
-                    if ($pos->side === 'short') {
-                        // SHORT: stop loss is ABOVE current price
-                        $distanceToStop = (($stopLoss - $currentPrice) / $currentPrice) * 100;
-                        $stopDistance = $stopLoss - $currentPrice;
-                    } else {
-                        // LONG: stop loss is BELOW current price
-                        $distanceToStop = (($currentPrice - $stopLoss) / $currentPrice) * 100;
-                        $stopDistance = $currentPrice - $stopLoss;
-                    }
-                }
-
                 // Calculate position size (how much $ invested)
                 $positionSize = $pos->quantity * $entryPrice;
                 $notionalSize = $pos->notional_usd ?? ($positionSize * $pos->leverage);
 
-                // Detect trailing stop level (handle SHORT positions)
+                // Detect trailing stop level
                 $trailingLevel = null;
                 if ($stopLoss && $entryPrice > 0) {
-                    if ($pos->side === 'short') {
-                        // SHORT: stop loss below entry = profit locked
-                        $stopDiff = (($entryPrice - $stopLoss) / $entryPrice) * 100;
-                    } else {
-                        // LONG: stop loss above entry = profit locked
-                        $stopDiff = (($stopLoss - $entryPrice) / $entryPrice) * 100;
-                    }
-
-                    if ($stopDiff >= 7) {
-                        $trailingLevel = 4; // Level 4: Stop at +8%
-                    } elseif ($stopDiff >= 4) {
-                        $trailingLevel = 3; // Level 3: Stop at +5%
-                    } elseif ($stopDiff >= 1.5) {
-                        $trailingLevel = 2; // Level 2: +2%
-                    } elseif ($stopDiff >= -0.5 && $stopDiff <= 0.5) {
-                        $trailingLevel = 1; // Level 1: -1%
-                    }
+                    $stopDiff = (($pos->side === 'short' ? $entryPrice - $stopLoss : $stopLoss - $entryPrice) / $entryPrice) * 100;
+                    if ($stopDiff >= 7) $trailingLevel = 4;
+                    elseif ($stopDiff >= 4) $trailingLevel = 3;
+                    elseif ($stopDiff >= 1.5) $trailingLevel = 2;
+                    elseif ($stopDiff >= -0.5) $trailingLevel = 1;
                 }
 
                 return [
@@ -225,266 +190,86 @@ class TradeDashboardController extends Controller
                     'notional_size' => $notionalSize,
                     'pnl' => $pnl,
                     'pnl_percent' => $pnlPercent,
-                    'unrealized_pnl' => $pos->unrealized_pnl ?? $pnl,
                     'opened_at' => $pos->opened_at?->diffForHumans(),
                     'price_updated_at' => $pos->price_updated_at?->diffForHumans() ?? 'Never',
-                    'liquidation_price' => $pos->liquidation_price,
                     'trailing_level' => $trailingLevel,
-                    'targets' => [
-                        'profit_target' => $profitTarget,
-                        'stop_loss' => $stopLoss,
-                        'distance_to_profit_pct' => $distanceToProfit,
-                        'distance_to_stop_pct' => $distanceToStop,
-                        'profit_needed' => $profitNeeded,
-                        'stop_distance' => $stopDistance,
-                    ],
                 ];
             });
 
-            // Calculate ROI based on actual profit (total P&L) rather than total account value
-            $totalUnrealizedPnl = $positions->sum('pnl');
-            $totalRealizedPnl = Position::where('is_open', false)->sum('realized_pnl');
-            $totalProfit = $totalUnrealizedPnl + $totalRealizedPnl;
-            
-            $roi = $initialCapital > 0
-                ? ($totalProfit / $initialCapital) * 100
-                : 0;
-
-            // Get active positions
-            $positions = Position::active()->get()->map(function ($pos) {
-                $currentPrice = (float) $pos->current_price;
-                $entryPrice = (float) $pos->entry_price;
-
-                // Calculate PNL
-                $priceDiff = $currentPrice - $entryPrice;
-                if ($pos->side === 'short') {
-                    $priceDiff = -$priceDiff;
-                }
-                $pnl = $priceDiff * $pos->quantity * $pos->leverage;
-                $pnlPercent = ($priceDiff / $entryPrice) * 100 * $pos->leverage;
-
-                // Get exit plan targets
-                $exitPlan = $pos->exit_plan ?? [];
-                $profitTarget = isset($exitPlan['profit_target']) ? (float) $exitPlan['profit_target'] : null;
-                $stopLoss = isset($exitPlan['stop_loss']) ? (float) $exitPlan['stop_loss'] : null;
-
-                // Calculate distance to targets (handle SHORT positions)
-                $distanceToProfit = null;
-                $distanceToStop = null;
-                $profitNeeded = null;
-                $stopDistance = null;
-
-                if ($profitTarget) {
-                    if ($pos->side === 'short') {
-                        // SHORT: profit target is BELOW current price
-                        $distanceToProfit = (($currentPrice - $profitTarget) / $currentPrice) * 100;
-                        $profitNeeded = $currentPrice - $profitTarget;
-                    } else {
-                        // LONG: profit target is ABOVE current price
-                        $distanceToProfit = (($profitTarget - $currentPrice) / $currentPrice) * 100;
-                        $profitNeeded = $profitTarget - $currentPrice;
-                    }
-                }
-
-                if ($stopLoss) {
-                    if ($pos->side === 'short') {
-                        // SHORT: stop loss is ABOVE current price
-                        $distanceToStop = (($stopLoss - $currentPrice) / $currentPrice) * 100;
-                        $stopDistance = $stopLoss - $currentPrice;
-                    } else {
-                        // LONG: stop loss is BELOW current price
-                        $distanceToStop = (($currentPrice - $stopLoss) / $currentPrice) * 100;
-                        $stopDistance = $currentPrice - $stopLoss;
-                    }
-                }
-
-                // Calculate position size (how much $ invested)
-                $positionSize = $pos->quantity * $entryPrice;
-                $notionalSize = $pos->notional_usd ?? ($positionSize * $pos->leverage);
-
-                // Detect trailing stop level (handle SHORT positions)
-                $trailingLevel = null;
-                if ($stopLoss && $entryPrice > 0) {
-                    if ($pos->side === 'short') {
-                        // SHORT: stop loss below entry = profit locked
-                        $stopDiff = (($entryPrice - $stopLoss) / $entryPrice) * 100;
-                    } else {
-                        // LONG: stop loss above entry = profit locked
-                        $stopDiff = (($stopLoss - $entryPrice) / $entryPrice) * 100;
-                    }
-
-                    if ($stopDiff >= 7) {
-                        $trailingLevel = 4; // Level 4: Stop at +8%
-                    } elseif ($stopDiff >= 4) {
-                        $trailingLevel = 3; // Level 3: Stop at +5%
-                    } elseif ($stopDiff >= 1.5) {
-                        $trailingLevel = 2; // Level 2: +2%
-                    } elseif ($stopDiff >= -0.5 && $stopDiff <= 0.5) {
-                        $trailingLevel = 1; // Level 1: -1%
-                    }
-                }
-
-                return [
+            // Get closed positions (last 10 in range)
+            $closedPositionsQuery = Position::where('is_open', false)->orderBy('closed_at', 'desc');
+            if ($dateFrom) {
+                $closedPositionsQuery->where('closed_at', '>=', $dateFrom);
+            }
+            $closedPositions = $closedPositionsQuery->limit(10)->get()->map(function ($pos) {
+                 return [
                     'symbol' => $pos->symbol,
                     'side' => $pos->side,
-                    'entry_price' => $entryPrice,
-                    'current_price' => $currentPrice,
+                    'entry_price' => (float)$pos->entry_price,
                     'quantity' => $pos->quantity,
-                    'leverage' => $pos->leverage,
-                    'position_size' => $positionSize,
-                    'notional_size' => $notionalSize,
-                    'pnl' => $pnl,
-                    'pnl_percent' => $pnlPercent,
-                    'unrealized_pnl' => $pos->unrealized_pnl ?? $pnl,
-                    'opened_at' => $pos->opened_at?->diffForHumans(),
-                    'price_updated_at' => $pos->price_updated_at?->diffForHumans() ?? 'Never',
-                    'liquidation_price' => $pos->liquidation_price,
-                    'trailing_level' => $trailingLevel,
-                    'targets' => [
-                        'profit_target' => $profitTarget,
-                        'stop_loss' => $stopLoss,
-                        'distance_to_profit_pct' => $distanceToProfit,
-                        'distance_to_stop_pct' => $distanceToStop,
-                        'profit_needed' => $profitNeeded,
-                        'stop_distance' => $stopDistance,
-                    ],
+                    'leverage' => $pos->leverage ?? 1,
+                    'pnl' => (float)($pos->realized_pnl ?? 0),
+                    'closed_at' => $pos->closed_at?->diffForHumans(),
+                    'close_reason' => $pos->close_reason,
                 ];
             });
 
-            // Get closed positions (last 10)
-            $closedPositions = Position::where('is_open', false)
-                ->orderBy('closed_at', 'desc')
-                ->limit(10)
-                ->get()
-                ->map(function ($pos) {
-                    $pnl = (float) ($pos->realized_pnl ?? 0);
-                    $entryPrice = (float) $pos->entry_price;
+            // Detailed closed positions stats for the period
+            $closedPositionsAllQuery = Position::where('is_open', false);
+            if ($dateFrom) {
+                $closedPositionsAllQuery->where('closed_at', '>=', $dateFrom);
+            }
+            $closedPositionsAll = $closedPositionsAllQuery->get();
 
-                    // Calculate PNL percentage with leverage
-                    $pnlPercent = 0;
-                    if ($entryPrice > 0 && $pos->quantity > 0) {
-                        $priceDiff = $pnl / ($pos->quantity * ($pos->leverage ?? 1));
-                        $pnlPercent = ($priceDiff / $entryPrice) * 100 * ($pos->leverage ?? 1);
-                    }
-
-                    // Calculate position size (how much $ invested)
-                    $positionSize = $pos->quantity * $entryPrice;
-                    $notionalSize = $pos->notional_usd ?? ($positionSize * ($pos->leverage ?? 1));
-
-                    return [
-                        'symbol' => $pos->symbol,
-                        'side' => $pos->side,
-                        'entry_price' => $entryPrice,
-                        'quantity' => $pos->quantity,
-                        'leverage' => $pos->leverage ?? 1,
-                        'position_size' => $positionSize,
-                        'notional_size' => $notionalSize,
-                        'pnl' => $pnl,
-                        'pnl_percent' => $pnlPercent,
-                        'closed_at' => $pos->closed_at?->diffForHumans(),
-                        'close_reason' => $pos->close_reason,
-                        'close_metadata' => $pos->close_metadata,
-                    ];
-                });
-
-            // Calculate stats
-            $totalPnl = $positions->sum('pnl');
-
-            // Detailed closed positions stats
-            $closedPositionsAll = Position::where('is_open', false)->get();
             $totalRealizedPnl = $closedPositionsAll->sum('realized_pnl');
             $totalWins = $closedPositionsAll->where('realized_pnl', '>', 0)->count();
-            $totalLosses = $closedPositionsAll->where('realized_pnl', '<', 0)->count();
+            $totalLosses = $closedPositionsAll->where('realized_pnl', '<=', 0)->count();
             $totalWinAmount = $closedPositionsAll->where('realized_pnl', '>', 0)->sum('realized_pnl');
-            $totalLossAmount = abs($closedPositionsAll->where('realized_pnl', '<', 0)->sum('realized_pnl'));
+            $totalLossAmount = abs($closedPositionsAll->where('realized_pnl', '<=', 0)->sum('realized_pnl'));
             $avgWin = $totalWins > 0 ? $totalWinAmount / $totalWins : 0;
             $avgLoss = $totalLosses > 0 ? $totalLossAmount / $totalLosses : 0;
             $profitFactor = $totalLossAmount > 0 ? $totalWinAmount / $totalLossAmount : 0;
+            
+            // ROI Calculation
+            $totalUnrealizedPnl = $activePositions->sum('pnl');
+            $totalProfit = $totalUnrealizedPnl + $totalRealizedPnl;
+            $roi = $initialCapital > 0 ? ($totalProfit / $initialCapital) * 100 : 0;
 
-            // Get AI logs
-            $aiLogs = AiLog::orderBy('created_at', 'desc')
-                ->limit(10)
-                ->get()
-                ->map(function ($log) {
-                    $decisions = $log->decision['decisions'] ?? [];
-                    return [
-                        'provider' => $log->provider,
-                        'model' => $log->model,
-                        'decisions_count' => count($decisions),
-                        'decisions' => $decisions,
-                        'created_at' => $log->created_at->diffForHumans(),
-                    ];
-                });
+            // Get AI logs for the period
+            $aiLogsQuery = AiLog::orderBy('created_at', 'desc');
+            if ($dateFrom) {
+                $aiLogsQuery->where('created_at', '>=', $dateFrom);
+            }
+            $aiLogs = $aiLogsQuery->limit(10)->get()->map(function ($log) {
+                return [
+                    'provider' => $log->provider,
+                    'model' => $log->model,
+                    'decisions' => $log->decision['decisions'] ?? [],
+                    'created_at' => $log->created_at->diffForHumans(),
+                ];
+            });
 
             $lastAiRun = AiLog::latest()->first();
-
-            // Get AI model information from latest log or config
             $aiProvider = $lastAiRun?->provider ?? config('app.ai_provider', 'openrouter');
             $aiModel = $lastAiRun?->model ?? config('openrouter.model', 'deepseek/deepseek-chat-v3.1');
+            
+            $aiPerformance = $this->calculateAiPerformance($dateFrom);
 
-            // Calculate AI performance metrics
-            $aiPerformance = $this->calculateAiPerformance();
-
-            // Extract HOLD decisions from last AI run
-            $holdReasons = [];
-            if ($lastAiRun && isset($lastAiRun->decision['decisions'])) {
-                $decisions = $lastAiRun->decision['decisions'];
-                foreach ($decisions as $decision) {
-                    if ($decision['action'] === 'hold') {
-                        $holdReasons[] = [
-                            'symbol' => $decision['symbol'],
-                            'confidence' => round(($decision['confidence'] ?? 0) * 100),
-                            'reason' => $decision['reasoning'] ?? 'No reason provided',
-                        ];
-                    }
-                }
-            }
-
-            // 🛡️ Risk Management Status
-            $sleepModeConfig = config('trading.sleep_mode');
-            $currentHourUTC = now()->utc()->hour;
-            $startHour = $sleepModeConfig['start_hour'];
-            $endHour = $sleepModeConfig['end_hour'];
-
-            $inSleepMode = false;
-            if ($startHour > $endHour) {
-                $inSleepMode = $currentHourUTC >= $startHour || $currentHourUTC < $endHour;
+            // PNL Chart Data
+            $pnlChartDays = 7;
+            if ($range === 'all') {
+                $firstTrade = Position::orderBy('opened_at', 'asc')->first();
+                $pnlChartDays = $firstTrade ? $firstTrade->opened_at->diffInDays(now()) + 1 : 7;
             } else {
-                $inSleepMode = $currentHourUTC >= $startHour && $currentHourUTC < $endHour;
+                $pnlChartDays = (int)$range;
             }
+            $pnlChartData = $this->getPnlChartData($pnlChartDays);
 
-            $dailyStat = DailyStat::today();
 
-            $riskManagement = [
-                'sleep_mode' => [
-                    'enabled' => $sleepModeConfig['enabled'],
-                    'active' => $inSleepMode,
-                    'hours_utc' => "{$startHour}:00-{$endHour}:00",
-                    'max_positions' => $sleepModeConfig['max_positions'],
-                    'current_utc_hour' => $currentHourUTC,
-                ],
-                'daily_drawdown' => [
-                    'enabled' => config('trading.daily_max_drawdown.enabled'),
-                    'current_pnl_percent' => round($dailyStat->daily_pnl_percent, 2),
-                    'max_allowed_percent' => config('trading.daily_max_drawdown.max_drawdown_percent'),
-                    'limit_hit' => $dailyStat->max_drawdown_hit,
-                    'cooldown_until' => $dailyStat->cooldown_until?->diffForHumans(),
-                    'trades_today' => $dailyStat->trades_count,
-                    'wins_today' => $dailyStat->wins_count,
-                    'losses_today' => $dailyStat->losses_count,
-                ],
-                'cluster_loss' => [
-                    'enabled' => config('trading.cluster_loss_cooldown.enabled'),
-                    'trigger_count' => config('trading.cluster_loss_cooldown.consecutive_losses_trigger'),
-                    'in_cooldown' => $this->checkClusterLossCooldown() !== null,
-                ],
-            ];
-
-            // Get PNL chart data (last 7 days)
-            $pnlChartData = $this->getPnlChartData();
-
-            // Get current market indicators for all symbols
+            // Other data points...
+            $riskManagement = $this->getRiskManagementStatus();
             $marketIndicators = $this->getMarketIndicators();
+            $holdReasons = $this->getHoldReasons($lastAiRun);
 
             return response()->json([
                 'success' => true,
@@ -497,7 +282,7 @@ class TradeDashboardController extends Controller
                         'total_pnl' => $totalProfit,
                         'realized_pnl' => $totalRealizedPnl,
                     ],
-                    'positions' => $positions,
+                    'positions' => $activePositions,
                     'closed_positions' => $closedPositions,
                     'ai_logs' => $aiLogs,
                     'hold_reasons' => $holdReasons,
@@ -509,11 +294,11 @@ class TradeDashboardController extends Controller
                     'pnl_chart' => $pnlChartData,
                     'market_indicators' => $marketIndicators,
                     'stats' => [
-                        'open_positions' => $positions->count(),
+                        'open_positions' => $activePositions->count(),
                         'total_trades' => $totalWins + $totalLosses,
                         'wins' => $totalWins,
                         'losses' => $totalLosses,
-                        'win_rate' => $this->calculateWinRate(),
+                        'win_rate' => $this->calculateWinRate($dateFrom),
                         'total_win_amount' => $totalWinAmount,
                         'total_loss_amount' => $totalLossAmount,
                         'avg_win' => $avgWin,
@@ -533,9 +318,14 @@ class TradeDashboardController extends Controller
         }
     }
 
-    private function calculateWinRate(): float
+    private function calculateWinRate($dateFrom = null): float
     {
-        $closed = Position::where('is_open', false)->get();
+        $query = Position::where('is_open', false);
+        if ($dateFrom) {
+            $query->where('closed_at', '>=', $dateFrom);
+        }
+        $closed = $query->get();
+
         if ($closed->count() === 0) return 0;
 
         $wins = $closed->where('realized_pnl', '>', 0)->count();
@@ -968,78 +758,42 @@ class TradeDashboardController extends Controller
     /**
      * Calculate AI performance metrics
      */
-    private function calculateAiPerformance(): array
+    private function calculateAiPerformance($dateFrom = null): array
     {
-        // Get all closed positions with AI confidence scores
-        $aiTrades = Position::where('is_open', false)
-            ->whereNotNull('confidence')
-            ->get();
+        $query = Position::where('is_open', false)->whereNotNull('confidence');
+        if ($dateFrom) {
+            $query->where('closed_at', '>=', $dateFrom);
+        }
+        $aiTrades = $query->get();
 
         if ($aiTrades->isEmpty()) {
             return [
-                'total_ai_trades' => 0,
-                'avg_confidence' => 0,
-                'high_confidence_win_rate' => 0,
-                'medium_confidence_win_rate' => 0,
-                'low_confidence_win_rate' => 0,
-                'avg_confidence_wins' => 0,
-                'avg_confidence_losses' => 0,
-                'best_performing_confidence_range' => 'N/A',
+                'total_ai_trades' => 0, 'avg_confidence' => 0, 'high_confidence_win_rate' => 0,
+                'medium_confidence_win_rate' => 0, 'low_confidence_win_rate' => 0, 'avg_confidence_wins' => 0,
+                'avg_confidence_losses' => 0, 'best_performing_confidence_range' => 'N/A',
             ];
         }
 
-        // Split by confidence levels
         $highConfidence = $aiTrades->where('confidence', '>=', 0.80);
-        $mediumConfidence = $aiTrades->where('confidence', '>=', 0.70)->where('confidence', '<', 0.80);
+        $mediumConfidence = $aiTrades->whereBetween('confidence', [0.70, 0.80]);
         $lowConfidence = $aiTrades->where('confidence', '<', 0.70);
 
-        // Calculate win rates per confidence level
-        $highConfWinRate = $highConfidence->count() > 0
-            ? ($highConfidence->where('realized_pnl', '>', 0)->count() / $highConfidence->count()) * 100
-            : 0;
+        $calcWinRate = function ($collection) {
+            if ($collection->isEmpty()) return 0;
+            return ($collection->where('realized_pnl', '>', 0)->count() / $collection->count()) * 100;
+        };
 
-        $mediumConfWinRate = $mediumConfidence->count() > 0
-            ? ($mediumConfidence->where('realized_pnl', '>', 0)->count() / $mediumConfidence->count()) * 100
-            : 0;
-
-        $lowConfWinRate = $lowConfidence->count() > 0
-            ? ($lowConfidence->where('realized_pnl', '>', 0)->count() / $lowConfidence->count()) * 100
-            : 0;
-
-        // Average confidence for wins vs losses
         $wins = $aiTrades->where('realized_pnl', '>', 0);
-        $losses = $aiTrades->where('realized_pnl', '<', 0);
-
-        $avgConfidenceWins = $wins->count() > 0 ? $wins->avg('confidence') : 0;
-        $avgConfidenceLosses = $losses->count() > 0 ? $losses->avg('confidence') : 0;
-
-        // Determine best performing confidence range
-        $bestRange = 'N/A';
-        $maxWinRate = max($highConfWinRate, $mediumConfWinRate, $lowConfWinRate);
-
-        if ($maxWinRate > 0) {
-            if ($highConfWinRate === $maxWinRate) {
-                $bestRange = 'High (≥80%)';
-            } elseif ($mediumConfWinRate === $maxWinRate) {
-                $bestRange = 'Medium (70-79%)';
-            } else {
-                $bestRange = 'Low (<70%)';
-            }
-        }
+        $losses = $aiTrades->where('realized_pnl', '<=', 0);
 
         return [
             'total_ai_trades' => $aiTrades->count(),
             'avg_confidence' => round($aiTrades->avg('confidence') * 100, 2),
-            'high_confidence_win_rate' => round($highConfWinRate, 2),
-            'high_confidence_trades' => $highConfidence->count(),
-            'medium_confidence_win_rate' => round($mediumConfWinRate, 2),
-            'medium_confidence_trades' => $mediumConfidence->count(),
-            'low_confidence_win_rate' => round($lowConfWinRate, 2),
-            'low_confidence_trades' => $lowConfidence->count(),
-            'avg_confidence_wins' => round($avgConfidenceWins * 100, 2),
-            'avg_confidence_losses' => round($avgConfidenceLosses * 100, 2),
-            'best_performing_confidence_range' => $bestRange,
-            'confidence_correlation' => round(($avgConfidenceWins - $avgConfidenceLosses) * 100, 2),
+            'high_confidence_win_rate' => round($calcWinRate($highConfidence), 2),
+            'medium_confidence_win_rate' => round($calcWinRate($mediumConfidence), 2),
+            'low_confidence_win_rate' => round($calcWinRate($lowConfidence), 2),
+            'avg_confidence_wins' => round(($wins->avg('confidence') ?? 0) * 100, 2),
+            'avg_confidence_losses' => round(($losses->avg('confidence') ?? 0) * 100, 2),
         ];
     }
 
@@ -1097,23 +851,33 @@ class TradeDashboardController extends Controller
     }
 
     /**
-     * Get PNL chart data for last 7 days
+     * Get PNL chart data for last N days
      */
-    private function getPnlChartData(): array
+    private function getPnlChartData(int $days = 7): array
     {
-        $days = 7;
+        if ($days > 1000) $days = 1000; // Safety cap
+
+        $startDate = now()->subDays($days - 1)->startOfDay();
+
+        $pnlByDay = Position::where('is_open', false)
+            ->where('closed_at', '>=', $startDate)
+            ->selectRaw('DATE(closed_at) as date, SUM(realized_pnl) as pnl')
+            ->groupBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $pnlBefore = Position::where('is_open', false)
+            ->where('closed_at', '<', $startDate)
+            ->sum('realized_pnl');
+
         $chartData = [];
-        $cumulativePnl = 0;
+        $cumulativePnl = $pnlBefore;
 
-        for ($i = $days - 1; $i >= 0; $i--) {
-            $date = now()->subDays($i)->startOfDay();
-            $endDate = $date->copy()->endOfDay();
-
-            // Get closed positions for this day
-            $dailyPnl = Position::where('is_open', false)
-                ->whereBetween('closed_at', [$date, $endDate])
-                ->sum('realized_pnl');
-
+        for ($i = 0; $i < $days; $i++) {
+            $date = $startDate->copy()->addDays($i);
+            $dateString = $date->format('Y-m-d');
+            
+            $dailyPnl = $pnlByDay->get($dateString)->pnl ?? 0;
             $cumulativePnl += $dailyPnl;
 
             $chartData[] = [
@@ -1124,6 +888,53 @@ class TradeDashboardController extends Controller
         }
 
         return $chartData;
+    }
+
+    private function getRiskManagementStatus(): array
+    {
+        $sleepModeConfig = config('trading.sleep_mode');
+        $currentHourUTC = now()->utc()->hour;
+        $startHour = $sleepModeConfig['start_hour'];
+        $endHour = $sleepModeConfig['end_hour'];
+
+        $inSleepMode = ($startHour > $endHour)
+            ? ($currentHourUTC >= $startHour || $currentHourUTC < $endHour)
+            : ($currentHourUTC >= $startHour && $currentHourUTC < $endHour);
+
+        $dailyStat = DailyStat::today();
+
+        return [
+            'sleep_mode' => [
+                'enabled' => $sleepModeConfig['enabled'],
+                'active' => $inSleepMode,
+                'hours_utc' => "{$startHour}:00-{$endHour}:00",
+            ],
+            'daily_drawdown' => [
+                'enabled' => config('trading.daily_max_drawdown.enabled'),
+                'limit_hit' => $dailyStat->max_drawdown_hit,
+            ],
+            'cluster_loss' => [
+                'enabled' => config('trading.cluster_loss_cooldown.enabled'),
+                'in_cooldown' => $this->checkClusterLossCooldown() !== null,
+            ],
+        ];
+    }
+    
+    private function getHoldReasons($lastAiRun): array
+    {
+        $holdReasons = [];
+        if ($lastAiRun && isset($lastAiRun->decision['decisions'])) {
+            foreach ($lastAiRun->decision['decisions'] as $decision) {
+                if ($decision['action'] === 'hold') {
+                    $holdReasons[] = [
+                        'symbol' => $decision['symbol'],
+                        'confidence' => round(($decision['confidence'] ?? 0) * 100),
+                        'reason' => $decision['reasoning'] ?? 'No reason provided',
+                    ];
+                }
+            }
+        }
+        return $holdReasons;
     }
 
     /**

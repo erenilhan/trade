@@ -46,6 +46,11 @@
         .tab-content.active {
             animation: fadeIn 0.3s ease-in-out;
         }
+        #date-range-filter button.active-range {
+            background-color: #2563eb; /* bg-blue-600 */
+            color: white;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body class="bg-dark-900 text-gray-200 min-h-screen">
@@ -131,6 +136,15 @@
     </header>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Date Range Filter -->
+        <div class="mb-4 flex justify-end">
+            <div id="date-range-filter" class="flex items-center bg-dark-800 border border-dark-700 rounded-lg p-1 space-x-1">
+                <button data-range="7" class="px-3 py-1 text-sm rounded-md text-gray-300 hover:bg-dark-600 transition-colors">7D</button>
+                <button data-range="30" class="px-3 py-1 text-sm rounded-md text-gray-300 hover:bg-dark-600 transition-colors">30D</button>
+                <button data-range="90" class="px-3 py-1 text-sm rounded-md text-gray-300 hover:bg-dark-600 transition-colors">90D</button>
+                <button data-range="all" class="px-3 py-1 text-sm rounded-md text-gray-300 hover:bg-dark-600 transition-colors">All</button>
+            </div>
+        </div>
 
         <!-- Overview Tab -->
         <div id="tab-overview" class="tab-content active">
@@ -424,6 +438,7 @@
     <script>
         const API_URL = '/api/dashboard/data';
         let pnlChartInstance = null;
+        let currentRange = '7';
 
         // Tab switching
         document.querySelectorAll('.tab-button').forEach(button => {
@@ -439,6 +454,18 @@
                 document.getElementById(`tab-${tab}`).classList.add('active');
             });
         });
+
+        // Date range filter
+        const rangeButtons = document.querySelectorAll('#date-range-filter button');
+        rangeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                rangeButtons.forEach(btn => btn.classList.remove('active-range'));
+                button.classList.add('active-range');
+                const range = button.dataset.range;
+                loadData(range);
+            });
+        });
+        document.querySelector('#date-range-filter button[data-range="7"]').classList.add('active-range');
 
         // Helper functions
         function formatMoney(value) {
@@ -479,6 +506,14 @@
             // Render positions
             renderPositions(positions);
             renderClosedPositions(closed_positions);
+
+            const chartTitle = document.querySelector('#tab-performance h2');
+            if (chartTitle) {
+                let rangeText = `Last ${currentRange} Days`;
+                if (currentRange === 'all') rangeText = 'All Time';
+                else if (currentRange === '7') rangeText = 'Last 7 Days';
+                chartTitle.textContent = `Performance Chart (${rangeText})`;
+            }
 
             if (pnl_chart) renderPnlChart(pnl_chart);
             if (market_indicators) renderMarketIndicators(market_indicators);
@@ -758,9 +793,10 @@
             }
         }
 
-        async function loadData() {
+        async function loadData(range = '7') {
+            currentRange = range;
             try {
-                const response = await fetch(API_URL);
+                const response = await fetch(`${API_URL}?range=${range}`);
                 const result = await response.json();
                 if (result.success) {
                     renderDashboard(result.data);
@@ -779,8 +815,8 @@
         });
 
         // Load data on start and refresh every minute
-        loadData();
-        setInterval(loadData, 60000);
+        loadData(currentRange);
+        setInterval(() => loadData(currentRange), 60000);
     </script>
 </body>
 </html>
