@@ -584,7 +584,21 @@
                                 <span class="text-gray-400">P&L</span>
                                 <span class="${pnlColor} font-bold">${pnlEmoji} ${formatMoney(pos.pnl)} (${formatPercent(pos.pnl_percent)})</span>
                             </div>
+                            ${pos.confidence ? `
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">Confidence</span>
+                                <span class="text-blue-400 font-semibold">${Math.round(pos.confidence * 100)}%</span>
+                            </div>
+                            ` : ''}
                         </div>
+                        ${pos.ai_reasoning ? `
+                        <div class="mt-3 pt-3 border-t border-dark-700">
+                            <button onclick="showAiReasoning('${pos.symbol}', '${pos.ai_reasoning.replace(/'/g, "\\'")}', ${pos.confidence || 0})" 
+                                    class="w-full bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded text-sm font-medium transition-colors">
+                                🤖 Why did AI choose this?
+                            </button>
+                        </div>
+                        ` : ''}
                     </div>
                 `;
             }).join('');
@@ -839,6 +853,56 @@
         // Load data on start and refresh every minute
         loadData(currentRange);
         setInterval(() => loadData(currentRange), 60000);
+    </script>
+
+    <!-- AI Reasoning Modal -->
+    <div id="aiReasoningModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-dark-800 border border-dark-700 rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-white">🤖 AI Decision Analysis</h3>
+                    <button onclick="closeAiReasoning()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="bg-dark-700 rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-gray-400">Symbol:</span>
+                            <span id="modalSymbol" class="text-white font-semibold"></span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">AI Confidence:</span>
+                            <span id="modalConfidence" class="text-blue-400 font-semibold"></span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-white font-semibold mb-2">AI Reasoning:</h4>
+                        <div id="modalReasoning" class="bg-dark-700 rounded-lg p-4 text-gray-300 leading-relaxed"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showAiReasoning(symbol, reasoning, confidence) {
+            document.getElementById('modalSymbol').textContent = symbol;
+            document.getElementById('modalConfidence').textContent = Math.round(confidence * 100) + '%';
+            document.getElementById('modalReasoning').textContent = reasoning;
+            document.getElementById('aiReasoningModal').classList.remove('hidden');
+        }
+
+        function closeAiReasoning() {
+            document.getElementById('aiReasoningModal').classList.add('hidden');
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('aiReasoningModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAiReasoning();
+            }
+        });
     </script>
 </body>
 </html>

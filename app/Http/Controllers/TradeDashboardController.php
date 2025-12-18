@@ -193,6 +193,8 @@ class TradeDashboardController extends Controller
                     'opened_at' => $pos->opened_at?->diffForHumans(),
                     'price_updated_at' => $pos->price_updated_at?->diffForHumans() ?? 'Never',
                     'trailing_level' => $trailingLevel,
+                    'confidence' => $pos->confidence,
+                    'ai_reasoning' => $this->getAiReasoningForPosition($pos->symbol, $pos->opened_at),
                 ];
             });
 
@@ -981,5 +983,52 @@ class TradeDashboardController extends Controller
         }
 
         return $indicators;
+    }
+
+    /**
+     * Get AI reasoning for a specific position from recent logs
+     */
+    private function getAiReasoningForPosition(string $symbol, $openedAt): ?string
+    {
+        // Look for AI logs around the time the position was opened (±10 minutes)
+        $timeWindow = 10; // minutes
+        $startTime = clone $openedAt;
+        $startTime->subMinutes($timeWindow);
+        $endTime = clone $openedAt;
+        $endTime->addMinutes($timeWindow * 2);
+
+        $aiLog = \App\Models\AiLog::whereBetween('created_at', [$startTime, $endTime])
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$aiLog) {
+            return null;
+        }
+
+        try {
+            $response = json_decode($aiLog->response, true);
+            $content = $response['choices'][0]['message']['content'] ?? null;
+            
+            if (!$content) {
+                return null;
+            }
+
+            $decisions = json_decode($content, true);
+            
+            if (!isset($decisions['decisions'])) {
+                return null;
+            }
+
+            // Find the decision for this symbol
+            foreach ($decisions['decisions'] as $decision) {
+                if ($decision['symbol'] === $symbol && in_array($decision['action'], ['buy', 'sell'])) {
+                    return $decision['reasoning'] ?? null;
+                }
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }
