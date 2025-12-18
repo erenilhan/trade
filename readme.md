@@ -24,7 +24,9 @@ AI-driven cryptocurrency trading bot built with Laravel 12, FilamentPHP v4, and 
 ### SHORT Trading Improvements
 - **ADX Threshold**: Reduced from 25 to 20 (more opportunities)
 - **RSI Range**: Expanded SHORT range from 28-55 to 25-60
-- **Volume Filters**: Lowered from 1.3x/1.5x to 1.1x/1.2x
+- **Volume Filters**: Lowered from 1.3x/1.5x to 0.9x/1.0x (realistic for crypto)
+- **Max Positions**: Reduced from 4 to 3 (prevent overtrading)
+- **L2 Trailing Stop**: Moved trigger from 6% to 8% (avoid premature exits)
 - **Coin Focus**: Simplified to 6 main coins for stability
 
 ### Expected Impact
@@ -149,8 +151,8 @@ Located in `MultiCoinAIService.php:99-195`
 Reduces AI token usage by 70%+ by pre-filtering uninteresting coins:
 
 **Time-Aware Volume Thresholds:**
-- US trading hours (13:00-22:00 UTC): Min 1.1x volume
-- Off-hours: Min 1.2x volume
+- US trading hours (13:00-22:00 UTC): Min 0.9x volume
+- Off-hours: Min 1.0x volume
 
 **Scoring System (Need 3/5 to pass):**
 - MACD alignment with 4H trend
@@ -188,9 +190,8 @@ Located in `MonitorPositions.php:53-314`
 - **Action**: Move stop to +3% (lock in profit)
 
 **Level 2** (L2) - Lines 270-289
-- **Trigger**: +6% profit
-- **Action**: Move stop to +1% (preserve small profit)
-- Note: L2 trigger increased from 5% to 6% (was too early)
+- **Trigger**: +8% profit (moved from 6% to avoid premature exits)
+- **Action**: Move stop to +2% (preserve profit safely)
 
 **Level 1** (L1) - Disabled - Line 229
 - Historical data: 0% win rate (7 trades lost)
@@ -255,7 +256,7 @@ Located in `MultiCoinTradingController.php:195-244`
 
 #### Position Limits
 
-- Max 4 open positions total
+- Max 3 open positions total (reduced from 4 to prevent overtrading)
 - Max 1 position per symbol
 - Max 2 positions per symbol in 6 hours (anti-overtrading)
 

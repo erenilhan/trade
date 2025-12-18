@@ -124,9 +124,9 @@ class MultiCoinAIService
                 $currentHour = now()->hour; // UTC hour
                 $isUSHours = $currentHour >= 13 && $currentHour <= 22; // US trading hours (13:00-22:00 UTC)
 
-                // 2025 OPTIMIZATION: More balanced volume filters
-                // US hours: moderate (1.1x), Off-hours: stricter (1.2x)
-                $minVolumeRatio = $isUSHours ? 1.1 : 1.2;
+                // 2025 OPTIMIZATION: Realistic volume filters for crypto markets
+                // US hours: lenient (0.9x), Off-hours: moderate (1.0x)
+                $minVolumeRatio = $isUSHours ? 0.9 : 1.0;
 
                 Log::info("⏰ Current hour: {$currentHour} UTC, US Hours: " . ($isUSHours ? 'YES' : 'NO') . ", Min Volume: {$minVolumeRatio}x");
 

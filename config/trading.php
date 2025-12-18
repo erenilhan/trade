@@ -77,8 +77,8 @@ return [
             'target' => -0.5,   // Not used (disabled)
         ],
         'level_2' => [
-            'trigger' => 6,   // Activate at +6% profit (was +5%, increased to avoid premature triggers)
-            'target' => 1,    // Move stop to +1% (was 0%, now preserves small profit instead of breakeven)
+            'trigger' => 8,   // Moved from 6% to 8% (avoid premature trigger)
+            'target' => 2,    // Moved from 1% to 2% (safer profit lock)
         ],
         'level_3' => [
             'trigger' => 8,   // Activate at +8% profit (unchanged, performs well - 100% win rate)
