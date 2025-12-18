@@ -557,7 +557,11 @@
                     <div class="bg-dark-800 border border-dark-700 rounded-lg p-4 hover:border-blue-500/50 transition-colors">
                         <div class="flex justify-between items-center pb-2 mb-3 border-b border-dark-700">
                             <div class="flex items-center gap-2">
-                                <div class="font-semibold text-lg text-white">${pos.symbol}</div>
+                                <a href="https://tr.tradingview.com/symbols/${pos.symbol.replace('/', '')}" 
+                                   target="_blank" 
+                                   class="font-semibold text-lg text-white hover:text-blue-400 transition-colors cursor-pointer">
+                                    ${pos.symbol}
+                                </a>
                                 <div class="${pos.side === 'long' ? 'bg-green-600' : 'bg-red-600'} text-white px-2 py-1 rounded-full text-xs font-bold">
                                     ${pos.side === 'long' ? '📈 LONG' : '📉 SHORT'}
                                 </div>
@@ -659,7 +663,13 @@
                     const sideText = pos.side === 'long' ? '📈 LONG' : '📉 SHORT';
                     return `
                         <div class="grid grid-cols-7 p-3 border-b border-dark-700 hover:bg-dark-700/30 text-sm">
-                            <div class="font-medium text-white">${pos.symbol}</div>
+                            <div class="font-medium">
+                                <a href="https://tr.tradingview.com/symbols/${pos.symbol.replace('/', '')}" 
+                                   target="_blank" 
+                                   class="text-white hover:text-blue-400 transition-colors">
+                                    ${pos.symbol}
+                                </a>
+                            </div>
                             <div class="${sideColor} font-semibold text-xs">${sideText}</div>
                             <div class="text-gray-300">${formatMoney(pos.entry_price)}</div>
                             <div class="text-blue-400">${pos.leverage}x</div>
