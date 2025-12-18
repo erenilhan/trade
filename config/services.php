@@ -45,4 +45,8 @@ return [
         'api_key' => env('DEEPSEEK_API_KEY'),
     ],
 
+    'taapi' => [
+        'api_key' => env('TAAPI_API_KEY'),
+    ],
+
 ];

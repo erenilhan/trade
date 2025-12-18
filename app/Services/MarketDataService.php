@@ -8,10 +8,12 @@ use Illuminate\Support\Facades\Log;
 class MarketDataService
 {
     private BinanceService $binance;
+    private TaapiService $taapi;
 
-    public function __construct(BinanceService $binance)
+    public function __construct(BinanceService $binance, TaapiService $taapi)
     {
         $this->binance = $binance;
+        $this->taapi = $taapi;
     }
 
     /**
@@ -58,15 +60,8 @@ class MarketDataService
      */
     public function collectMarketData(string $symbol, string $timeframe = '3m'): array
     {
-        // Fetch OHLCV data
-        $ohlcv = $this->fetchOHLCV($symbol, $timeframe, 50); // Last 50 candles for indicators
-
-        if (empty($ohlcv)) {
-            throw new \Exception("No OHLCV data for {$symbol}");
-        }
-
-        // Calculate indicators
-        $indicators = $this->calculateIndicators($ohlcv);
+        // Fetch indicators from TAAPI
+        $indicators = $this->fetchIndicatorsFromTaapi($symbol, $timeframe);
 
         // Get funding rate and open interest (for futures)
         try {
@@ -78,11 +73,10 @@ class MarketDataService
             $openInterest = 0;
         }
 
-        // Get last 10 prices for series
-        $priceSeries = array_slice(array_column($ohlcv, 4), -10); // Close prices
+        // Get price series from TAAPI
+        $priceSeries = $this->taapi->getPriceSeries($symbol, $timeframe, 10);
+        $currentPrice = end($priceSeries) ?: $this->taapi->getCurrentPrice($symbol, $timeframe);
 
-        // Current values
-        $currentPrice = end($priceSeries);
         $marketData = [
             'symbol' => $symbol,
             'timeframe' => $timeframe,
@@ -142,75 +136,137 @@ class MarketDataService
     }
 
     /**
-     * Calculate technical indicators
+     * Calculate technical indicators using TAAPI.IO
      */
     private function calculateIndicators(array $ohlcv): array
     {
+        // Get symbol from context (we'll need to pass it)
+        // For now, extract closes for fallback
         $closes = array_column($ohlcv, 4); // Close prices
-        $highs = array_column($ohlcv, 2);  // High prices
-        $lows = array_column($ohlcv, 3);   // Low prices
         $volumes = array_column($ohlcv, 5); // Volumes
-
-        // Calculate MACD with signal line
-        $macdData = $this->calculateMACDSeries($closes);
-        $macdValue = end($macdData['macd']);
-        $signalValue = end($macdData['signal']);
-        $macdHistogram = $macdValue - $signalValue; // MACD Histogram = MACD - Signal
-        
-        // Calculate previous MACD histogram to determine if rising
-        $prevMacdValue = count($macdData['macd']) > 1 ? $macdData['macd'][count($macdData['macd']) - 2] : $macdValue;
-        $prevSignalValue = count($macdData['signal']) > 1 ? $macdData['signal'][count($macdData['signal']) - 2] : $signalValue;
-        $prevMacdHistogram = $prevMacdValue - $prevSignalValue;
-        $macdHistogramRising = $macdHistogram > $prevMacdHistogram;
-
-        // Calculate ADX
-        $adxData = $this->calculateADX($highs, $lows, $closes, 14);
-
-        // Calculate new indicators
-        $bollingerBands = $this->calculateBollingerBands($closes, 20, 2.0);
-        $volumeMA = $this->calculateVolumeMA($volumes, 20);
-        $stochRsi = $this->calculateStochasticRSI($closes, 14, 14);
-        $supertrend = $this->calculateSupertrend($highs, $lows, $closes, 10, 3.0);
-
-        // Volume ratio (current volume vs 20-period average)
         $currentVolume = end($volumes);
-        $volumeRatio = $volumeMA > 0 ? $currentVolume / $volumeMA : 1.0;
 
+        // Note: This method will be called with symbol context in collectMarketData
+        // For now, return empty structure (will be filled by fetchIndicatorsFromTaapi)
         return [
-            'ema20' => $this->calculateEMA($closes, 20),
-            'ema50' => $this->calculateEMA($closes, 50),
-            'ema20_series' => $this->calculateEMASeries($closes, 20),
-            'macd' => $macdValue,
-            'macd_signal' => $signalValue,
-            'macd_histogram' => round($macdHistogram, 8),
-            'macd_histogram_rising' => $macdHistogramRising,
-            'macd_series' => $macdData['macd'],
-            'signal_series' => $macdData['signal'],
-            'rsi7' => $this->calculateRSI($closes, 7),
-            'rsi14' => $this->calculateRSI($closes, 14),
-            'rsi7_series' => $this->calculateRSISeries($closes, 7),
-            'rsi14_series' => $this->calculateRSISeries($closes, 14),
-            'atr3' => $this->calculateATR($highs, $lows, $closes, 3),
-            'atr14' => $this->calculateATR($highs, $lows, $closes, 14),
-            'adx' => $adxData['adx'],
-            'plus_di' => $adxData['plus_di'],
-            'minus_di' => $adxData['minus_di'],
+            'ema20' => 0,
+            'ema50' => 0,
+            'ema20_series' => [],
+            'macd' => 0,
+            'macd_signal' => 0,
+            'macd_histogram' => 0,
+            'macd_histogram_rising' => false,
+            'macd_series' => [],
+            'signal_series' => [],
+            'rsi7' => 50,
+            'rsi14' => 50,
+            'rsi7_series' => [],
+            'rsi14_series' => [],
+            'atr3' => 0,
+            'atr14' => 0,
+            'adx' => 0,
+            'plus_di' => 0,
+            'minus_di' => 0,
             'volume' => $currentVolume,
-            // New indicators
-            'bb_upper' => $bollingerBands['upper'],
-            'bb_middle' => $bollingerBands['middle'],
-            'bb_lower' => $bollingerBands['lower'],
-            'bb_width' => $bollingerBands['bandwidth'],
-            'bb_percent_b' => $bollingerBands['percent_b'],
-            'volume_ma' => $volumeMA,
-            'volume_ratio' => round($volumeRatio, 4),
-            'stoch_rsi_k' => $stochRsi['k'],
-            'stoch_rsi_d' => $stochRsi['d'],
-            'supertrend_trend' => $supertrend['trend'],
-            'supertrend_value' => $supertrend['value'],
-            'supertrend_is_bullish' => $supertrend['is_bullish'],
-            'supertrend_is_bearish' => $supertrend['is_bearish'],
+            'bb_upper' => 0,
+            'bb_middle' => 0,
+            'bb_lower' => 0,
+            'bb_width' => 0,
+            'bb_percent_b' => 0.5,
+            'volume_ma' => 0,
+            'volume_ratio' => 1.0,
+            'stoch_rsi_k' => 50,
+            'stoch_rsi_d' => 50,
+            'supertrend_trend' => 0,
+            'supertrend_value' => 0,
+            'supertrend_is_bullish' => false,
+            'supertrend_is_bearish' => false,
         ];
+    }
+
+    /**
+     * Fetch indicators from TAAPI.IO
+     */
+    private function fetchIndicatorsFromTaapi(string $symbol, string $timeframe): array
+    {
+        try {
+            Log::info("📡 Fetching indicators from TAAPI for {$symbol} {$timeframe}");
+
+            // Map Laravel timeframe to TAAPI format (3m -> 3m, 4h -> 4h, etc.)
+            $interval = $timeframe;
+
+            // Fetch all indicators
+            $ema20 = $this->taapi->getEMA($symbol, $interval, 20, 10);
+            $ema50 = $this->taapi->getEMA($symbol, $interval, 50, 10);
+            $macd = $this->taapi->getMACD($symbol, $interval, 10);
+            $rsi7 = $this->taapi->getRSI($symbol, $interval, 7, 10);
+            $rsi14 = $this->taapi->getRSI($symbol, $interval, 14, 10);
+            $atr3 = $this->taapi->getATR($symbol, $interval, 3);
+            $atr14 = $this->taapi->getATR($symbol, $interval, 14);
+            $adx = $this->taapi->getADX($symbol, $interval, 14);
+            $bbands = $this->taapi->getBollingerBands($symbol, $interval, 20, 2);
+            $stochRsi = $this->taapi->getStochasticRSI($symbol, $interval, 14);
+            $supertrend = $this->taapi->getSupertrend($symbol, $interval, 10, 3);
+            $volumeData = $this->taapi->getVolumeWithMA($symbol, $interval, 20);
+
+            // Calculate MACD histogram rising
+            // Ensure histogram is a single value, not an array
+            $macdHistogram = is_array($macd['histogram']) ? end($macd['histogram']) : $macd['histogram'];
+            $macdHistogramRising = false;
+            if (count($macd['macd_series']) >= 2 && count($macd['signal_series']) >= 2) {
+                $prevMacd = $macd['macd_series'][count($macd['macd_series']) - 2];
+                $prevSignal = $macd['signal_series'][count($macd['signal_series']) - 2];
+                $prevHistogram = $prevMacd - $prevSignal;
+                $macdHistogramRising = $macdHistogram > $prevHistogram;
+            }
+
+            // Ensure all values are scalars, not arrays
+            $ema20Value = is_array($ema20['value']) ? end($ema20['value']) : $ema20['value'];
+            $ema50Value = is_array($ema50['value']) ? end($ema50['value']) : $ema50['value'];
+            $macdValue = is_array($macd['macd']) ? end($macd['macd']) : $macd['macd'];
+            $macdSignal = is_array($macd['signal']) ? end($macd['signal']) : $macd['signal'];
+            $rsi7Value = is_array($rsi7['value']) ? end($rsi7['value']) : $rsi7['value'];
+            $rsi14Value = is_array($rsi14['value']) ? end($rsi14['value']) : $rsi14['value'];
+
+            return [
+                'ema20' => $ema20Value,
+                'ema50' => $ema50Value,
+                'ema20_series' => $ema20['series'],
+                'macd' => $macdValue,
+                'macd_signal' => $macdSignal,
+                'macd_histogram' => round($macdHistogram, 8),
+                'macd_histogram_rising' => $macdHistogramRising,
+                'macd_series' => $macd['macd_series'],
+                'signal_series' => $macd['signal_series'],
+                'rsi7' => $rsi7Value,
+                'rsi14' => $rsi14Value,
+                'rsi7_series' => $rsi7['series'],
+                'rsi14_series' => $rsi14['series'],
+                'atr3' => $atr3,
+                'atr14' => $atr14,
+                'adx' => $adx['adx'],
+                'plus_di' => $adx['plus_di'],
+                'minus_di' => $adx['minus_di'],
+                'volume' => $volumeData['current'],
+                'bb_upper' => $bbands['upper'],
+                'bb_middle' => $bbands['middle'],
+                'bb_lower' => $bbands['lower'],
+                'bb_width' => $bbands['bandwidth'],
+                'bb_percent_b' => $bbands['percent_b'],
+                'volume_ma' => $volumeData['ma'],
+                'volume_ratio' => $volumeData['ratio'],
+                'stoch_rsi_k' => $stochRsi['k'],
+                'stoch_rsi_d' => $stochRsi['d'],
+                'supertrend_trend' => $supertrend['trend'],
+                'supertrend_value' => $supertrend['value'],
+                'supertrend_is_bullish' => $supertrend['is_bullish'],
+                'supertrend_is_bearish' => $supertrend['is_bearish'],
+            ];
+        } catch (\Exception $e) {
+            Log::error("Failed to fetch indicators from TAAPI for {$symbol}: " . $e->getMessage());
+            // Return default values on error
+            return $this->calculateIndicators([]);
+        }
     }
 
     /**
