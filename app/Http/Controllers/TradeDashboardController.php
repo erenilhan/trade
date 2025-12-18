@@ -195,6 +195,7 @@ class TradeDashboardController extends Controller
                     'trailing_level' => $trailingLevel,
                     'confidence' => $pos->confidence,
                     'ai_reasoning' => $this->getAiReasoningForPosition($pos->symbol, $pos->opened_at),
+                    'exit_plan' => $pos->exit_plan,
                 ];
             });
 

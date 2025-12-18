@@ -591,6 +591,37 @@
                             </div>
                             ` : ''}
                         </div>
+                        
+                        <!-- Exit Plan -->
+                        <div class="mt-3 pt-3 border-t border-dark-700">
+                            <div class="text-xs text-gray-400 mb-2 font-semibold">📋 Exit Plan</div>
+                            <div class="space-y-1 text-xs">
+                                ${pos.exit_plan?.profit_target ? `
+                                <div class="flex justify-between">
+                                    <span class="text-green-400">🎯 Take Profit</span>
+                                    <span class="text-green-400 font-semibold">${formatMoney(pos.exit_plan.profit_target)}</span>
+                                </div>
+                                ` : ''}
+                                ${pos.exit_plan?.stop_loss ? `
+                                <div class="flex justify-between">
+                                    <span class="text-red-400">🛑 Stop Loss</span>
+                                    <span class="text-red-400 font-semibold">${formatMoney(pos.exit_plan.stop_loss)}</span>
+                                </div>
+                                ` : ''}
+                                ${pos.trailing_level ? `
+                                <div class="flex justify-between">
+                                    <span class="text-yellow-400">🛡️ Trailing Stop</span>
+                                    <span class="text-yellow-400 font-semibold">Level ${pos.trailing_level} Active</span>
+                                </div>
+                                ` : `
+                                <div class="flex justify-between">
+                                    <span class="text-gray-500">🛡️ Trailing Stop</span>
+                                    <span class="text-gray-500">Waiting for profit</span>
+                                </div>
+                                `}
+                            </div>
+                        </div>
+                        
                         ${pos.ai_reasoning ? `
                         <div class="mt-3 pt-3 border-t border-dark-700">
                             <button onclick="showAiReasoning('${pos.symbol}', '${pos.ai_reasoning.replace(/'/g, "\\'")}', ${pos.confidence || 0})" 
