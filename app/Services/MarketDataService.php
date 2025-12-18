@@ -20,7 +20,14 @@ class MarketDataService
     public static function getSupportedCoins(): array
     {
         $defaultCoins = config('trading.default_active_pairs', array_keys(config('trading.supported_pairs', [])));
-        return \App\Models\BotSetting::get('supported_coins', $defaultCoins);
+        $coins = \App\Models\BotSetting::get('supported_coins', $defaultCoins);
+        
+        // Handle JSON string from database
+        if (is_string($coins)) {
+            $coins = json_decode($coins, true) ?? $defaultCoins;
+        }
+        
+        return is_array($coins) ? $coins : $defaultCoins;
     }
 
     /**

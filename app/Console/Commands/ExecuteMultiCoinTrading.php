@@ -131,8 +131,9 @@ class ExecuteMultiCoinTrading extends Command
                 try {
                     match($action) {
                         'buy' => $this->executeBuy($symbol, $decision, $cash),
+                        'sell' => $this->executeSell($symbol, $decision, $cash),
                         'hold' => null,
-                        default => $this->warn("⚠️ Unknown action: {$action} (AI should only return 'buy' or 'hold')")
+                        default => $this->warn("⚠️ Unknown action: {$action} (AI should return 'buy', 'sell', or 'hold')")
                     };
                 } catch (Exception $e) {
                     $this->error("❌ {$symbol}: {$e->getMessage()}");
@@ -294,6 +295,108 @@ class ExecuteMultiCoinTrading extends Command
 
         $this->info("  ✅ BUY executed: {$quantity} @ \${$entryPrice} (leverage: {$leverage}x)");
         Log::info("✅ {$symbol}: BUY executed", [
+            'quantity' => $quantity,
+            'entry_price' => $entryPrice,
+            'leverage' => $leverage,
+        ]);
+    }
+
+    /**
+     * Execute sell (SHORT) for a coin
+     */
+    private function executeSell(string $symbol, array $decision, float $availableCash): void
+    {
+        // Skip BTC, ETH, and BNB if cash is below $10
+        if ($availableCash < 10 && in_array($symbol, ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'])) {
+            $this->warn("  ⚠️ Skipping {$symbol}: Cash below $10 (have \${$availableCash})");
+            return;
+        }
+
+        // Check if position already exists
+        $existingPosition = Position::active()->bySymbol($symbol)->first();
+        if ($existingPosition) {
+            $this->warn("  ⚠️ Position already exists for {$symbol}");
+            return;
+        }
+
+        // Use same cooldown logic as buy
+        if (!\App\Models\BotSetting::get('manual_cooldown_override', false)) {
+            $requiredCooldown = $this->calculateDynamicCooldown($symbol);
+            $lastTrade = Position::where('symbol', $symbol)
+                ->orderBy('opened_at', 'desc')
+                ->first();
+
+            if ($lastTrade && $lastTrade->opened_at->diffInMinutes(now()) < $requiredCooldown) {
+                $minutesAgo = $lastTrade->opened_at->diffInMinutes(now());
+                $this->warn("  ⚠️ Skipping {$symbol}: Cooldown active ({$minutesAgo}min ago, need {$requiredCooldown}min)");
+                return;
+            }
+        }
+
+        $positionSize = $this->calculateDynamicPositionSize($availableCash);
+        if ($availableCash < $positionSize) {
+            $this->warn("  ⚠️ Insufficient cash (need \${$positionSize}, have \${$availableCash})");
+            return;
+        }
+
+        $leverage = $decision['leverage'] ?? $this->calculateDynamicLeverage($symbol);
+        $maxLeverage = BotSetting::get('max_leverage', 10);
+        $leverage = max(2, min($maxLeverage, $leverage));
+
+        $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
+        $targetPrice = $decision['target_price'] ?? $entryPrice * 0.95; // SHORT target is lower
+        
+        // SHORT stop loss (price goes UP)
+        $maxPnlLoss = 8.0;
+        $priceStopPercent = $maxPnlLoss / $leverage;
+        $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($priceStopPercent / 100));
+
+        $quantity = ($positionSize * $leverage) / $entryPrice;
+
+        // Set leverage
+        try {
+            $this->binance->getExchange()->setLeverage($leverage, $symbol);
+            $this->line("  📊 Leverage set to {$leverage}x");
+        } catch (\Exception $e) {
+            $this->warn("  ⚠️ Leverage setting failed: " . $e->getMessage());
+        }
+
+        // Send MARKET SELL order (open SHORT)
+        $this->line("  📤 Sending SELL (SHORT) order to Binance...");
+        $order = $this->binance->getExchange()->createMarketOrder(
+            $symbol,
+            'sell',
+            $quantity
+        );
+
+        $this->info("  ✅ Binance SHORT order executed: ID {$order['id']}");
+
+        $actualEntryPrice = $order['average'] ?? $order['price'] ?? $entryPrice;
+
+        // Create SHORT position record
+        Position::create([
+            'symbol' => $symbol,
+            'side' => 'short',
+            'quantity' => $order['filled'] ?? $quantity,
+            'entry_price' => $actualEntryPrice,
+            'current_price' => $actualEntryPrice,
+            'leverage' => $leverage,
+            'notional_value' => $positionSize * $leverage,
+            'notional_usd' => $positionSize * $leverage,
+            'entry_order_id' => $order['id'],
+            'exit_plan' => [
+                'profit_target' => $targetPrice,
+                'stop_loss' => $stopPrice,
+                'invalidation_condition' => $decision['invalidation'] ?? "Price closes above " . ($actualEntryPrice * 1.05),
+            ],
+            'confidence' => $decision['confidence'],
+            'risk_usd' => $positionSize * ($leverage / 100) * 3,
+            'is_open' => true,
+            'opened_at' => now(),
+        ]);
+
+        $this->info("  ✅ SELL (SHORT) executed: {$quantity} @ \${$entryPrice} (leverage: {$leverage}x)");
+        Log::info("✅ {$symbol}: SELL (SHORT) executed", [
             'quantity' => $quantity,
             'entry_price' => $entryPrice,
             'leverage' => $leverage,
