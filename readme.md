@@ -8,7 +8,7 @@ This is an open-source project and is still in the development and testing phase
 
 AI-driven cryptocurrency trading bot built with Laravel 12, FilamentPHP v4, and multi-provider AI support (DeepSeek/OpenRouter/OpenAI). Trades 6 cryptocurrencies simultaneously on Binance Futures with advanced technical analysis and risk management.
 
-## Supported Coins
+## Supported Coins (Active)
 
 - BTC/USDT
 - ETH/USDT
@@ -16,6 +16,22 @@ AI-driven cryptocurrency trading bot built with Laravel 12, FilamentPHP v4, and 
 - BNB/USDT
 - XRP/USDT
 - DOGE/USDT
+
+**Note:** Coin list simplified from 19 to 6 main coins for better focus and stability.
+
+## Recent Optimizations (Dec 2025)
+
+### SHORT Trading Improvements
+- **ADX Threshold**: Reduced from 25 to 20 (more opportunities)
+- **RSI Range**: Expanded SHORT range from 28-55 to 25-60
+- **Volume Filters**: Lowered from 1.3x/1.5x to 1.1x/1.2x
+- **Coin Focus**: Simplified to 6 main coins for stability
+
+### Expected Impact
+- Increased SHORT trading opportunities
+- Better trend detection with ADX 20
+- More balanced LONG/SHORT ratio
+- Improved overall win rate
 
 ## Technical Indicators (Active)
 
@@ -40,7 +56,7 @@ All indicators are calculated in pure PHP without external libraries in `MarketD
    - +DI (Plus Directional Indicator)
    - -DI (Minus Directional Indicator)
    - Uses Wilder's Smoothing method
-   - Measures trend strength (>20 = moderate, >25 = strong)
+   - Measures trend strength (>20 = strong trend)
 
 4. **Supertrend** - Lines 705-796
    - Period: 10
@@ -121,7 +137,7 @@ Located in `MultiCoinAIService.php:456-462`
 **All 5 criteria must be TRUE:**
 
 1. **MACD Bearish**: MACD < Signal AND MACD < 0
-2. **RSI Healthy**: RSI(7) between 28-55 (not oversold)
+2. **RSI Healthy**: RSI(7) between 25-60 (not oversold)
 3. **Price Below EMA**: 0-2% below EMA20 (riding downtrend)
 4. **4H Strong Downtrend**: EMA20 < EMA50 AND ADX > 20
 5. **Volume Confirmation**: Volume Ratio ≥ 1.0x
@@ -133,8 +149,8 @@ Located in `MultiCoinAIService.php:99-195`
 Reduces AI token usage by 70%+ by pre-filtering uninteresting coins:
 
 **Time-Aware Volume Thresholds:**
-- US trading hours (13:00-22:00 UTC): Min 1.3x volume
-- Off-hours: Min 1.5x volume
+- US trading hours (13:00-22:00 UTC): Min 1.1x volume
+- Off-hours: Min 1.2x volume
 
 **Scoring System (Need 3/5 to pass):**
 - MACD alignment with 4H trend

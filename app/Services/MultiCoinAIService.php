@@ -124,9 +124,9 @@ class MultiCoinAIService
                 $currentHour = now()->hour; // UTC hour
                 $isUSHours = $currentHour >= 13 && $currentHour <= 22; // US trading hours (13:00-22:00 UTC)
 
-                // 2025 OPTIMIZATION: Stricter volume filters
-                // US hours: stricter (1.3x), Off-hours: even stricter (1.5x)
-                $minVolumeRatio = $isUSHours ? 1.3 : 1.5;
+                // 2025 OPTIMIZATION: More balanced volume filters
+                // US hours: moderate (1.1x), Off-hours: stricter (1.2x)
+                $minVolumeRatio = $isUSHours ? 1.1 : 1.2;
 
                 Log::info("⏰ Current hour: {$currentHour} UTC, US Hours: " . ($isUSHours ? 'YES' : 'NO') . ", Min Volume: {$minVolumeRatio}x");
 
@@ -134,8 +134,8 @@ class MultiCoinAIService
                 $is4hUptrend = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0);
                 $is4hDowntrend = ($data4h['ema20'] ?? 0) < ($data4h['ema50'] ?? 0);
 
-                // 2025 OPTIMIZATION: Stronger ADX requirement (25+)
-                $adxOk = ($data4h['adx'] ?? 0) > 25; // Increased from 18 to 25 for stronger trends
+                // 2025 OPTIMIZATION: Stronger ADX requirement (20+)
+                $adxOk = ($data4h['adx'] ?? 0) > 20; // Back to 20 for consistency
 
                 // If 4H ADX too weak (< 20), skip - NO weak trends
                 if (($data4h['adx'] ?? 0) < 20) {
@@ -316,18 +316,17 @@ class MultiCoinAIService
             $atrWarning = $atrPercent > 8 ? '⚠️ TOO VOLATILE → HOLD' : '✅ OK';
 
             // Direction-aware 4H trend check (critical for determining LONG vs SHORT)
-            // 2025 OPTIMIZATION: Stricter ADX requirement (25+)
             $is4hUptrend = $data4h['ema20'] > ($data4h['ema50'] * 0.999);
-            $adxStrong = ($data4h['adx'] ?? 0) > 25; // Increased from 20 to 25
+            $adxStrong = ($data4h['adx'] ?? 0) > 20; // Back to 20 (25 was too strict)
 
             if ($is4hUptrend && $adxStrong) {
-                $prompt .= "4H TREND: ✅ STRONG BULLISH UPTREND (EMA20 > EMA50, ADX > 25) - **Favor LONG positions**\n";
+                $prompt .= "4H TREND: ✅ STRONG BULLISH UPTREND (EMA20 > EMA50, ADX > 20) - **Favor LONG positions**\n";
             } elseif (!$is4hUptrend && $adxStrong) {
-                $prompt .= "4H TREND: ✅ STRONG BEARISH DOWNTREND (EMA20 < EMA50, ADX > 25) - **Favor SHORT positions**\n";
+                $prompt .= "4H TREND: ✅ STRONG BEARISH DOWNTREND (EMA20 < EMA50, ADX > 20) - **Favor SHORT positions**\n";
             } elseif ($is4hUptrend && !$adxStrong) {
-                $prompt .= "4H TREND: ⚠️ WEAK UPTREND (EMA20 > EMA50, ADX < 25) - Too weak, prefer HOLD\n";
+                $prompt .= "4H TREND: ⚠️ WEAK UPTREND (EMA20 > EMA50, ADX < 20) - Too weak, prefer HOLD\n";
             } else {
-                $prompt .= "4H TREND: ⚠️ WEAK DOWNTREND (EMA20 < EMA50, ADX < 25) - Too weak, prefer HOLD\n";
+                $prompt .= "4H TREND: ⚠️ WEAK DOWNTREND (EMA20 < EMA50, ADX < 20) - Too weak, prefer HOLD\n";
             }
 
             $prompt .= sprintf(
@@ -444,7 +443,7 @@ LONG ENTRY (5 simple rules - ALL must be true):
 
 SHORT ENTRY (5 simple rules - ALL must be true):
 1. MACD < MACD_Signal AND MACD < 0 (bearish momentum)
-2. RSI(7) between 28-55 (healthy downward momentum, not oversold)
+2. RSI(7) between 25-60 (healthy downward momentum, not oversold)
 3. Price 0-2% below EMA20 (riding downtrend)
 4. 4H trend: EMA20 < EMA50 AND ADX > 20 (strong downtrend on higher timeframe)
 5. Volume Ratio ≥ 1.0x (minimum liquidity - coins below this already filtered out)
