@@ -556,7 +556,12 @@
                 return `
                     <div class="bg-dark-800 border border-dark-700 rounded-lg p-4 hover:border-blue-500/50 transition-colors">
                         <div class="flex justify-between items-center pb-2 mb-3 border-b border-dark-700">
-                            <div class="font-semibold text-lg text-white">${pos.symbol}</div>
+                            <div class="flex items-center gap-2">
+                                <div class="font-semibold text-lg text-white">${pos.symbol}</div>
+                                <div class="${pos.side === 'long' ? 'bg-green-600' : 'bg-red-600'} text-white px-2 py-1 rounded-full text-xs font-bold">
+                                    ${pos.side === 'long' ? '📈 LONG' : '📉 SHORT'}
+                                </div>
+                            </div>
                             <div class="flex gap-2">
                                 ${trailingBadge}
                                 <div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs">${pos.leverage}x</div>
@@ -593,8 +598,9 @@
             }
 
             container.innerHTML = `
-                <div class="grid grid-cols-6 bg-dark-700 text-gray-300 font-semibold p-3 text-sm">
+                <div class="grid grid-cols-7 bg-dark-700 text-gray-300 font-semibold p-3 text-sm">
                     <div>Symbol</div>
+                    <div>Side</div>
                     <div>Entry</div>
                     <div>Leverage</div>
                     <div>P&L</div>
@@ -604,9 +610,12 @@
                 ${positions.map(pos => {
                     const pnlColor = pos.pnl >= 0 ? 'text-green-400' : 'text-red-400';
                     const pnlEmoji = pos.pnl >= 0 ? '🟢' : '🔴';
+                    const sideColor = pos.side === 'long' ? 'text-green-400' : 'text-red-400';
+                    const sideText = pos.side === 'long' ? '📈 LONG' : '📉 SHORT';
                     return `
-                        <div class="grid grid-cols-6 p-3 border-b border-dark-700 hover:bg-dark-700/30 text-sm">
+                        <div class="grid grid-cols-7 p-3 border-b border-dark-700 hover:bg-dark-700/30 text-sm">
                             <div class="font-medium text-white">${pos.symbol}</div>
+                            <div class="${sideColor} font-semibold text-xs">${sideText}</div>
                             <div class="text-gray-300">${formatMoney(pos.entry_price)}</div>
                             <div class="text-blue-400">${pos.leverage}x</div>
                             <div class="${pnlColor} font-semibold">${pnlEmoji} ${formatMoney(pos.pnl)}</div>
