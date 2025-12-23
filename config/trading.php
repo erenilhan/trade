@@ -78,16 +78,16 @@ return [
             'target' => -0.5,   // Not used (disabled)
         ],
         'level_2' => [
-            'trigger' => 8,   // Moved from 6% to 8% (avoid premature trigger)
-            'target' => 2,    // Moved from 1% to 2% (safer profit lock)
+            'trigger' => 8,   // First trailing stop at +8% profit
+            'target' => 2,    // Lock in +2% profit
         ],
         'level_3' => [
-            'trigger' => 8,   // Activate at +8% profit (unchanged, performs well - 100% win rate)
-            'target' => 5,    // Move stop to +5% (unchanged, performs well)
+            'trigger' => 10,  // OPTIMIZED: Increased from 8% to avoid collision with L2
+            'target' => 5,    // Lock in +5% profit
         ],
         'level_4' => [
-            'trigger' => 12,  // Activate at +12% profit (unchanged, performs well)
-            'target' => 8,    // Move stop to +8% (unchanged, performs well)
+            'trigger' => 12,  // Activate at +12% profit
+            'target' => 8,    // Lock in +8% profit (let winners run!)
         ],
     ],
 
@@ -233,5 +233,20 @@ return [
         'consecutive_losses_trigger' => 3,  // Trigger after 3 consecutive losses
         'cooldown_hours' => 24,             // 24-hour trading pause
         'lookback_hours' => 24,             // Look at last 24 hours of trades
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI Batch Processing (Rate Limit Optimization)
+    |--------------------------------------------------------------------------
+    |
+    | Split coins into batches for free AI models with rate limits.
+    | Smaller batches = fewer tokens per request = less rate limiting.
+    |
+    */
+    'ai_batch_processing' => [
+        'enabled' => env('AI_BATCH_ENABLED', false), // Enable for free models
+        'coins_per_batch' => 5,                       // Max coins per AI request
+        'delay_between_batches' => 3,                 // Seconds to wait between batches
     ],
 ];

@@ -62,8 +62,8 @@ class ExecuteMultiCoinTrading extends Command
 
             // Check if there are any coins without open positions
             $openPositionsCount = Position::active()->count();
-            $supportedCoins = BotSetting::get('supported_coins', config('trading.default_active_pairs', []));
-            $totalCoins = count($supportedCoins); // Get from BotSetting (19 coins by default)
+            $supportedCoins = \App\Services\MarketDataService::getSupportedCoins(excludeBlacklisted: true);
+            $totalCoins = count($supportedCoins); // Get from BotSetting, excluding blacklisted
             $coinsAvailableForTrading = $totalCoins - $openPositionsCount;
 
             if ($coinsAvailableForTrading === 0) {
@@ -254,14 +254,22 @@ class ExecuteMultiCoinTrading extends Command
         $leverage = max(2, min($maxLeverage, $leverage));
 
         $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
-        $targetPrice = $decision['target_price'] ?? $entryPrice * 1.05;
-        
-        // Dynamic stop loss based on leverage: max 8% P&L loss (increased from 6% for volatility tolerance)
-        // Formula: price_stop% = 8% / leverage
-        // Examples: 2x = 4% price stop, 3x = 2.67% price stop, 5x = 1.6% price stop
-        $maxPnlLoss = 8.0; // Maximum P&L loss % (was 6.0)
-        $priceStopPercent = $maxPnlLoss / $leverage;
-        $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($priceStopPercent / 100));
+
+        // DYNAMIC TP/SL based on ATR (adaptive to volatility)
+        $latestMarketData = \App\Models\MarketData::getLatest($symbol, '4h');
+        $atr14 = $latestMarketData->atr_14 ?? 0;
+        $atrPercent = $atr14 > 0 ? ($atr14 / $entryPrice) * 100 : 0;
+
+        // Dynamic TP: ATR * 1.5, minimum 7.5%
+        $dynamicTpPercent = max(7.5, $atrPercent * 1.5);
+        $targetPrice = $decision['target_price'] ?? $entryPrice * (1 + ($dynamicTpPercent / 100));
+
+        // Dynamic SL: ATR * 0.75 for tighter stops, but respect max P&L loss
+        $maxPnlLoss = 8.0; // Maximum P&L loss %
+        $dynamicSlPercent = min($atrPercent * 0.75, $maxPnlLoss / $leverage);
+        $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($dynamicSlPercent / 100));
+
+        Log::info("  📊 Dynamic TP/SL: ATR {$atrPercent}% → TP {$dynamicTpPercent}%, SL {$dynamicSlPercent}%");
 
         // Calculate liquidation price
         $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage);
@@ -364,12 +372,22 @@ class ExecuteMultiCoinTrading extends Command
         $leverage = max(2, min($maxLeverage, $leverage));
 
         $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
-        $targetPrice = $decision['target_price'] ?? $entryPrice * 0.95; // SHORT target is lower
-        
-        // SHORT stop loss (price goes UP)
+
+        // DYNAMIC TP/SL for SHORT (same logic as LONG but inverted)
+        $latestMarketData = \App\Models\MarketData::getLatest($symbol, '4h');
+        $atr14 = $latestMarketData->atr_14 ?? 0;
+        $atrPercent = $atr14 > 0 ? ($atr14 / $entryPrice) * 100 : 0;
+
+        // Dynamic TP for SHORT: ATR * 1.5, minimum 7.5% (price goes DOWN)
+        $dynamicTpPercent = max(7.5, $atrPercent * 1.5);
+        $targetPrice = $decision['target_price'] ?? $entryPrice * (1 - ($dynamicTpPercent / 100));
+
+        // Dynamic SL for SHORT: ATR * 0.75 (price goes UP)
         $maxPnlLoss = 8.0;
-        $priceStopPercent = $maxPnlLoss / $leverage;
-        $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($priceStopPercent / 100));
+        $dynamicSlPercent = min($atrPercent * 0.75, $maxPnlLoss / $leverage);
+        $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($dynamicSlPercent / 100));
+
+        Log::info("  📊 Dynamic TP/SL: ATR {$atrPercent}% → TP {$dynamicTpPercent}%, SL {$dynamicSlPercent}%");
 
         $quantity = ($positionSize * $leverage) / $entryPrice;
 

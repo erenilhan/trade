@@ -16,18 +16,35 @@ class MarketDataService
 
     /**
      * Get supported coins from BotSetting or config default
+     *
+     * @param bool $excludeBlacklisted Filter out blacklisted coins (default: true)
+     * @return array List of tradeable coin symbols
      */
-    public static function getSupportedCoins(): array
+    public static function getSupportedCoins(bool $excludeBlacklisted = true): array
     {
         $defaultCoins = config('trading.default_active_pairs', array_keys(config('trading.supported_pairs', [])));
         $coins = \App\Models\BotSetting::get('supported_coins', $defaultCoins);
-        
+
         // Handle JSON string from database
         if (is_string($coins)) {
             $coins = json_decode($coins, true) ?? $defaultCoins;
         }
-        
-        return is_array($coins) ? $coins : $defaultCoins;
+
+        $coins = is_array($coins) ? $coins : $defaultCoins;
+
+        // Filter out blacklisted coins
+        if ($excludeBlacklisted) {
+            $blacklisted = \App\Models\CoinBlacklist::where('status', 'blacklisted')
+                ->pluck('symbol')
+                ->toArray();
+
+            if (!empty($blacklisted)) {
+                $coins = array_values(array_diff($coins, $blacklisted));
+                \Illuminate\Support\Facades\Log::info("🚫 Filtered out " . count($blacklisted) . " blacklisted coins", ['blacklisted' => $blacklisted]);
+            }
+        }
+
+        return $coins;
     }
 
     /**

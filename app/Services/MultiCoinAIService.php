@@ -33,7 +33,7 @@ class MultiCoinAIService
     }
 
     /**
-     * Make multi-coin trading decision
+     * Make multi-coin trading decision (with optional batch processing)
      */
     public function makeDecision(array $account): array
     {
@@ -50,48 +50,14 @@ class MultiCoinAIService
                 ];
             }
 
-            // Build advanced multi-coin prompt
-            $prompt = $this->buildMultiCoinPrompt($account, $allMarketData);
-
-            // Show which coins are being sent to AI
-            $coinsInPrompt = array_keys($allMarketData);
-            $this->showCoinsBeingSent($coinsInPrompt);
-            
-            // Show detailed prompt being sent to AI
-            $this->showPromptDetails($prompt);
-
-            Log::info("🤖 Multi-Coin AI Prompt ({$this->provider})", ['length' => strlen($prompt)]);
-
-            // Call appropriate AI provider
-            $aiResponse = match ($this->provider) {
-                'deepseek' => $this->callDeepSeekAPI($prompt),
-                'openrouter' => $this->callOpenRouter($prompt),
-                default => throw new Exception("Invalid AI provider: {$this->provider}")
-            };
-
-            $decision = $aiResponse['decision'];
-            $rawResponse = $aiResponse['raw_response'];
-            $model = $aiResponse['model'];
-
-            // Log the AI call
-            $this->logAiCall($this->provider, $model, $prompt, $rawResponse, $decision);
-
-            Log::info("🤖 Multi-Coin Decision", ['decision' => $decision]);
-
-            // Add metadata to response
-            $decision['provider'] = $this->provider;
-            $decision['model'] = $model;
-            if (isset($aiResponse['tokens_used'])) {
-                $decision['tokens_used'] = $aiResponse['tokens_used'];
+            // Check if batch processing is enabled (for free models with rate limits)
+            $batchConfig = config('trading.ai_batch_processing');
+            if ($batchConfig['enabled'] && count($allMarketData) > $batchConfig['coins_per_batch']) {
+                return $this->makeDecisionInBatches($account, $allMarketData, $batchConfig);
             }
-            if (isset($aiResponse['cost'])) {
-                $decision['cost'] = $aiResponse['cost'];
-            }
-            
-            // Show AI response details
-            $this->showAIResponse($decision, $rawResponse);
 
-            return $decision;
+            // Single request for all coins (default)
+            return $this->processSingleBatch($account, $allMarketData);
 
         } catch (Exception $e) {
             Log::error('❌ Multi-Coin AI Error', ['error' => $e->getMessage()]);
@@ -101,6 +67,98 @@ class MultiCoinAIService
                 'reasoning' => 'AI error: ' . $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Process multiple batches of coins (for rate limit optimization)
+     */
+    private function makeDecisionInBatches(array $account, array $allMarketData, array $batchConfig): array
+    {
+        $coinsPerBatch = $batchConfig['coins_per_batch'];
+        $delayBetweenBatches = $batchConfig['delay_between_batches'];
+
+        $allCoins = array_keys($allMarketData);
+        $batches = array_chunk($allCoins, $coinsPerBatch, true);
+
+        Log::info("📦 Batch processing enabled: " . count($batches) . " batches of {$coinsPerBatch} coins each");
+
+        $allDecisions = [];
+        $allReasoning = [];
+
+        foreach ($batches as $batchIndex => $coinBatch) {
+            Log::info("📦 Processing batch " . ($batchIndex + 1) . "/" . count($batches));
+
+            // Filter market data for this batch
+            $batchMarketData = array_intersect_key($allMarketData, array_flip($coinBatch));
+
+            // Process this batch
+            $batchResult = $this->processSingleBatch($account, $batchMarketData);
+
+            // Merge results
+            $allDecisions = array_merge($allDecisions, $batchResult['decisions'] ?? []);
+            $allReasoning[] = $batchResult['reasoning'] ?? '';
+
+            // Delay before next batch (except last batch)
+            if ($batchIndex < count($batches) - 1) {
+                Log::info("⏳ Waiting {$delayBetweenBatches}s before next batch...");
+                sleep($delayBetweenBatches);
+            }
+        }
+
+        return [
+            'decisions' => $allDecisions,
+            'reasoning' => implode(' | ', array_filter($allReasoning)),
+            'batches_processed' => count($batches),
+        ];
+    }
+
+    /**
+     * Process a single batch of coins
+     */
+    private function processSingleBatch(array $account, array $marketData): array
+    {
+        // Build prompt for this batch
+        $prompt = $this->buildMultiCoinPrompt($account, $marketData);
+
+        // Show which coins are being sent to AI
+        $coinsInPrompt = array_keys($marketData);
+        $this->showCoinsBeingSent($coinsInPrompt);
+
+        // Show detailed prompt being sent to AI
+        $this->showPromptDetails($prompt);
+
+        Log::info("🤖 Multi-Coin AI Prompt ({$this->provider})", ['length' => strlen($prompt)]);
+
+        // Call appropriate AI provider
+        $aiResponse = match ($this->provider) {
+            'deepseek' => $this->callDeepSeekAPI($prompt),
+            'openrouter' => $this->callOpenRouter($prompt),
+            default => throw new Exception("Invalid AI provider: {$this->provider}")
+        };
+
+        $decision = $aiResponse['decision'];
+        $rawResponse = $aiResponse['raw_response'];
+        $model = $aiResponse['model'];
+
+        // Log the AI call
+        $this->logAiCall($this->provider, $model, $prompt, $rawResponse, $decision);
+
+        Log::info("🤖 Multi-Coin Decision", ['decision' => $decision]);
+
+        // Add metadata to response
+        $decision['provider'] = $this->provider;
+        $decision['model'] = $model;
+        if (isset($aiResponse['tokens_used'])) {
+            $decision['tokens_used'] = $aiResponse['tokens_used'];
+        }
+        if (isset($aiResponse['cost'])) {
+            $decision['cost'] = $aiResponse['cost'];
+        }
+
+        // Show AI response details
+        $this->showAIResponse($decision, $rawResponse);
+
+        return $decision;
     }
 
     /**
@@ -140,15 +198,29 @@ class MultiCoinAIService
                 $data3m = $data['3m'];
                 $data4h = $data['4h'];
 
-                // Dynamic volume threshold based on trading hours
+                // Dynamic volume threshold based on global trading hours (UTC)
                 $currentHour = now()->hour; // UTC hour
-                $isUSHours = $currentHour >= 13 && $currentHour <= 22; // US trading hours (13:00-22:00 UTC)
 
-                // 2025 OPTIMIZATION: Realistic volume filters for crypto markets
-                // US hours: lenient (0.9x), Off-hours: moderate (1.0x)
-                $minVolumeRatio = $isUSHours ? 0.9 : 1.0;
+                // Regional liquidity zones (optimized for crypto markets)
+                if ($currentHour >= 13 && $currentHour <= 22) {
+                    // US hours (13:00-22:00 UTC = 8am-5pm EST)
+                    $minVolumeRatio = 0.9;
+                    $region = 'US';
+                } elseif ($currentHour >= 1 && $currentHour <= 9) {
+                    // Asia hours (01:00-09:00 UTC = 9am-5pm Asia)
+                    $minVolumeRatio = 0.8;
+                    $region = 'Asia';
+                } elseif ($currentHour >= 7 && $currentHour <= 16) {
+                    // Europe hours (07:00-16:00 UTC = 8am-5pm CET)
+                    $minVolumeRatio = 0.95;
+                    $region = 'Europe';
+                } else {
+                    // Off-peak hours (low liquidity)
+                    $minVolumeRatio = 1.0;
+                    $region = 'Off-peak';
+                }
 
-                Log::info("⏰ Current hour: {$currentHour} UTC, US Hours: " . ($isUSHours ? 'YES' : 'NO') . ", Min Volume: {$minVolumeRatio}x");
+                Log::info("⏰ Current: {$currentHour} UTC, Region: {$region}, Min Volume: {$minVolumeRatio}x");
 
                 // Determine 4H trend direction first
                 $is4hUptrend = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0);
@@ -174,31 +246,29 @@ class MultiCoinAIService
                 $longScore = 0;
                 $shortScore = 0;
 
-                // LONG scoring
+                // LONG scoring (volume NOT counted in score)
                 if ($is4hUptrend) {
                     if (($data3m['macd'] ?? 0) > ($data3m['macd_signal'] ?? 0)) $longScore++;
-                    if (($data3m['rsi7'] ?? 0) >= 40 && ($data3m['rsi7'] ?? 0) <= 75) $longScore++;
+                    if (($data3m['rsi7'] ?? 0) >= 50 && ($data3m['rsi7'] ?? 0) <= 70) $longScore++; // Tightened
                     if ($data3m['price'] >= $data3m['ema20'] * 0.98 && $data3m['price'] <= $data3m['ema20'] * 1.05) $longScore++;
                     if ($adxOk) $longScore++;
-                    $longScore++; // Volume already checked above
                 }
 
-                // SHORT scoring
+                // SHORT scoring (volume NOT counted in score)
                 if ($is4hDowntrend) {
                     if (($data3m['macd'] ?? 0) < ($data3m['macd_signal'] ?? 0)) $shortScore++;
-                    if (($data3m['rsi7'] ?? 0) >= 25 && ($data3m['rsi7'] ?? 0) <= 60) $shortScore++;
+                    if (($data3m['rsi7'] ?? 0) >= 30 && ($data3m['rsi7'] ?? 0) <= 55) $shortScore++; // Tightened
                     if ($data3m['price'] <= $data3m['ema20'] * 1.02 && $data3m['price'] >= $data3m['ema20'] * 0.95) $shortScore++;
                     if ($adxOk) $shortScore++;
-                    $shortScore++; // Volume already checked above
                 }
 
-                // Need at least 3/5 score to send to AI
+                // Need at least 3/4 score to send to AI (volume checked separately)
                 if ($longScore >= 3) {
-                    Log::info("✅ {$symbol} passed pre-filter (potential LONG, score {$longScore}/5, volume {$volumeRatio}x)");
+                    Log::info("✅ {$symbol} passed pre-filter (potential LONG, score {$longScore}/4, volume {$volumeRatio}x)");
                 } else if ($shortScore >= 3) {
-                    Log::info("✅ {$symbol} passed pre-filter (potential SHORT, score {$shortScore}/5, volume {$volumeRatio}x)");
+                    Log::info("✅ {$symbol} passed pre-filter (potential SHORT, score {$shortScore}/4, volume {$volumeRatio}x)");
                 } else {
-                    Log::info("⏭️ Pre-filtered {$symbol} - Low score (LONG {$longScore}/5, SHORT {$shortScore}/5)");
+                    Log::info("⏭️ Pre-filtered {$symbol} - Low score (LONG {$longScore}/4, SHORT {$shortScore}/4)");
                     continue;
                 }
             }
@@ -222,16 +292,16 @@ class MultiCoinAIService
                 $data3m['rsi7']
             );
 
-            // RSI direction check
+            // RSI direction check (tightened ranges for safety)
             $rsi = $data3m['rsi7'];
-            if ($rsi >= 45 && $rsi <= 72) {
-                $prompt .= "RSI STATUS: ✅ IN LONG RANGE (45-72, current: {$rsi}) - healthy for LONG\n";
-            } elseif ($rsi >= 28 && $rsi <= 55) {
-                $prompt .= "RSI STATUS: ✅ IN SHORT RANGE (28-55, current: {$rsi}) - healthy for SHORT\n";
-            } elseif ($rsi < 28) {
-                $prompt .= "RSI STATUS: ⚠️ OVERSOLD (< 28, current: {$rsi}) - too weak, avoid SHORT (bounce risk)\n";
+            if ($rsi >= 50 && $rsi <= 70) {
+                $prompt .= "RSI STATUS: ✅ IN LONG RANGE (50-70, current: {$rsi}) - healthy for LONG\n";
+            } elseif ($rsi >= 30 && $rsi <= 55) {
+                $prompt .= "RSI STATUS: ✅ IN SHORT RANGE (30-55, current: {$rsi}) - healthy for SHORT\n";
+            } elseif ($rsi < 30) {
+                $prompt .= "RSI STATUS: ⚠️ OVERSOLD (< 30, current: {$rsi}) - too weak, avoid SHORT (bounce risk)\n";
             } else {
-                $prompt .= "RSI STATUS: ⚠️ OVERBOUGHT (> 72, current: {$rsi}) - too strong, avoid LONG (pullback risk)\n";
+                $prompt .= "RSI STATUS: ⚠️ OVERBOUGHT (> 70, current: {$rsi}) - too strong, avoid LONG (pullback risk)\n";
             }
 
             // Price position relative to EMA20
@@ -309,12 +379,12 @@ class MultiCoinAIService
             $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'], 10) . "\n";
             $prompt .= "Open Interest: Latest: " . number_format($data3m['open_interest'], 2) . "\n\n";
 
-            $prompt .= "Intraday series (3-minute intervals, last 10 candles = 30min context):\n";
-            $prompt .= "Prices: [" . implode(', ', array_map(fn($p) => number_format($p, 2), array_slice($data3m['price_series'], -10))) . "]\n";
-            $prompt .= "EMA20: [" . implode(', ', array_map(fn($e) => number_format($e, 2), array_slice($data3m['indicators']['ema_series'], -10))) . "]\n";
-            $prompt .= "MACD: [" . implode(', ', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -10))) . "]\n";
-            $prompt .= "MACD Signal: [" . implode(', ', array_map(fn($s) => number_format($s, 3), array_slice($data3m['indicators']['signal_series'], -10))) . "]\n";
-            $prompt .= "RSI7: [" . implode(', ', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -10))) . "]\n\n";
+            // Shortened series (5 candles = 15min context, saves tokens)
+            $prompt .= "Recent 3m data (last 5 candles):\n";
+            $prompt .= "Price: [" . implode(',', array_map(fn($p) => number_format($p, 2), array_slice($data3m['price_series'], -5))) . "]\n";
+            $prompt .= "EMA20: [" . implode(',', array_map(fn($e) => number_format($e, 2), array_slice($data3m['indicators']['ema_series'], -5))) . "]\n";
+            $prompt .= "MACD: [" . implode(',', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -5))) . "]\n";
+            $prompt .= "RSI7: [" . implode(',', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -5))) . "]\n\n";
 
             // Volume info
             $currentVolume = $data3m['volume'] ?? 0;
@@ -463,76 +533,39 @@ class MultiCoinAIService
             return $customPrompt;
         }
 
-        // SIMPLIFIED strategy - back to basics that worked (KISS principle)
-        return "You are a crypto day trader. Trade LONG and SHORT based on simple, clear signals.
+        // COMPACT system prompt (optimized for free models with token limits)
+        return "Crypto trader. LONG=buy uptrends, SHORT=sell downtrends.
 
-⚠️ STRATEGY: Trade with the trend. LONG in uptrends, SHORT in downtrends. Simple and effective.
+LONG (all 5 must pass):
+1. MACD>Signal & MACD>0
+2. RSI7: 50-70 (tightened for safety)
+3. Price 0-2% above EMA20
+4. 4H: EMA20>EMA50 & ADX>20
+5. Volume≥1.0x
 
-⚠️ IMPORTANT DIRECTION LOGIC:
-- When you see '**LONG signal**' or 'Favor LONG positions' → Check the 5 LONG criteria
-- When you see '**SHORT signal**' or 'Favor SHORT positions' → Check the 5 SHORT criteria
-- When you see 'BEARISH DOWNTREND' → This is GOOD for SHORT (not bad!)
-- When you see 'BULLISH UPTREND' → This is GOOD for LONG (not bad!)
-- DO NOT only check LONG criteria - check BOTH directions based on market trend!
+SHORT (all 5 must pass):
+1. MACD<Signal & MACD<0
+2. RSI7: 30-55 (tightened for safety)
+3. Price 0-2% below EMA20
+4. 4H: EMA20<EMA50 & ADX>20
+5. Volume≥1.0x
 
-LONG ENTRY (5 simple rules - ALL must be true):
-1. MACD > MACD_Signal AND MACD > 0 (bullish momentum)
-2. RSI(7) between 45-72 (healthy momentum, not overbought)
-3. Price 0-2% above EMA20 (riding uptrend)
-4. 4H trend: EMA20 > EMA50 AND ADX > 20 (strong uptrend on higher timeframe)
-5. Volume Ratio ≥ 1.0x (minimum liquidity - coins below this already filtered out)
+HOLD if: ATR>8% OR criteria not met OR low confidence (<60%)
 
-SHORT ENTRY (5 simple rules - ALL must be true):
-1. MACD < MACD_Signal AND MACD < 0 (bearish momentum)
-2. RSI(7) between 25-60 (healthy downward momentum, not oversold)
-3. Price 0-2% below EMA20 (riding downtrend)
-4. 4H trend: EMA20 < EMA50 AND ADX > 20 (strong downtrend on higher timeframe)
-5. Volume Ratio ≥ 1.0x (minimum liquidity - coins below this already filtered out)
+Max 1-2 trades/cycle. Leverage=2x always.
 
-VOLUME QUALITY TIERS (impacts risk):
-- Volume ≥ 1.5x: EXCELLENT - High liquidity, low slippage risk, full confidence
-- Volume 1.2-1.5x: GOOD - Normal liquidity, standard risk
-- Volume 1.0-1.2x: ACCEPTABLE - Moderate liquidity, slightly elevated risk
-- Volume < 1.0x: WEAK - Already filtered out by system
-
-HOLD IF (any of these):
-- Criteria not met for LONG or SHORT
-- ATR > 8% (too volatile - CRITICAL SAFETY CHECK)
-- Volume marked as WEAK (< 1.0x - should already be filtered)
-- AI Confidence < 60%
-- 4H ADX < 20 (sideways, no clear trend)
-- Volume 1.0-1.2x AND other signals not strong (prefer higher volume)
-
-RISK MANAGEMENT:
-- Maximum 1-2 new positions per cycle (LONG or SHORT)
-- Skip if 4+ positions already open
-- Mix LONG and SHORT when possible (hedge risk)
-- Use 2x leverage for all trades (proven safe and effective)
-
-OUTPUT FORMAT:
-- Return JSON: {\"decisions\":[{\"symbol\":\"ALPACA/USDT\",\"action\":\"buy|sell|hold\",\"reasoning\":\"...\",\"confidence\":0.70,\"leverage\":2}],\"chain_of_thought\":\"...\"}
-- Actions: 'buy' (LONG), 'sell' (SHORT), 'hold'
-- Always set leverage = 2
-- DO NOT set entry_price, target_price, stop_price, or invalidation (system calculates automatically)
-
-IMPORTANT:
-- Your job: Decide action (buy/sell/hold) based on the 5 rules
-- System's job: Calculate entry, target, stop prices automatically
-- Exits handled by trailing stops (L2 at +6%, L3 at +9%, L4 at +12%)
-- Simple is better - 5 clear criteria beats 40 confusing rules
-- Trade WITH the 4H trend, time entry on 3m chart
-- Volume confirmation critical - no volume = no trade
-- Historical data: 60-74% confidence performs best (avoid 80%+ overconfidence)
-- If ATR > 8%, ALWAYS return 'hold' regardless of other signals";
+JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reasoning\":\"brief\",\"confidence\":0.70,\"leverage\":2}],\"chain_of_thought\":\"brief\"}";
     }
 
     /**
-     * Call OpenRouter API
+     * Call OpenRouter API with rate limit handling
      * @throws ReflectionException
      */
     private function callOpenRouter(string $prompt): array
     {
         $model = config('openrouter.model', 'deepseek/deepseek-chat');
+        $maxRetries = 3;
+        $retryDelay = 2; // seconds
 
         $messages = [
             new MessageData(
@@ -555,8 +588,31 @@ IMPORTANT:
             temperature: 0.3
         );
 
-        $responseDTO = LaravelOpenRouter::chatRequest($chatData);
-        $content = $responseDTO->choices[0]['message']['content'] ?? null;
+        // Retry loop for rate limits
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $responseDTO = LaravelOpenRouter::chatRequest($chatData);
+                $content = $responseDTO->choices[0]['message']['content'] ?? null;
+                break; // Success, exit retry loop
+            } catch (\Exception $e) {
+                $isRateLimit = str_contains($e->getMessage(), 'rate limit') ||
+                               str_contains($e->getMessage(), '429') ||
+                               str_contains($e->getMessage(), 'Too Many Requests');
+
+                if ($isRateLimit && $attempt < $maxRetries) {
+                    $waitTime = $retryDelay * pow(2, $attempt - 1); // Exponential backoff
+                    Log::warning("⏳ OpenRouter rate limit hit, retrying in {$waitTime}s (attempt {$attempt}/{$maxRetries})");
+                    sleep($waitTime);
+                    continue;
+                }
+
+                throw $e; // Not rate limit or max retries reached
+            }
+        }
+
+        if (!isset($content)) {
+            $content = $responseDTO->choices[0]['message']['content'] ?? null;
+        }
 
         if (!$content) {
             throw new Exception('Empty OpenRouter response');

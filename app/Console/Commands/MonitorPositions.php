@@ -63,6 +63,26 @@ class MonitorPositions extends Command
 
         $this->line("  📊 {$symbol}: \${$currentPrice} ({$position->side})");
 
+        // 🌙 PRE-SLEEP MODE: Close profitable positions 2 hours before sleep (21:00 UTC)
+        $currentHourUTC = now()->utc()->hour;
+        $preSleepHour = 21; // 2 hours before sleep mode starts at 23:00 UTC
+
+        if ($currentHourUTC === $preSleepHour) {
+            // Calculate profit percent
+            $priceDiff = $currentPrice - $entryPrice;
+            if ($position->side === 'short') {
+                $priceDiff = -$priceDiff;
+            }
+            $profitPercent = ($priceDiff / $entryPrice) * 100 * $position->leverage;
+
+            // Close if profitable (even slightly)
+            if ($profitPercent > 0) {
+                $this->warn("    🌙 Pre-sleep close: Locking in +{$profitPercent}% profit before sleep mode");
+                $this->closePosition($position, 'pre_sleep_close', $currentPrice);
+                return;
+            }
+        }
+
         // 🌙 SLEEP MODE: Tighten stop loss during low liquidity hours
         $sleepModeConfig = config('trading.sleep_mode');
         if ($sleepModeConfig['enabled'] && $sleepModeConfig['tighter_stops'] && $stopLoss) {
