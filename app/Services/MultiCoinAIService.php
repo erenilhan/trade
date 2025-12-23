@@ -71,6 +71,16 @@ class MultiCoinAIService
 
             Log::info("🤖 Multi-Coin Decision", ['decision' => $decision]);
 
+            // Add metadata to response
+            $decision['provider'] = $this->provider;
+            $decision['model'] = $model;
+            if (isset($aiResponse['tokens_used'])) {
+                $decision['tokens_used'] = $aiResponse['tokens_used'];
+            }
+            if (isset($aiResponse['cost'])) {
+                $decision['cost'] = $aiResponse['cost'];
+            }
+
             return $decision;
 
         } catch (Exception $e) {

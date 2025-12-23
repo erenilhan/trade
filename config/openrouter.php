@@ -16,10 +16,10 @@ return [
     | Default Model
     |--------------------------------------------------------------------------
     |
-    | The default AI model to use (DeepSeek for trading)
+    | The default AI model to use (Xiaomi MIMO v2 Flash - FREE!)
     |
     */
-    'model' => env('OPENROUTER_MODEL', 'deepseek/deepseek-chat-v3.1'),
+    'model' => env('OPENROUTER_MODEL', 'xiaomi/mimo-v2-flash:free'),
 
     /*
     |--------------------------------------------------------------------------

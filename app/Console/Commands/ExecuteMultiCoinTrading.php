@@ -102,7 +102,27 @@ class ExecuteMultiCoinTrading extends Command
             // Get AI decision
             $aiDecision = $this->ai->makeDecision($account);
 
+            // Show AI response details
             $this->info("🤖 AI made " . count($aiDecision['decisions'] ?? []) . " decisions");
+            
+            // Show AI provider and model info
+            if (isset($aiDecision['provider'])) {
+                $this->line("🔧 Provider: " . $aiDecision['provider']);
+            }
+            if (isset($aiDecision['model'])) {
+                $this->line("🧠 Model: " . $aiDecision['model']);
+            }
+            if (isset($aiDecision['tokens_used'])) {
+                $this->line("💬 Tokens: " . number_format($aiDecision['tokens_used']));
+            }
+            if (isset($aiDecision['cost'])) {
+                $this->line("💰 Cost: $" . number_format($aiDecision['cost'], 4));
+            }
+            
+            // Show reasoning if available
+            if (isset($aiDecision['reasoning']) && !empty($aiDecision['reasoning'])) {
+                $this->line("💭 AI Reasoning: " . substr($aiDecision['reasoning'], 0, 100) . "...");
+            }
 
             // Execute decisions
             foreach ($aiDecision['decisions'] ?? [] as $decision) {
