@@ -102,8 +102,8 @@ class MarketDataService
             $openInterest = 0;
         }
 
-        // Get last 10 prices for series
-        $priceSeries = array_slice(array_column($ohlcv, 4), -10); // Close prices
+        // Get last 20 prices for series (needed for ADX calculation)
+        $priceSeries = array_slice(array_column($ohlcv, 4), -20); // Close prices
 
         // Current values
         $currentPrice = end($priceSeries);
@@ -139,12 +139,15 @@ class MarketDataService
             'stoch_rsi_k' => $indicators['stoch_rsi_k'],
             'stoch_rsi_d' => $indicators['stoch_rsi_d'],
             'indicators' => [
-                'ema_series' => array_slice($indicators['ema20_series'], -10),
-                'macd_series' => array_slice($indicators['macd_series'], -10),
-                'signal_series' => array_slice($indicators['signal_series'], -10),
-                'rsi7_series' => array_slice($indicators['rsi7_series'], -10),
-                'rsi14_series' => array_slice($indicators['rsi14_series'], -10),
+                'ema_series' => array_slice($indicators['ema20_series'], -20),
+                'macd_series' => array_slice($indicators['macd_series'], -20),
+                'signal_series' => array_slice($indicators['signal_series'], -20),
+                'rsi7_series' => array_slice($indicators['rsi7_series'], -20),
+                'rsi14_series' => array_slice($indicators['rsi14_series'], -20),
                 'volume' => $indicators['volume'],
+                'adx' => $indicators['adx'] ?? null,
+                'plus_di' => $indicators['plus_di'] ?? null,
+                'minus_di' => $indicators['minus_di'] ?? null,
             ],
             'data_timestamp' => now(),
         ];
