@@ -7,8 +7,8 @@ use Illuminate\Support\Facades\Http;
 
 class SyncBinanceFutures extends Command
 {
-    protected $signature = 'binance:sync-futures {--top=50 : Number of top pairs to show}';
-    protected $description = 'Get available Binance Futures USDT pairs';
+    protected $signature = 'binance:sync-futures {--top=50 : Number of top pairs to show} {--update : Update bot settings with top coins}';
+    protected $description = 'Get available Binance Futures USDT pairs and optionally update bot settings';
 
     public function handle()
     {
@@ -46,6 +46,16 @@ class SyncBinanceFutures extends Command
             
             $this->newLine();
             $this->info('✅ Sync completed!');
+            
+            // Update bot settings if requested
+            if ($this->option('update')) {
+                $topCoins = $tickers->take(30)->pluck('symbol')->toArray();
+                \App\Models\BotSetting::set('supported_coins', $topCoins);
+                $this->info("🔄 Updated bot settings with top 30 coins");
+                $this->line("Active coins: " . implode(', ', $topCoins));
+            } else {
+                $this->comment("💡 Run with --update to automatically update bot settings");
+            }
             
         } catch (\Exception $e) {
             $this->error('Error: ' . $e->getMessage());

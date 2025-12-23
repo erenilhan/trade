@@ -34,7 +34,7 @@ Schedule::command('db:cleanup --days=7 --ai-days=3')
     ->dailyAt('02:00')
     ->onOneServer();
 
-// Sync Binance Futures markets weekly on Sunday at 3 AM
-Schedule::command('binance:sync-futures --top=30')
+// Sync Binance Futures markets weekly on Sunday at 3 AM (with auto-update)
+Schedule::command('binance:sync-futures --top=30 --update')
     ->weeklyOn(0, '03:00')
     ->onOneServer();
