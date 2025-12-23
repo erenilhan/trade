@@ -29,7 +29,12 @@ Schedule::command('positions:monitor')
     ->onOneServer()
     ->runInBackground();
 
-// Prune AI logs daily
-Schedule::command('logs:prune-ai')
-    ->daily()
+// Database cleanup daily at 2 AM
+Schedule::command('db:cleanup --days=7 --ai-days=3')
+    ->dailyAt('02:00')
+    ->onOneServer();
+
+// Sync Binance Futures markets weekly on Sunday at 3 AM
+Schedule::command('binance:sync-futures --top=30')
+    ->weeklyOn(0, '03:00')
     ->onOneServer();

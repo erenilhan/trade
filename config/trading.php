@@ -12,25 +12,26 @@ return [
     |
     */
     'supported_pairs' => [
-        'ETH/USDT' => 'Ethereum ($15.8B)',
-        'BTC/USDT' => 'Bitcoin ($13.2B)',
-        'SOL/USDT' => 'Solana ($4.4B)',
-        'BNB/USDT' => 'BNB ($2.7B)',
-        'ZEC/USDT' => 'Zcash ($1.38B)',
-        'XRP/USDT' => 'Ripple ($1.28B)',
-        'DOGE/USDT' => 'Dogecoin ($0.80B)',
-        'HYPE/USDT' => 'Hype ($0.65B)',
-        'SUI/USDT' => 'Sui ($0.33B)',
-        'LINK/USDT' => 'Chainlink ($0.23B)',
-        'ADA/USDT' => 'Cardano ($0.26B)',
-        'AVAX/USDT' => 'Avalanche ($0.27B)',
-        'TAO/USDT' => 'Bittensor ($0.23B)',
-        'BCH/USDT' => 'Bitcoin Cash ($0.21B)',
-        'DOT/USDT' => 'Polkadot ($0.20B)',
-        'ZEN/USDT' => 'Horizen ($0.17B)',
-        'LTC/USDT' => 'Litecoin ($0.15B)',
-        // 'PEPE/USDT' => 'Pepe ($0.26B)', // Not available on Binance Futures
-        // 'MATIC/USDT' => 'Polygon ($0.14B)', // Not available on Binance Futures
+        'BTC/USDT' => 'Bitcoin ($12.6B)',
+        'ETH/USDT' => 'Ethereum ($10.9B)',
+        'ALPACA/USDT' => 'Alpaca Finance ($2.9B)',
+        'SOL/USDT' => 'Solana ($2.5B)',
+        'BEAT/USDT' => 'Beat ($1.3B)',
+        'XRP/USDT' => 'Ripple ($0.79B)',
+        'ZEC/USDT' => 'Zcash ($0.69B)',
+        'H/USDT' => 'H ($0.63B)',
+        'DOGE/USDT' => 'Dogecoin ($0.51B)',
+        'BNX/USDT' => 'BinaryX ($0.49B)',
+        'ALPHA/USDT' => 'Alpha Finance ($0.37B)',
+        'RAVE/USDT' => 'Rave ($0.36B)',
+        'PIPPIN/USDT' => 'Pippin ($0.35B)',
+        'BNB/USDT' => 'BNB ($0.33B)',
+        'NIGHT/USDT' => 'Night ($0.31B)',
+        'ANIME/USDT' => 'Anime ($0.31B)',
+        'AAVE/USDT' => 'Aave ($0.27B)',
+        'SUI/USDT' => 'Sui ($0.27B)',
+        'ADA/USDT' => 'Cardano ($0.24B)',
+        'ZKP/USDT' => 'ZKP ($0.25B)',
     ],
 
     /*
@@ -45,9 +46,9 @@ return [
         'BTC/USDT',
         'ETH/USDT', 
         'SOL/USDT',
-        'BNB/USDT',
         'XRP/USDT',
         'DOGE/USDT',
+        'BNB/USDT',
     ],
 
     /*
