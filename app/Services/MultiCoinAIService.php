@@ -622,7 +622,8 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
         for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
             try {
                 $responseDTO = LaravelOpenRouter::chatRequest($chatData);
-                $content = $responseDTO->choices[0]['message']['content'] ?? null;
+                $responseArray = $responseDTO->toArray();
+                $content = $responseArray['choices'][0]['message']['content'] ?? null;
                 break; // Success, exit retry loop
             } catch (\Exception $e) {
                 $isRateLimit = str_contains($e->getMessage(), 'rate limit') ||
@@ -638,10 +639,6 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
 
                 throw $e; // Not rate limit or max retries reached
             }
-        }
-
-        if (!isset($content)) {
-            $content = $responseDTO->choices[0]['message']['content'] ?? null;
         }
 
         if (!$content) {
