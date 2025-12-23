@@ -417,10 +417,31 @@ class MultiCoinAIService
             throw new Exception('Empty DeepSeek response');
         }
 
+        // Clean the response (remove markdown code blocks if present)
+        $response = trim($response);
+        $response = preg_replace('/^```json\s*/i', '', $response);
+        $response = preg_replace('/\s*```$/', '', $response);
+
         $decision = json_decode($response, true);
 
+        // Better error handling with full details
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            Log::error('DeepSeek JSON decode error', [
+                'error' => json_last_error_msg(),
+                'content_length' => strlen($response),
+                'content_start' => substr($response, 0, 200),
+                'content_end' => substr($response, -200),
+            ]);
+            throw new Exception('JSON decode error: ' . json_last_error_msg() . ' (length: ' . strlen($response) . ')');
+        }
+
         if (!$decision || !isset($decision['decisions'])) {
-            throw new Exception('Invalid DeepSeek response format: ' . $response);
+            Log::error('Invalid DeepSeek response structure', [
+                'has_decision' => !is_null($decision),
+                'keys' => is_array($decision) ? array_keys($decision) : 'not an array',
+                'content' => substr($response, 0, 500),
+            ]);
+            throw new Exception('Invalid DeepSeek response format: missing "decisions" key');
         }
 
         return [
@@ -541,9 +562,31 @@ IMPORTANT:
             throw new Exception('Empty OpenRouter response');
         }
 
+        // Clean the response (remove markdown code blocks if present)
+        $content = trim($content);
+        $content = preg_replace('/^```json\s*/i', '', $content);
+        $content = preg_replace('/\s*```$/', '', $content);
+
         $decision = json_decode($content, true);
+
+        // Better error handling with full details
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            Log::error('JSON decode error', [
+                'error' => json_last_error_msg(),
+                'content_length' => strlen($content),
+                'content_start' => substr($content, 0, 200),
+                'content_end' => substr($content, -200),
+            ]);
+            throw new Exception('JSON decode error: ' . json_last_error_msg() . ' (length: ' . strlen($content) . ')');
+        }
+
         if (!$decision || !isset($decision['decisions'])) {
-            throw new Exception('Invalid OpenRouter response format: ' . $content);
+            Log::error('Invalid response structure', [
+                'has_decision' => !is_null($decision),
+                'keys' => is_array($decision) ? array_keys($decision) : 'not an array',
+                'content' => substr($content, 0, 500),
+            ]);
+            throw new Exception('Invalid OpenRouter response format: missing "decisions" key');
         }
 
         return [
