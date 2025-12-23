@@ -255,21 +255,33 @@ class ExecuteMultiCoinTrading extends Command
 
         $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
 
-        // DYNAMIC TP/SL based on ATR (adaptive to volatility)
-        $latestMarketData = \App\Models\MarketData::getLatest($symbol, '4h');
-        $atr14 = $latestMarketData->atr_14 ?? 0;
-        $atrPercent = $atr14 > 0 ? ($atr14 / $entryPrice) * 100 : 0;
+        // DYNAMIC TP/SL based on ATR (adaptive to volatility) - Settings from database
+        $dynamicTpEnabled = BotSetting::get('dynamic_tp_enabled', 'true') === 'true';
+        $dynamicSlEnabled = BotSetting::get('dynamic_sl_enabled', 'true') === 'true';
 
-        // Dynamic TP: ATR * 1.5, minimum 7.5%
-        $dynamicTpPercent = max(7.5, $atrPercent * 1.5);
-        $targetPrice = $decision['target_price'] ?? $entryPrice * (1 + ($dynamicTpPercent / 100));
+        if ($dynamicTpEnabled || $dynamicSlEnabled) {
+            $latestMarketData = \App\Models\MarketData::getLatest($symbol, '4h');
+            $atr14 = $latestMarketData->atr_14 ?? 0;
+            $atrPercent = $atr14 > 0 ? ($atr14 / $entryPrice) * 100 : 0;
 
-        // Dynamic SL: ATR * 0.75 for tighter stops, but respect max P&L loss
-        $maxPnlLoss = 8.0; // Maximum P&L loss %
-        $dynamicSlPercent = min($atrPercent * 0.75, $maxPnlLoss / $leverage);
-        $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($dynamicSlPercent / 100));
+            // Dynamic TP: ATR * multiplier, minimum from database
+            $tpMinPercent = BotSetting::get('dynamic_tp_min_percent', 7.5);
+            $tpAtrMultiplier = BotSetting::get('dynamic_tp_atr_multiplier', 1.5);
+            $dynamicTpPercent = $dynamicTpEnabled ? max($tpMinPercent, $atrPercent * $tpAtrMultiplier) : $tpMinPercent;
+            $targetPrice = $decision['target_price'] ?? $entryPrice * (1 + ($dynamicTpPercent / 100));
 
-        Log::info("  📊 Dynamic TP/SL: ATR {$atrPercent}% → TP {$dynamicTpPercent}%, SL {$dynamicSlPercent}%");
+            // Dynamic SL: ATR * multiplier, but respect max P&L loss
+            $slAtrMultiplier = BotSetting::get('dynamic_sl_atr_multiplier', 0.75);
+            $maxPnlLoss = 8.0; // Maximum P&L loss %
+            $dynamicSlPercent = $dynamicSlEnabled ? min($atrPercent * $slAtrMultiplier, $maxPnlLoss / $leverage) : ($maxPnlLoss / $leverage);
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($dynamicSlPercent / 100));
+
+            Log::info("  📊 Dynamic TP/SL: ATR {$atrPercent}% → TP {$dynamicTpPercent}%, SL {$dynamicSlPercent}%");
+        } else {
+            // Fallback to static values if dynamic disabled
+            $targetPrice = $decision['target_price'] ?? $entryPrice * 1.075;
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - (8.0 / $leverage / 100));
+        }
 
         // Calculate liquidation price
         $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage);
@@ -373,21 +385,33 @@ class ExecuteMultiCoinTrading extends Command
 
         $entryPrice = $decision['entry_price'] ?? $this->binance->fetchTicker($symbol)['last'];
 
-        // DYNAMIC TP/SL for SHORT (same logic as LONG but inverted)
-        $latestMarketData = \App\Models\MarketData::getLatest($symbol, '4h');
-        $atr14 = $latestMarketData->atr_14 ?? 0;
-        $atrPercent = $atr14 > 0 ? ($atr14 / $entryPrice) * 100 : 0;
+        // DYNAMIC TP/SL for SHORT (same logic as LONG but inverted) - Settings from database
+        $dynamicTpEnabled = BotSetting::get('dynamic_tp_enabled', 'true') === 'true';
+        $dynamicSlEnabled = BotSetting::get('dynamic_sl_enabled', 'true') === 'true';
 
-        // Dynamic TP for SHORT: ATR * 1.5, minimum 7.5% (price goes DOWN)
-        $dynamicTpPercent = max(7.5, $atrPercent * 1.5);
-        $targetPrice = $decision['target_price'] ?? $entryPrice * (1 - ($dynamicTpPercent / 100));
+        if ($dynamicTpEnabled || $dynamicSlEnabled) {
+            $latestMarketData = \App\Models\MarketData::getLatest($symbol, '4h');
+            $atr14 = $latestMarketData->atr_14 ?? 0;
+            $atrPercent = $atr14 > 0 ? ($atr14 / $entryPrice) * 100 : 0;
 
-        // Dynamic SL for SHORT: ATR * 0.75 (price goes UP)
-        $maxPnlLoss = 8.0;
-        $dynamicSlPercent = min($atrPercent * 0.75, $maxPnlLoss / $leverage);
-        $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($dynamicSlPercent / 100));
+            // Dynamic TP for SHORT: ATR * multiplier, minimum from database (price goes DOWN)
+            $tpMinPercent = BotSetting::get('dynamic_tp_min_percent', 7.5);
+            $tpAtrMultiplier = BotSetting::get('dynamic_tp_atr_multiplier', 1.5);
+            $dynamicTpPercent = $dynamicTpEnabled ? max($tpMinPercent, $atrPercent * $tpAtrMultiplier) : $tpMinPercent;
+            $targetPrice = $decision['target_price'] ?? $entryPrice * (1 - ($dynamicTpPercent / 100));
 
-        Log::info("  📊 Dynamic TP/SL: ATR {$atrPercent}% → TP {$dynamicTpPercent}%, SL {$dynamicSlPercent}%");
+            // Dynamic SL for SHORT: ATR * multiplier (price goes UP)
+            $slAtrMultiplier = BotSetting::get('dynamic_sl_atr_multiplier', 0.75);
+            $maxPnlLoss = 8.0;
+            $dynamicSlPercent = $dynamicSlEnabled ? min($atrPercent * $slAtrMultiplier, $maxPnlLoss / $leverage) : ($maxPnlLoss / $leverage);
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($dynamicSlPercent / 100));
+
+            Log::info("  📊 Dynamic TP/SL: ATR {$atrPercent}% → TP {$dynamicTpPercent}%, SL {$dynamicSlPercent}%");
+        } else {
+            // Fallback to static values if dynamic disabled
+            $targetPrice = $decision['target_price'] ?? $entryPrice * 0.925;
+            $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + (8.0 / $leverage / 100));
+        }
 
         $quantity = ($positionSize * $leverage) / $entryPrice;
 

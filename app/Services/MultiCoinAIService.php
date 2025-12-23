@@ -201,22 +201,28 @@ class MultiCoinAIService
                 // Dynamic volume threshold based on global trading hours (UTC)
                 $currentHour = now()->hour; // UTC hour
 
+                // Get regional volume thresholds from database
+                $volumeUS = BotSetting::get('volume_threshold_us', 0.9);
+                $volumeAsia = BotSetting::get('volume_threshold_asia', 0.8);
+                $volumeEurope = BotSetting::get('volume_threshold_europe', 0.95);
+                $volumeOffPeak = BotSetting::get('volume_threshold_offpeak', 1.0);
+
                 // Regional liquidity zones (optimized for crypto markets)
                 if ($currentHour >= 13 && $currentHour <= 22) {
                     // US hours (13:00-22:00 UTC = 8am-5pm EST)
-                    $minVolumeRatio = 0.9;
+                    $minVolumeRatio = $volumeUS;
                     $region = 'US';
                 } elseif ($currentHour >= 1 && $currentHour <= 9) {
                     // Asia hours (01:00-09:00 UTC = 9am-5pm Asia)
-                    $minVolumeRatio = 0.8;
+                    $minVolumeRatio = $volumeAsia;
                     $region = 'Asia';
                 } elseif ($currentHour >= 7 && $currentHour <= 16) {
                     // Europe hours (07:00-16:00 UTC = 8am-5pm CET)
-                    $minVolumeRatio = 0.95;
+                    $minVolumeRatio = $volumeEurope;
                     $region = 'Europe';
                 } else {
                     // Off-peak hours (low liquidity)
-                    $minVolumeRatio = 1.0;
+                    $minVolumeRatio = $volumeOffPeak;
                     $region = 'Off-peak';
                 }
 
@@ -246,10 +252,16 @@ class MultiCoinAIService
                 $longScore = 0;
                 $shortScore = 0;
 
+                // Get RSI thresholds from database
+                $rsiLongMin = BotSetting::get('rsi_long_min', 50);
+                $rsiLongMax = BotSetting::get('rsi_long_max', 70);
+                $rsiShortMin = BotSetting::get('rsi_short_min', 30);
+                $rsiShortMax = BotSetting::get('rsi_short_max', 55);
+
                 // LONG scoring (volume NOT counted in score)
                 if ($is4hUptrend) {
                     if (($data3m['macd'] ?? 0) > ($data3m['macd_signal'] ?? 0)) $longScore++;
-                    if (($data3m['rsi7'] ?? 0) >= 50 && ($data3m['rsi7'] ?? 0) <= 70) $longScore++; // Tightened
+                    if (($data3m['rsi7'] ?? 0) >= $rsiLongMin && ($data3m['rsi7'] ?? 0) <= $rsiLongMax) $longScore++;
                     if ($data3m['price'] >= $data3m['ema20'] * 0.98 && $data3m['price'] <= $data3m['ema20'] * 1.05) $longScore++;
                     if ($adxOk) $longScore++;
                 }
@@ -257,7 +269,7 @@ class MultiCoinAIService
                 // SHORT scoring (volume NOT counted in score)
                 if ($is4hDowntrend) {
                     if (($data3m['macd'] ?? 0) < ($data3m['macd_signal'] ?? 0)) $shortScore++;
-                    if (($data3m['rsi7'] ?? 0) >= 30 && ($data3m['rsi7'] ?? 0) <= 55) $shortScore++; // Tightened
+                    if (($data3m['rsi7'] ?? 0) >= $rsiShortMin && ($data3m['rsi7'] ?? 0) <= $rsiShortMax) $shortScore++;
                     if ($data3m['price'] <= $data3m['ema20'] * 1.02 && $data3m['price'] >= $data3m['ema20'] * 0.95) $shortScore++;
                     if ($adxOk) $shortScore++;
                 }
@@ -292,16 +304,21 @@ class MultiCoinAIService
                 $data3m['rsi7']
             );
 
-            // RSI direction check (tightened ranges for safety)
+            // RSI direction check (from database settings)
             $rsi = $data3m['rsi7'];
-            if ($rsi >= 50 && $rsi <= 70) {
-                $prompt .= "RSI STATUS: ✅ IN LONG RANGE (50-70, current: {$rsi}) - healthy for LONG\n";
-            } elseif ($rsi >= 30 && $rsi <= 55) {
-                $prompt .= "RSI STATUS: ✅ IN SHORT RANGE (30-55, current: {$rsi}) - healthy for SHORT\n";
-            } elseif ($rsi < 30) {
-                $prompt .= "RSI STATUS: ⚠️ OVERSOLD (< 30, current: {$rsi}) - too weak, avoid SHORT (bounce risk)\n";
+            $rsiLongMin = BotSetting::get('rsi_long_min', 50);
+            $rsiLongMax = BotSetting::get('rsi_long_max', 70);
+            $rsiShortMin = BotSetting::get('rsi_short_min', 30);
+            $rsiShortMax = BotSetting::get('rsi_short_max', 55);
+
+            if ($rsi >= $rsiLongMin && $rsi <= $rsiLongMax) {
+                $prompt .= "RSI STATUS: ✅ IN LONG RANGE ({$rsiLongMin}-{$rsiLongMax}, current: {$rsi}) - healthy for LONG\n";
+            } elseif ($rsi >= $rsiShortMin && $rsi <= $rsiShortMax) {
+                $prompt .= "RSI STATUS: ✅ IN SHORT RANGE ({$rsiShortMin}-{$rsiShortMax}, current: {$rsi}) - healthy for SHORT\n";
+            } elseif ($rsi < $rsiShortMin) {
+                $prompt .= "RSI STATUS: ⚠️ OVERSOLD (< {$rsiShortMin}, current: {$rsi}) - too weak, avoid SHORT (bounce risk)\n";
             } else {
-                $prompt .= "RSI STATUS: ⚠️ OVERBOUGHT (> 70, current: {$rsi}) - too strong, avoid LONG (pullback risk)\n";
+                $prompt .= "RSI STATUS: ⚠️ OVERBOUGHT (> {$rsiLongMax}, current: {$rsi}) - too strong, avoid LONG (pullback risk)\n";
             }
 
             // Price position relative to EMA20
@@ -534,18 +551,24 @@ class MultiCoinAIService
         }
 
         // COMPACT system prompt (optimized for free models with token limits)
+        // Get RSI thresholds from database
+        $rsiLongMin = BotSetting::get('rsi_long_min', 50);
+        $rsiLongMax = BotSetting::get('rsi_long_max', 70);
+        $rsiShortMin = BotSetting::get('rsi_short_min', 30);
+        $rsiShortMax = BotSetting::get('rsi_short_max', 55);
+
         return "Crypto trader. LONG=buy uptrends, SHORT=sell downtrends.
 
 LONG (all 5 must pass):
 1. MACD>Signal & MACD>0
-2. RSI7: 50-70 (tightened for safety)
+2. RSI7: {$rsiLongMin}-{$rsiLongMax}
 3. Price 0-2% above EMA20
 4. 4H: EMA20>EMA50 & ADX>20
 5. Volume≥1.0x
 
 SHORT (all 5 must pass):
 1. MACD<Signal & MACD<0
-2. RSI7: 30-55 (tightened for safety)
+2. RSI7: {$rsiShortMin}-{$rsiShortMax}
 3. Price 0-2% below EMA20
 4. 4H: EMA20<EMA50 & ADX>20
 5. Volume≥1.0x

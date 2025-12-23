@@ -63,11 +63,12 @@ class MonitorPositions extends Command
 
         $this->line("  📊 {$symbol}: \${$currentPrice} ({$position->side})");
 
-        // 🌙 PRE-SLEEP MODE: Close profitable positions 2 hours before sleep (21:00 UTC)
+        // 🌙 PRE-SLEEP MODE: Close profitable positions before sleep mode (from database)
+        $preSleepEnabled = BotSetting::get('pre_sleep_close_enabled', 'true') === 'true';
+        $preSleepHour = BotSetting::get('pre_sleep_close_hour_utc', 21);
         $currentHourUTC = now()->utc()->hour;
-        $preSleepHour = 21; // 2 hours before sleep mode starts at 23:00 UTC
 
-        if ($currentHourUTC === $preSleepHour) {
+        if ($preSleepEnabled && $currentHourUTC == $preSleepHour) {
             // Calculate profit percent
             $priceDiff = $currentPrice - $entryPrice;
             if ($position->side === 'short') {
