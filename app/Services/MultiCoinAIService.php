@@ -198,10 +198,10 @@ class MultiCoinAIService
                 $data3m = $data['3m'];
                 $data4h = $data['4h'];
 
-                // CRITICAL: Skip coins with no market data (RSI=0, ADX=0)
-                $hasMarketData = ($data3m['rsi7'] ?? 0) > 0 && ($data4h['adx'] ?? 0) > 0;
+                // CRITICAL: Skip coins with no market data (RSI=0)
+                $hasMarketData = ($data3m['rsi7'] ?? 0) > 0;
                 if (!$hasMarketData) {
-                    Log::info("⏭️ Pre-filtered {$symbol} - No market data available (RSI={$data3m['rsi7']}, ADX={$data4h['adx']})");
+                    Log::info("⏭️ Pre-filtered {$symbol} - No market data available (RSI={$data3m['rsi7']})");
                     continue;
                 }
 
