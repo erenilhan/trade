@@ -163,24 +163,33 @@ class MonitorPositions extends Command
 
             $invalidationReasons = [];
 
-            // Check if price broke below EMA20
-            if ($currentPrice < $marketData['ema20']) {
-                $invalidationReasons[] = "Price < EMA20 ({$marketData['ema20']})";
+            if ($position->side === 'LONG') {
+                // LONG position invalidation checks
+                if ($currentPrice < $marketData['ema20']) {
+                    $invalidationReasons[] = "Price < EMA20 ({$marketData['ema20']})";
+                }
+                if (($marketData['macd'] ?? 0) < 0) {
+                    $invalidationReasons[] = "MACD turned negative ({$marketData['macd']})";
+                }
+                if ($data4h['ema20'] < $data4h['ema50']) {
+                    $invalidationReasons[] = "4H trend reversed (EMA20 < EMA50)";
+                }
+            } else {
+                // SHORT position invalidation checks
+                if ($currentPrice > $marketData['ema20']) {
+                    $invalidationReasons[] = "Price > EMA20 ({$marketData['ema20']})";
+                }
+                if (($marketData['macd'] ?? 0) > 0) {
+                    $invalidationReasons[] = "MACD turned positive ({$marketData['macd']})";
+                }
+                if ($data4h['ema20'] > $data4h['ema50']) {
+                    $invalidationReasons[] = "4H trend reversed (EMA20 > EMA50)";
+                }
             }
 
-            // Check if MACD turned negative
-            if (($marketData['macd'] ?? 0) < 0) {
-                $invalidationReasons[] = "MACD turned negative ({$marketData['macd']})";
-            }
-
-            // Check if 4H trend weakened (ADX < 20)
+            // Common checks for both LONG and SHORT
             if (($data4h['adx'] ?? 0) < 20) {
                 $invalidationReasons[] = "4H ADX weak ({$data4h['adx']} < 20)";
-            }
-
-            // Check if 4H trend reversed (EMA20 < EMA50)
-            if ($data4h['ema20'] < $data4h['ema50']) {
-                $invalidationReasons[] = "4H trend reversed (EMA20 < EMA50)";
             }
 
             // If 2+ invalidation signals AND position is NOT profitable, close early
