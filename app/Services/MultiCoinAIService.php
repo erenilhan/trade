@@ -198,6 +198,13 @@ class MultiCoinAIService
                 $data3m = $data['3m'];
                 $data4h = $data['4h'];
 
+                // CRITICAL: Skip coins with no market data (RSI=0, ADX=0)
+                $hasMarketData = ($data3m['rsi7'] ?? 0) > 0 && ($data4h['adx'] ?? 0) > 0;
+                if (!$hasMarketData) {
+                    Log::info("⏭️ Pre-filtered {$symbol} - No market data available (RSI={$data3m['rsi7']}, ADX={$data4h['adx']})");
+                    continue;
+                }
+
                 // Dynamic volume threshold based on global trading hours (UTC)
                 $currentHour = now()->hour; // UTC hour
 
@@ -696,12 +703,14 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
     {
         if (app()->runningInConsole()) {
             echo "📤 Sending " . count($coins) . " coins to AI:\n";
-            
+
+            $noDataCount = 0;
+
             foreach ($coins as $symbol) {
                 // Get latest market data for this coin
                 $latest3m = \App\Models\MarketData::getLatest($symbol, '3m');
                 $latest4h = \App\Models\MarketData::getLatest($symbol, '4h');
-                
+
                 if ($latest3m && $latest4h) {
                     $rsi = $latest3m->rsi_7 ?? 0;
                     $macd = $latest3m->macd ?? 0;
@@ -709,17 +718,28 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
                     $adx = $latest4h->adx ?? 0;
                     $volumeRatio = $latest3m->volume_ratio ?? 0;
                     $atr = $latest3m->atr_3 ?? 0;
-                    
-                    // Determine trend
-                    $trend = $macd > $signal ? "📈" : "📉";
-                    $strength = $adx > 25 ? "💪" : ($adx > 20 ? "👍" : "😴");
-                    
-                    echo "  {$trend} {$symbol} - RSI:" . number_format($rsi, 0) . " MACD:" . number_format($macd, 4) . " ADX:" . number_format($adx, 0) . " Vol:" . number_format($volumeRatio, 1) . "x ATR:" . number_format($atr, 1) . "% {$strength}\n";
+
+                    // Check if valid data
+                    if ($rsi == 0 && $adx == 0) {
+                        echo "  ⚠️ {$symbol} - NO MARKET DATA (will be filtered)\n";
+                        $noDataCount++;
+                    } else {
+                        // Determine trend
+                        $trend = $macd > $signal ? "📈" : "📉";
+                        $strength = $adx > 25 ? "💪" : ($adx > 20 ? "👍" : "😴");
+
+                        echo "  {$trend} {$symbol} - RSI:" . number_format($rsi, 0) . " MACD:" . number_format($macd, 4) . " ADX:" . number_format($adx, 0) . " Vol:" . number_format($volumeRatio, 1) . "x ATR:" . number_format($atr, 1) . "% {$strength}\n";
+                    }
                 } else {
-                    echo "  ⚪ {$symbol} - No data\n";
+                    echo "  ⚪ {$symbol} - No data in database\n";
+                    $noDataCount++;
                 }
             }
-            
+
+            if ($noDataCount > 0) {
+                echo "\n⚠️ {$noDataCount} coin(s) filtered due to missing market data\n";
+            }
+
             echo "\n";
         }
     }
