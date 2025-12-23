@@ -567,9 +567,7 @@ IMPORTANT:
     private function showCoinsBeingSent(array $coins): void
     {
         if (app()->runningInConsole()) {
-            $command = app('Illuminate\Console\Application')->getArtisan();
-            
-            $command->line("📤 Sending " . count($coins) . " coins to AI:");
+            echo "📤 Sending " . count($coins) . " coins to AI:\n";
             
             foreach ($coins as $symbol) {
                 // Get latest market data for this coin
@@ -588,13 +586,13 @@ IMPORTANT:
                     $trend = $macd > $signal ? "📈" : "📉";
                     $strength = $adx > 25 ? "💪" : ($adx > 20 ? "👍" : "😴");
                     
-                    $command->line("  {$trend} {$symbol} - RSI:" . number_format($rsi, 0) . " MACD:" . number_format($macd, 4) . " ADX:" . number_format($adx, 0) . " Vol:" . number_format($volumeRatio, 1) . "x ATR:" . number_format($atr, 1) . "% {$strength}");
+                    echo "  {$trend} {$symbol} - RSI:" . number_format($rsi, 0) . " MACD:" . number_format($macd, 4) . " ADX:" . number_format($adx, 0) . " Vol:" . number_format($volumeRatio, 1) . "x ATR:" . number_format($atr, 1) . "% {$strength}\n";
                 } else {
-                    $command->line("  ⚪ {$symbol} - No data");
+                    echo "  ⚪ {$symbol} - No data\n";
                 }
             }
             
-            $command->line("");
+            echo "\n";
         }
     }
 
