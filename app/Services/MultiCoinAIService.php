@@ -56,6 +56,9 @@ class MultiCoinAIService
             // Show which coins are being sent to AI
             $coinsInPrompt = array_keys($allMarketData);
             $this->showCoinsBeingSent($coinsInPrompt);
+            
+            // Show detailed prompt being sent to AI
+            $this->showPromptDetails($prompt);
 
             Log::info("🤖 Multi-Coin AI Prompt ({$this->provider})", ['length' => strlen($prompt)]);
 
@@ -84,6 +87,9 @@ class MultiCoinAIService
             if (isset($aiResponse['cost'])) {
                 $decision['cost'] = $aiResponse['cost'];
             }
+            
+            // Show AI response details
+            $this->showAIResponse($decision, $rawResponse);
 
             return $decision;
 
@@ -589,6 +595,68 @@ IMPORTANT:
                     echo "  {$trend} {$symbol} - RSI:" . number_format($rsi, 0) . " MACD:" . number_format($macd, 4) . " ADX:" . number_format($adx, 0) . " Vol:" . number_format($volumeRatio, 1) . "x ATR:" . number_format($atr, 1) . "% {$strength}\n";
                 } else {
                     echo "  ⚪ {$symbol} - No data\n";
+                }
+            }
+            
+            echo "\n";
+        }
+    }
+
+    /**
+     * Show prompt details being sent to AI
+     */
+    private function showPromptDetails(string $prompt): void
+    {
+        if (app()->runningInConsole()) {
+            echo "📝 AI Prompt Preview:\n";
+            echo "Length: " . number_format(strlen($prompt)) . " characters\n";
+            
+            // Show first 500 characters of prompt
+            $preview = substr($prompt, 0, 500);
+            echo "Preview: " . $preview . "...\n\n";
+            
+            // Show last part (instructions)
+            $lines = explode("\n", $prompt);
+            $lastLines = array_slice($lines, -10);
+            echo "Instructions:\n";
+            foreach ($lastLines as $line) {
+                echo "  " . $line . "\n";
+            }
+            echo "\n";
+        }
+    }
+
+    /**
+     * Show AI response details
+     */
+    private function showAIResponse(array $decision, array $rawResponse): void
+    {
+        if (app()->runningInConsole()) {
+            echo "🤖 AI Response Analysis:\n";
+            
+            // Show chain of thought if available
+            if (isset($decision['chain_of_thought'])) {
+                echo "💭 AI Thinking: " . substr($decision['chain_of_thought'], 0, 200) . "...\n";
+            }
+            
+            // Show each decision with reasoning
+            if (isset($decision['decisions'])) {
+                echo "📊 Individual Decisions:\n";
+                foreach ($decision['decisions'] as $coinDecision) {
+                    $symbol = $coinDecision['symbol'] ?? 'Unknown';
+                    $action = $coinDecision['action'] ?? 'hold';
+                    $confidence = $coinDecision['confidence'] ?? 0;
+                    $reasoning = $coinDecision['reasoning'] ?? 'No reasoning provided';
+                    
+                    $actionIcon = match($action) {
+                        'buy' => '📈 BUY',
+                        'sell' => '📉 SELL', 
+                        'hold' => '⏸️ HOLD',
+                        default => '❓ ' . strtoupper($action)
+                    };
+                    
+                    echo "  {$actionIcon} {$symbol} (confidence: " . number_format($confidence, 2) . ")\n";
+                    echo "    💡 Reasoning: " . substr($reasoning, 0, 100) . "...\n";
                 }
             }
             
