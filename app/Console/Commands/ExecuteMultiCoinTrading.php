@@ -196,6 +196,18 @@ class ExecuteMultiCoinTrading extends Command
                 ->orderBy('opened_at', 'desc')
                 ->first();
 
+            // 🛑 EXTENDED COOLDOWN AFTER STOP LOSS: Prevent re-entering failed setup
+            $stopLossCooldown = BotSetting::get('stop_loss_cooldown_minutes', 120);
+            if ($lastTrade && $lastTrade->close_reason === 'stop_loss' && $lastTrade->closed_at) {
+                $minutesSinceStopLoss = $lastTrade->closed_at->diffInMinutes(now());
+                if ($minutesSinceStopLoss < $stopLossCooldown) {
+                    $this->warn("  🛑 Skipping {$symbol}: Stop loss cooldown active ({$minutesSinceStopLoss}/{$stopLossCooldown}min)");
+                    Log::info("🛑 Stop loss cooldown: Skipping {$symbol} - stopped out {$minutesSinceStopLoss}min ago");
+                    return;
+                }
+            }
+
+            // Regular cooldown
             if ($lastTrade && $lastTrade->opened_at->diffInMinutes(now()) < $requiredCooldown) {
                 $minutesAgo = $lastTrade->opened_at->diffInMinutes(now());
                 $this->warn("  ⚠️ Skipping {$symbol}: Cooldown active ({$minutesAgo}min ago, need {$requiredCooldown}min)");
@@ -271,7 +283,8 @@ class ExecuteMultiCoinTrading extends Command
             $targetPrice = $decision['target_price'] ?? $entryPrice * (1 + ($dynamicTpPercent / 100));
 
             // Dynamic SL: ATR * multiplier, but respect max P&L loss
-            $slAtrMultiplier = BotSetting::get('dynamic_sl_atr_multiplier', 0.75);
+            // OPTIMIZED: Changed from 0.75 to 1.5 (wider stops to prevent premature exits)
+            $slAtrMultiplier = BotSetting::get('dynamic_sl_atr_multiplier', 1.5);
             $maxPnlLoss = 8.0; // Maximum P&L loss %
             $dynamicSlPercent = $dynamicSlEnabled ? min($atrPercent * $slAtrMultiplier, $maxPnlLoss / $leverage) : ($maxPnlLoss / $leverage);
             $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 - ($dynamicSlPercent / 100));
@@ -401,7 +414,8 @@ class ExecuteMultiCoinTrading extends Command
             $targetPrice = $decision['target_price'] ?? $entryPrice * (1 - ($dynamicTpPercent / 100));
 
             // Dynamic SL for SHORT: ATR * multiplier (price goes UP)
-            $slAtrMultiplier = BotSetting::get('dynamic_sl_atr_multiplier', 0.75);
+            // OPTIMIZED: Changed from 0.75 to 1.5 (wider stops to prevent premature exits)
+            $slAtrMultiplier = BotSetting::get('dynamic_sl_atr_multiplier', 1.5);
             $maxPnlLoss = 8.0;
             $dynamicSlPercent = $dynamicSlEnabled ? min($atrPercent * $slAtrMultiplier, $maxPnlLoss / $leverage) : ($maxPnlLoss / $leverage);
             $stopPrice = $decision['stop_price'] ?? $entryPrice * (1 + ($dynamicSlPercent / 100));

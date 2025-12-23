@@ -122,6 +122,30 @@ class MonitorPositions extends Command
             }
         }
 
+        // 🕐 MINIMUM HOLDING PERIOD: Prevent premature stop loss in first 30 minutes
+        $minHoldingMinutes = BotSetting::get('min_holding_period_minutes', 30);
+        $positionAgeMinutes = $position->opened_at->diffInMinutes(now());
+        $inMinHoldingPeriod = $positionAgeMinutes < $minHoldingMinutes;
+
+        // 🛡️ INITIAL STOP BUFFER: First 15 minutes use wider stop (ATR*2.0)
+        $initialBufferMinutes = BotSetting::get('initial_stop_buffer_minutes', 15);
+        $initialBufferMultiplier = BotSetting::get('initial_stop_buffer_multiplier', 2.0);
+        $inInitialBuffer = $positionAgeMinutes < $initialBufferMinutes;
+
+        if ($inInitialBuffer && $stopLoss) {
+            // Apply wider stop during initial buffer period
+            $stopDistance = abs($entryPrice - $stopLoss);
+            $widerStopDistance = $stopDistance * $initialBufferMultiplier;
+
+            if ($position->side === 'short') {
+                $stopLoss = $entryPrice + $widerStopDistance; // SHORT: stop further above
+            } else {
+                $stopLoss = $entryPrice - $widerStopDistance; // LONG: stop further below
+            }
+
+            $this->warn("    🛡️ Initial buffer active ({$positionAgeMinutes}min old): Stop widened to \${$stopLoss}");
+        }
+
         // 1. CHECK TAKE PROFIT (handle SHORT vs LONG)
         $takeProfitHit = false;
         if ($profitTarget) {
@@ -138,20 +162,24 @@ class MonitorPositions extends Command
             return;
         }
 
-        // 2. CHECK STOP LOSS (handle SHORT vs LONG)
-        $stopLossHit = false;
-        if ($stopLoss) {
-            if ($position->side === 'short') {
-                $stopLossHit = $currentPrice >= $stopLoss; // SHORT: stop when price goes UP
-            } else {
-                $stopLossHit = $currentPrice <= $stopLoss; // LONG: stop when price goes DOWN
+        // 2. CHECK STOP LOSS (handle SHORT vs LONG) - Skip if in minimum holding period
+        if ($inMinHoldingPeriod) {
+            $this->warn("    🕐 Minimum holding period active ({$positionAgeMinutes}/{$minHoldingMinutes}min) - Skip stop loss check");
+        } else {
+            $stopLossHit = false;
+            if ($stopLoss) {
+                if ($position->side === 'short') {
+                    $stopLossHit = $currentPrice >= $stopLoss; // SHORT: stop when price goes UP
+                } else {
+                    $stopLossHit = $currentPrice <= $stopLoss; // LONG: stop when price goes DOWN
+                }
             }
-        }
 
-        if ($stopLossHit) {
-            $this->warn("    🛑 Stop Loss hit! Stop: \${$stopLoss}");
-            $this->closePosition($position, 'stop_loss', $currentPrice);
-            return;
+            if ($stopLossHit) {
+                $this->warn("    🛑 Stop Loss hit! Stop: \${$stopLoss}");
+                $this->closePosition($position, 'stop_loss', $currentPrice);
+                return;
+            }
         }
 
         // 3. CHECK LIQUIDATION DANGER (handle SHORT vs LONG)
