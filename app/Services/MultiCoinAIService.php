@@ -53,6 +53,10 @@ class MultiCoinAIService
             // Build advanced multi-coin prompt
             $prompt = $this->buildMultiCoinPrompt($account, $allMarketData);
 
+            // Show which coins are being sent to AI
+            $coinsInPrompt = array_keys($allMarketData);
+            $this->showCoinsBeingSent($coinsInPrompt);
+
             Log::info("🤖 Multi-Coin AI Prompt ({$this->provider})", ['length' => strlen($prompt)]);
 
             // Call appropriate AI provider
@@ -120,8 +124,8 @@ class MultiCoinAIService
                 continue;
             }
 
-            // Skip BTC, ETH, and BNB if cash is low
-            if ($skipExpensiveCoins && in_array($symbol, ['BTC/USDT', 'ETH/USDT', 'BNB/USDT'])) {
+            // Skip expensive coins if cash is low (but BTC/ETH not in new list anyway)
+            if ($skipExpensiveCoins && in_array($symbol, ['PAXG/USDT', 'BNB/USDT'])) {
                 continue;
             }
 
@@ -377,7 +381,7 @@ class MultiCoinAIService
         $prompt .= "- Historical data shows 2x outperforms 3x and 5x\n\n";
 
         $prompt .= "RESPONSE FORMAT (strict JSON):\n";
-        $prompt .= '{"decisions":[{"symbol":"BTC/USDT","action":"buy|sell|hold","reasoning":"...","confidence":0.70,"leverage":2}],"chain_of_thought":"..."}\n';
+        $prompt .= '{"decisions":[{"symbol":"ALPACA/USDT","action":"buy|sell|hold","reasoning":"...","confidence":0.70,"leverage":2}],"chain_of_thought":"..."}\n';
         $prompt .= "\nACTIONS:\n";
         $prompt .= "- buy = LONG position (profit when price goes UP)\n";
         $prompt .= "- sell = SHORT position (profit when price goes DOWN)\n";
@@ -479,7 +483,7 @@ RISK MANAGEMENT:
 - Use 2x leverage for all trades (proven safe and effective)
 
 OUTPUT FORMAT:
-- Return JSON: {\"decisions\":[{\"symbol\":\"BTC/USDT\",\"action\":\"buy|sell|hold\",\"reasoning\":\"...\",\"confidence\":0.70,\"leverage\":2}],\"chain_of_thought\":\"...\"}
+- Return JSON: {\"decisions\":[{\"symbol\":\"ALPACA/USDT\",\"action\":\"buy|sell|hold\",\"reasoning\":\"...\",\"confidence\":0.70,\"leverage\":2}],\"chain_of_thought\":\"...\"}
 - Actions: 'buy' (LONG), 'sell' (SHORT), 'hold'
 - Always set leverage = 2
 - DO NOT set entry_price, target_price, stop_price, or invalidation (system calculates automatically)
@@ -555,6 +559,43 @@ IMPORTANT:
             'response' => json_encode($response),
             'decision' => $decision,
         ]);
+    }
+
+    /**
+     * Show which coins are being sent to AI with their key metrics
+     */
+    private function showCoinsBeingSent(array $coins): void
+    {
+        if (app()->runningInConsole()) {
+            $command = app('Illuminate\Console\Application')->getArtisan();
+            
+            $command->line("📤 Sending " . count($coins) . " coins to AI:");
+            
+            foreach ($coins as $symbol) {
+                // Get latest market data for this coin
+                $latest3m = \App\Models\MarketData::getLatest($symbol, '3m');
+                $latest4h = \App\Models\MarketData::getLatest($symbol, '4h');
+                
+                if ($latest3m && $latest4h) {
+                    $rsi = $latest3m->rsi_7 ?? 0;
+                    $macd = $latest3m->macd ?? 0;
+                    $signal = $latest3m->macd_signal ?? 0;
+                    $adx = $latest4h->adx ?? 0;
+                    $volumeRatio = $latest3m->volume_ratio ?? 0;
+                    $atr = $latest3m->atr_3 ?? 0;
+                    
+                    // Determine trend
+                    $trend = $macd > $signal ? "📈" : "📉";
+                    $strength = $adx > 25 ? "💪" : ($adx > 20 ? "👍" : "😴");
+                    
+                    $command->line("  {$trend} {$symbol} - RSI:" . number_format($rsi, 0) . " MACD:" . number_format($macd, 4) . " ADX:" . number_format($adx, 0) . " Vol:" . number_format($volumeRatio, 1) . "x ATR:" . number_format($atr, 1) . "% {$strength}");
+                } else {
+                    $command->line("  ⚪ {$symbol} - No data");
+                }
+            }
+            
+            $command->line("");
+        }
     }
 
 }
