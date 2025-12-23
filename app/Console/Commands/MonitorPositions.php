@@ -157,6 +157,13 @@ class MonitorPositions extends Command
         }
 
         // 4. CHECK TREND INVALIDATION (early warning system)
+        // Calculate P&L first for invalidation checks
+        $priceDiff = $currentPrice - $entryPrice;
+        if ($position->side === 'short') {
+            $priceDiff = -$priceDiff; // SHORT: price down = profit
+        }
+        $pnlPercent = ($priceDiff / $entryPrice) * 100 * $position->leverage;
+
         try {
             $marketData = $this->marketData->collectMarketData($symbol, '3m');
             $data4h = $this->marketData->collectMarketData($symbol, '4h');
@@ -217,12 +224,7 @@ class MonitorPositions extends Command
         }
 
         // 5. MULTI-LEVEL TRAILING STOP (Protect profits as position grows)
-        // Calculate P&L with proper SHORT handling
-        $priceDiff = $currentPrice - $entryPrice;
-        if ($position->side === 'short') {
-            $priceDiff = -$priceDiff; // SHORT: price down = profit
-        }
-        $pnlPercent = ($priceDiff / $entryPrice) * 100 * $position->leverage;
+        // P&L already calculated above for trend invalidation
 
         $originalStopLoss = $exitPlan['stop_loss'] ?? null;
         $trailingUpdated = false;
