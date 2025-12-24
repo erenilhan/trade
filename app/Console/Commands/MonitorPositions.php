@@ -248,10 +248,12 @@ class MonitorPositions extends Command
                 $invalidationReasons[] = "4H ADX weak ({$data4h['adx']} < 20)";
             }
 
-            // If 2+ invalidation signals AND position is NOT profitable, close early
-            if (count($invalidationReasons) >= 2 && $pnlPercent < 2) {
+            // If 2+ invalidation signals AND position is LOSING (not just unprofitable), close early
+            // OPTIMIZED: Only close if actually losing money, not just low profit
+            $minLossThreshold = (float) BotSetting::get('trend_invalidation_min_loss', -3);
+            if (count($invalidationReasons) >= 2 && $pnlPercent < $minLossThreshold) {
                 $this->warn("    ⚠️ TREND INVALIDATION: " . implode(', ', $invalidationReasons));
-                $this->warn("    📉 Closing position early (PNL: {$pnlPercent}%)");
+                $this->warn("    📉 Closing position early (PNL: {$pnlPercent}% < {$minLossThreshold}%)");
                 $this->closePosition($position, 'trend_invalidation', $currentPrice);
                 return;
             }
@@ -274,6 +276,16 @@ class MonitorPositions extends Command
 
         // 5. MULTI-LEVEL TRAILING STOP (Protect profits as position grows)
         // P&L already calculated above for trend invalidation
+
+        // 🛡️ DISABLE TRAILING STOPS DURING MINIMUM HOLDING PERIOD
+        // Prevents premature profit-taking in first 30 minutes
+        $disableTrailingInHoldingPeriod = BotSetting::get('disable_trailing_in_holding_period', 'true') === 'true';
+
+        if ($disableTrailingInHoldingPeriod && $inMinHoldingPeriod) {
+            $this->warn("    🛡️ Trailing stops disabled during holding period ({$positionAgeMinutes}/{$minHoldingMinutes}min)");
+            $this->line("    ✓ Position OK (PNL: " . number_format($pnlPercent, 2) . "%)");
+            return;
+        }
 
         $originalStopLoss = $exitPlan['stop_loss'] ?? null;
         $trailingUpdated = false;
