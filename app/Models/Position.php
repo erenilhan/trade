@@ -108,6 +108,9 @@ class Position extends Model
             'entry_oid' => $this->entry_order_id ?? -1,
             'wait_for_fill' => $this->wait_for_fill,
             'notional_usd' => (float) $this->notional_value,
+            'opened_at' => $this->opened_at?->format('M j, H:i'),
+            'closed_at' => $this->closed_at?->format('M j, H:i'),
+            'duration' => $this->opened_at ? $this->opened_at->diffForHumans($this->closed_at ?? now(), true) : null,
         ];
     }
 }

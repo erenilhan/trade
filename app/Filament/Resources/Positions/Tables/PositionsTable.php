@@ -61,15 +61,21 @@ class PositionsTable
 
                 TextColumn::make('opened_at')
                     ->label('Opened')
-                    ->dateTime()
+                    ->dateTime('M j, H:i')
                     ->since()
+                    ->sortable(),
+
+                TextColumn::make('closed_at')
+                    ->label('Closed')
+                    ->dateTime('M j, H:i')
+                    ->since()
+                    ->placeholder('Open')
                     ->sortable(),
 
                 // Hidden by default
                 TextColumn::make('quantity')->numeric()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('liquidation_price')->numeric()->money('USD')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('realized_pnl')->numeric()->money('USD')->sortable()->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('closed_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
