@@ -602,7 +602,10 @@ class MultiCoinAIService
         $response = preg_replace('/^```json\s*/i', '', $response);
         $response = preg_replace('/\s*```$/', '', $response);
 
-        $cleanResponse = preg_replace('/[\x00-\x1F\x7F]/', '', $response);
+        $cleanResponse = preg_replace("/[\x00-\x1F\x7F\x80-\xFF]/", "", $response);
+        $cleanResponse = str_replace(["", "
+", "	"], " ", $cleanResponse);
+        $decision = json_decode($cleanResponse, true);
         $decision = json_decode($cleanResponse, true);
 
         // Better error handling with full details
@@ -733,7 +736,10 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
         }
 
         // Clean the response (remove markdown code blocks if present)
-        $content = trim($content);
+        $cleanContent = preg_replace("/[\x00-\x1F\x7F\x80-\xFF]/", "", $content);
+        $cleanContent = str_replace(["", "
+", "	"], " ", $cleanContent);
+        $decision = json_decode($cleanContent, true);
         $content = preg_replace('/^```json\s*/i', '', $content);
         $content = preg_replace('/\s*```$/', '', $content);
 
