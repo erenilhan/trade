@@ -55,11 +55,12 @@ class AICalculationService
         // Prepare compact data
         $ohlcvData = [];
         foreach ($rawData as $candle) {
-            $priceArray = json_decode($candle->price_series, true);
+            // price_series is already an array (casted in MarketData model)
+            $priceArray = is_array($candle->price_series) ? $candle->price_series : json_decode($candle->price_series, true);
             if (is_array($priceArray) && count($priceArray) >= 4) {
                 $ohlcvData[] = [
                     'o' => round($priceArray[0], 4),
-                    'h' => round($priceArray[1], 4), 
+                    'h' => round($priceArray[1], 4),
                     'l' => round($priceArray[2], 4),
                     'c' => round($priceArray[3], 4),
                     'v' => round($candle->volume, 0),
