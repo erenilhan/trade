@@ -492,15 +492,26 @@ class MultiCoinAIService
                 $volumeStatus
             );
 
-            $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'], 10) . "\n";
-            $prompt .= "Open Interest: Latest: " . number_format($data3m['open_interest'], 2) . "\n\n";
+            $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'] ?? 0, 10) . "\n";
+            $prompt .= "Open Interest: Latest: " . number_format($data3m['open_interest'] ?? 0, 2) . "\n\n";
 
             // Shortened series (5 candles = 15min context, saves tokens)
-            $prompt .= "Recent 3m data (last 5 candles):\n";
-            $prompt .= "Price: [" . implode(',', array_map(fn($p) => number_format($p, 2), array_slice($data3m['price_series'], -5))) . "]\n";
-            $prompt .= "EMA20: [" . implode(',', array_map(fn($e) => number_format($e, 2), array_slice($data3m['indicators']['ema_series'], -5))) . "]\n";
-            $prompt .= "MACD: [" . implode(',', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -5))) . "]\n";
-            $prompt .= "RSI7: [" . implode(',', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -5))) . "]\n\n";
+            // Only show if data available (AI calculations may not have series)
+            if (isset($data3m['price_series']) && is_array($data3m['price_series'])) {
+                $prompt .= "Recent 3m data (last 5 candles):\n";
+                $prompt .= "Price: [" . implode(',', array_map(fn($p) => number_format($p, 2), array_slice($data3m['price_series'], -5))) . "]\n";
+
+                if (isset($data3m['indicators']['ema_series'])) {
+                    $prompt .= "EMA20: [" . implode(',', array_map(fn($e) => number_format($e, 2), array_slice($data3m['indicators']['ema_series'], -5))) . "]\n";
+                }
+                if (isset($data3m['indicators']['macd_series'])) {
+                    $prompt .= "MACD: [" . implode(',', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -5))) . "]\n";
+                }
+                if (isset($data3m['indicators']['rsi7_series'])) {
+                    $prompt .= "RSI7: [" . implode(',', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -5))) . "]\n";
+                }
+                $prompt .= "\n";
+            }
 
             // Volume info
             $currentVolume = $data3m['volume'] ?? 0;
