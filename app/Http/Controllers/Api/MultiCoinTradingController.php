@@ -105,8 +105,14 @@ class MultiCoinTradingController extends Controller
                 ]);
             }
 
-            // Get AI decision for all coins
-            $aiDecision = $this->ai->makeDecision($account);
+            // Get AI decision for all coins (with optional AI calculations)
+            $useAICalculations = BotSetting::get('use_ai_calculations', false);
+            if ($useAICalculations) {
+                Log::info("🧠 Using AI-calculated indicators");
+                $aiDecision = $this->ai->makeDecisionWithAICalculations($account);
+            } else {
+                $aiDecision = $this->ai->makeDecision($account);
+            }
 
             $results = [];
 
