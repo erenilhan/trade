@@ -16,10 +16,10 @@ return [
     | Default Model
     |--------------------------------------------------------------------------
     |
-    | The default AI model to use (Xiaomi MIMO v2 Flash - FREE!)
+    | The default AI model to use (GPT-oss-120b - Best for structured output)
     |
     */
-    'model' => env('OPENROUTER_MODEL', 'xiaomi/mimo-v2-flash:free'),
+    'model' => env('OPENROUTER_MODEL', 'openai/gpt-oss-120b'),
 
     /*
     |--------------------------------------------------------------------------
