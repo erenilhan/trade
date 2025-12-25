@@ -588,7 +588,7 @@ class MultiCoinAIService
         $response = $client
             ->withModel($model)
             ->setTemperature(0.3)
-            ->setMaxTokens(2000)
+            ->setMaxTokens(16000) // Increased for 30 coins (~500 tokens per coin)
             ->setResponseFormat('json_object')
             ->query($fullPrompt)
             ->run();
@@ -612,18 +612,33 @@ class MultiCoinAIService
             'length' => strlen($cleanResponse),
             'first_100' => substr($cleanResponse, 0, 100),
             'last_100' => substr($cleanResponse, -100),
+            'starts_with_brace' => substr($cleanResponse, 0, 1) === '{',
+            'ends_with_brace' => substr($cleanResponse, -1) === '}',
         ]);
+
+        // Warn if JSON might be truncated
+        if (substr($cleanResponse, -1) !== '}') {
+            Log::warning('⚠️ JSON appears truncated (does not end with })', [
+                'last_50_chars' => substr($cleanResponse, -50),
+            ]);
+        }
 
         $decision = json_decode($cleanResponse, true);
 
         // Better error handling with full details
         if (json_last_error() !== JSON_ERROR_NONE) {
+            // Write full content to temp file for inspection
+            $tempFile = storage_path('logs/failed_json_' . time() . '.txt');
+            file_put_contents($tempFile, $cleanResponse);
+
             Log::error('DeepSeek JSON decode error', [
                 'error' => json_last_error_msg(),
+                'error_code' => json_last_error(),
                 'content_length' => strlen($cleanResponse),
                 'content_start' => substr($cleanResponse, 0, 200),
                 'content_end' => substr($cleanResponse, -200),
-                'raw_sample' => bin2hex(substr($cleanResponse, 0, 50)), // Show hex to see hidden chars
+                'raw_sample' => bin2hex(substr($cleanResponse, 0, 50)),
+                'temp_file' => $tempFile,
             ]);
             throw new Exception('JSON decode error: ' . json_last_error_msg() . ' (length: ' . strlen($cleanResponse) . ')');
         }
@@ -719,7 +734,7 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
             response_format: new ResponseFormatData(
                 type: 'json_object'
             ),
-            max_tokens: 2000,
+            max_tokens: 16000, // Increased for 30 coins (~500 tokens per coin)
             temperature: 0.3
         );
 
@@ -765,18 +780,33 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
             'length' => strlen($cleanContent),
             'first_100' => substr($cleanContent, 0, 100),
             'last_100' => substr($cleanContent, -100),
+            'starts_with_brace' => substr($cleanContent, 0, 1) === '{',
+            'ends_with_brace' => substr($cleanContent, -1) === '}',
         ]);
+
+        // Warn if JSON might be truncated
+        if (substr($cleanContent, -1) !== '}') {
+            Log::warning('⚠️ JSON appears truncated (does not end with })', [
+                'last_50_chars' => substr($cleanContent, -50),
+            ]);
+        }
 
         $decision = json_decode($cleanContent, true);
 
         // Better error handling with full details
         if (json_last_error() !== JSON_ERROR_NONE) {
+            // Write full content to temp file for inspection
+            $tempFile = storage_path('logs/failed_json_' . time() . '.txt');
+            file_put_contents($tempFile, $cleanContent);
+
             Log::error('JSON decode error', [
                 'error' => json_last_error_msg(),
+                'error_code' => json_last_error(),
                 'content_length' => strlen($cleanContent),
                 'content_start' => substr($cleanContent, 0, 200),
                 'content_end' => substr($cleanContent, -200),
-                'raw_sample' => bin2hex(substr($cleanContent, 0, 50)), // Show hex to see hidden chars
+                'raw_sample' => bin2hex(substr($cleanContent, 0, 50)),
+                'temp_file' => $tempFile,
             ]);
             throw new Exception('JSON decode error: ' . json_last_error_msg() . ' (length: ' . strlen($cleanContent) . ')');
         }
