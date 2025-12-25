@@ -101,11 +101,11 @@ class AICalculationService
         // Quick filters
         $volumeRatio = $latest->volume_ratio ?? 0;
         $rsi = $latest->rsi7 ?? 50;
-        
+
         // Only process if:
-        return $volumeRatio >= 0.8 && // Decent volume
-               ($rsi <= 30 || $rsi >= 70 || // Extreme RSI
-                ($rsi >= 45 && $rsi <= 65)); // Or healthy range
+        return $volumeRatio >= 0.3 && // Lower threshold for more coverage
+               ($rsi <= 35 || $rsi >= 65 || // Extreme RSI
+                ($rsi >= 40 && $rsi <= 60)); // Or healthy range
     }
 
     /**
