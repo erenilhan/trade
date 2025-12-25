@@ -15,6 +15,13 @@ Schedule::command('trading:multi-coin')
     ->onOneServer()
     ->runInBackground();
 
+// Collect market data every 3 minutes (before trading)
+Schedule::command('market:collect')
+    ->everyThreeMinutes()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->runInBackground();
+
 // Update open positions every minute
 Schedule::command('positions:update')
     ->everyMinute()
