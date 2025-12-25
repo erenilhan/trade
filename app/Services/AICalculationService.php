@@ -3,15 +3,20 @@
 namespace App\Services;
 
 use App\Models\MarketData;
+use App\Models\BotSetting;
 use Illuminate\Support\Facades\Log;
 
 class AICalculationService
 {
     private $aiService;
+    private $calculationModel;
 
     public function __construct(AIService $aiService)
     {
         $this->aiService = $aiService;
+        
+        // Use different model for calculations (more accurate)
+        $this->calculationModel = BotSetting::get('calculation_ai_model', 'openai/gpt-4.1-nano');
     }
 
     /**
@@ -109,12 +114,22 @@ class AICalculationService
     {
         $data = json_encode($ohlcvData);
         
-        return "Calculate indicators for {$symbol}. OHLCV data: {$data}
+        return "Technical Analysis Expert: Calculate precise indicators for {$symbol}
 
-Return JSON only:
-{\"i\":{\"r7\":45.6,\"r14\":52.3,\"m\":0.012,\"ms\":0.009,\"e20\":98500,\"e50\":97800,\"adx\":25.6,\"atr\":1250,\"vr\":1.23}}
+OHLCV: {$data}
 
-Where: r7=RSI7, r14=RSI14, m=MACD, ms=MACD_signal, e20=EMA20, e50=EMA50, adx=ADX, atr=ATR14, vr=volume_ratio";
+Calculate for LAST candle using standard formulas:
+- RSI(7): Relative Strength Index 7-period
+- RSI(14): Relative Strength Index 14-period  
+- MACD(12,26,9): MACD line, Signal line
+- EMA(20): 20-period Exponential Moving Average
+- EMA(50): 50-period Exponential Moving Average
+- ADX(14): Average Directional Index
+- ATR(14): Average True Range
+- Volume Ratio: Current vs 20-period average
+
+Return ONLY this JSON:
+{\"i\":{\"r7\":45.6,\"r14\":52.3,\"m\":0.012,\"ms\":0.009,\"e20\":98500,\"e50\":97800,\"adx\":25.6,\"atr\":1250,\"vr\":1.23}}";
     }
 
     /**
