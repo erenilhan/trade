@@ -19,6 +19,7 @@ class MultiCoinAIService
 {
     private MarketDataService $marketData;
     private string $provider;
+    private $aiCalculation;
 
     public function __construct(MarketDataService $marketData)
     {
@@ -26,6 +27,7 @@ class MultiCoinAIService
         ini_set('memory_limit', '99999M');
         ini_set('max_execution_time', '99999');
         $this->marketData = $marketData;
+        $this->aiCalculation = app(AICalculationService::class);
 
         // Get AI provider from BotSetting or .env
         $this->provider = BotSetting::get('ai_provider')
@@ -33,9 +35,68 @@ class MultiCoinAIService
     }
 
     /**
-     * Make multi-coin trading decision (with optional batch processing)
-     * FIXED: Use database market data instead of live API calls
+     * Make multi-coin trading decision using AI calculations
+     * EXPERIMENTAL: Let AI calculate its own indicators
      */
+    public function makeDecisionWithAICalculations(array $account): array
+    {
+        try {
+            $useAICalculations = BotSetting::get('use_ai_calculations', false);
+            
+            if (!$useAICalculations) {
+                // Fallback to normal method
+                return $this->makeDecision($account);
+            }
+
+            Log::info("🤖 Using AI-calculated indicators for trading decisions");
+            
+            $allMarketData = [];
+            $supportedCoins = MarketDataService::getSupportedCoins();
+            
+            foreach ($supportedCoins as $symbol) {
+                // Get AI-calculated indicators
+                $aiData3m = $this->aiCalculation->getAICalculatedData($symbol, '3m');
+                $aiData4h = $this->aiCalculation->getAICalculatedData($symbol, '4h');
+                
+                if ($aiData3m && $aiData4h) {
+                    $allMarketData[$symbol] = [
+                        '3m' => $aiData3m['indicators'],
+                        '4h' => $aiData4h['indicators'],
+                        'ai_trend' => $aiData4h['trend_analysis'] ?? null,
+                    ];
+                }
+            }
+
+            if (empty($allMarketData)) {
+                Log::warning("⚠️ No AI-calculated market data available");
+                return [
+                    'decisions' => [],
+                    'reasoning' => 'No AI-calculated market data available',
+                ];
+            }
+
+            // Build prompt with AI-calculated data
+            $prompt = $this->buildMultiCoinPrompt($allMarketData, $allMarketData, $account['cash']);
+            
+            // Get trading decision from AI
+            $response = $this->aiService->makeRequest($prompt);
+            $decision = json_decode($response, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new \Exception("Invalid JSON response from AI");
+            }
+
+            Log::info("🤖 AI decision with AI calculations: " . json_encode($decision));
+            
+            return $decision;
+
+        } catch (\Exception $e) {
+            Log::error("❌ AI calculation decision failed: " . $e->getMessage());
+            
+            // Fallback to normal method
+            return $this->makeDecision($account);
+        }
+    }
     public function makeDecision(array $account): array
     {
         try {
