@@ -103,7 +103,7 @@ class MultiCoinAIService
             'adx' => $compact['adx'] ?? 0,
             'atr14' => $compact['atr'] ?? 0,
             'volume_ratio' => $compact['vr'] ?? 1,
-            'price' => $compact['e20'] ?? 0, // Use EMA20 as current price
+            'price' => $compact['price'] ?? $compact['e20'] ?? 0, // Use actual price or fallback to EMA20
         ];
     }
     public function makeDecision(array $account): array
@@ -531,8 +531,14 @@ class MultiCoinAIService
             );
 
             // ATR volatility warning (critical safety check)
-            $atrPercent = ($data4h['atr14'] / $data3m['price']) * 100;
-            $atrWarning = $atrPercent > 8 ? '⚠️ TOO VOLATILE → HOLD' : '✅ OK';
+            $currentPrice = $data3m['price'] ?? 0;
+            if ($currentPrice > 0) {
+                $atrPercent = ($data4h['atr14'] / $currentPrice) * 100;
+                $atrWarning = $atrPercent > 8 ? '⚠️ TOO VOLATILE → HOLD' : '✅ OK';
+            } else {
+                $atrPercent = 0;
+                $atrWarning = '⚠️ No price data';
+            }
 
             // Direction-aware 4H trend check (critical for determining LONG vs SHORT)
             $is4hUptrend = $data4h['ema20'] > ($data4h['ema50'] * 0.999);

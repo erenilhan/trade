@@ -76,9 +76,13 @@ class AICalculationService
             $calculations = json_decode($response, true);
             
             if (json_last_error() === JSON_ERROR_NONE && isset($calculations['i'])) {
+                // Add current price from latest candle
+                $latestCandle = $rawData->last();
+                $calculations['i']['price'] = $latestCandle->price ?? 0;
+
                 // Cache for 1 hour
                 cache()->put($cacheKey, $calculations, 3600);
-                
+
                 Log::info("✅ AI calculated {$symbol}: RSI=" . ($calculations['i']['r7'] ?? 'N/A'));
                 return $calculations;
             }
