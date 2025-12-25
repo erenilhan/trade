@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\BotSetting;
+use App\Models\CoinBlacklist;
 use App\Models\MarketData;
+use Exception;
 use Illuminate\Support\Facades\Log;
 
 class MarketDataService
@@ -12,39 +15,6 @@ class MarketDataService
     public function __construct(BinanceService $binance)
     {
         $this->binance = $binance;
-    }
-
-    /**
-     * Get supported coins from BotSetting or config default
-     *
-     * @param bool $excludeBlacklisted Filter out blacklisted coins (default: true)
-     * @return array List of tradeable coin symbols
-     */
-    public static function getSupportedCoins(bool $excludeBlacklisted = true): array
-    {
-        $defaultCoins = config('trading.default_active_pairs', array_keys(config('trading.supported_pairs', [])));
-        $coins = \App\Models\BotSetting::get('supported_coins', $defaultCoins);
-
-        // Handle JSON string from database
-        if (is_string($coins)) {
-            $coins = json_decode($coins, true) ?? $defaultCoins;
-        }
-
-        $coins = is_array($coins) ? $coins : $defaultCoins;
-
-        // Filter out blacklisted coins
-        if ($excludeBlacklisted) {
-            $blacklisted = \App\Models\CoinBlacklist::where('status', 'blacklisted')
-                ->pluck('symbol')
-                ->toArray();
-
-            if (!empty($blacklisted)) {
-                $coins = array_values(array_diff($coins, $blacklisted));
-                \Illuminate\Support\Facades\Log::info("🚫 Filtered out " . count($blacklisted) . " blacklisted coins", ['blacklisted' => $blacklisted]);
-            }
-        }
-
-        return $coins;
     }
 
     /**
@@ -68,13 +38,46 @@ class MarketDataService
                 ];
 
                 Log::info("📊 Market data collected for {$symbol}");
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 Log::error("Failed to collect market data for {$symbol}: " . $e->getMessage());
                 $allData[$symbol] = null;
             }
         }
 
         return $allData;
+    }
+
+    /**
+     * Get supported coins from BotSetting or config default
+     *
+     * @param bool $excludeBlacklisted Filter out blacklisted coins (default: true)
+     * @return array List of tradeable coin symbols
+     */
+    public static function getSupportedCoins(bool $excludeBlacklisted = true): array
+    {
+        $defaultCoins = config('trading.default_active_pairs', array_keys(config('trading.supported_pairs', [])));
+        $coins = BotSetting::get('supported_coins', $defaultCoins);
+
+        // Handle JSON string from database
+        if (is_string($coins)) {
+            $coins = json_decode($coins, true) ?? $defaultCoins;
+        }
+
+        $coins = is_array($coins) ? $coins : $defaultCoins;
+
+        // Filter out blacklisted coins
+        if ($excludeBlacklisted) {
+            $blacklisted = CoinBlacklist::where('status', 'blacklisted')
+                ->pluck('symbol')
+                ->toArray();
+
+            if (!empty($blacklisted)) {
+                $coins = array_values(array_diff($coins, $blacklisted));
+                Log::info("🚫 Filtered out " . count($blacklisted) . " blacklisted coins", ['blacklisted' => $blacklisted]);
+            }
+        }
+
+        return $coins;
     }
 
     /**
@@ -86,7 +89,7 @@ class MarketDataService
         $ohlcv = $this->fetchOHLCV($symbol, $timeframe, 50); // Last 50 candles for indicators
 
         if (empty($ohlcv)) {
-            throw new \Exception("No OHLCV data for {$symbol}");
+            throw new Exception("No OHLCV data for {$symbol}");
         }
 
         // Calculate indicators
@@ -96,7 +99,7 @@ class MarketDataService
         try {
             $fundingRate = $this->getFundingRate($symbol);
             $openInterest = $this->getOpenInterest($symbol);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::warning("Could not fetch funding/OI for {$symbol}: " . $e->getMessage());
             $fundingRate = 0;
             $openInterest = 0;
@@ -183,7 +186,7 @@ class MarketDataService
         $macdValue = end($macdData['macd']);
         $signalValue = end($macdData['signal']);
         $macdHistogram = $macdValue - $signalValue; // MACD Histogram = MACD - Signal
-        
+
         // Calculate previous MACD histogram to determine if rising
         $prevMacdValue = count($macdData['macd']) > 1 ? $macdData['macd'][count($macdData['macd']) - 2] : $macdValue;
         $prevSignalValue = count($macdData['signal']) > 1 ? $macdData['signal'][count($macdData['signal']) - 2] : $signalValue;
@@ -241,64 +244,6 @@ class MarketDataService
     }
 
     /**
-     * Calculate EMA (Exponential Moving Average)
-     */
-    private function calculateEMA(array $prices, int $period): float
-    {
-        if (count($prices) < $period) {
-            return end($prices);
-        }
-
-        $multiplier = 2 / ($period + 1);
-        $ema = array_sum(array_slice($prices, 0, $period)) / $period;
-
-        for ($i = $period; $i < count($prices); $i++) {
-            $ema = ($prices[$i] - $ema) * $multiplier + $ema;
-        }
-
-        return round($ema, 8);
-    }
-
-    /**
-     * Calculate EMA series (last 50 values)
-     */
-    private function calculateEMASeries(array $prices, int $period): array
-    {
-        $series = [];
-        $multiplier = 2 / ($period + 1);
-
-        if (count($prices) < $period) {
-            return array_fill(0, count($prices), end($prices));
-        }
-
-        $ema = array_sum(array_slice($prices, 0, $period)) / $period;
-        $series[] = $ema;
-
-        for ($i = $period; $i < count($prices); $i++) {
-            $ema = ($prices[$i] - $ema) * $multiplier + $ema;
-            $series[] = round($ema, 8);
-        }
-
-        return $series;
-    }
-
-    /**
-     * Calculate MACD (Moving Average Convergence Divergence)
-     */
-    private function calculateMACD(array $prices): array
-    {
-        $ema12 = $this->calculateEMA($prices, 12);
-        $ema26 = $this->calculateEMA($prices, 26);
-        $macd = $ema12 - $ema26;
-
-        return [
-            'macd' => round($macd, 8),
-            'ema12' => $ema12,
-            'ema26' => $ema26,
-        ];
-    }
-
-    /**
      * Calculate MACD series with signal line
      */
     private function calculateMACDSeries(array $prices): array
@@ -323,91 +268,26 @@ class MarketDataService
     }
 
     /**
-     * Calculate RSI (Relative Strength Index) with Wilder's Smoothing
-     * Standard RSI uses Wilder's smoothing, not simple moving average
+     * Calculate EMA series (last 50 values)
      */
-    private function calculateRSI(array $prices, int $period = 14): float
+    private function calculateEMASeries(array $prices, int $period): array
     {
-        if (count($prices) < $period + 1) {
-            return 50; // Neutral
+        $series = [];
+        $multiplier = 2 / ($period + 1);
+
+        if (count($prices) < $period) {
+            return array_fill(0, count($prices), end($prices));
         }
 
-        $gains = [];
-        $losses = [];
+        $ema = array_sum(array_slice($prices, 0, $period)) / $period;
+        $series[] = $ema;
 
-        for ($i = 1; $i < count($prices); $i++) {
-            $change = $prices[$i] - $prices[$i - 1];
-            $gains[] = $change > 0 ? $change : 0;
-            $losses[] = $change < 0 ? abs($change) : 0;
+        for ($i = $period; $i < count($prices); $i++) {
+            $ema = ($prices[$i] - $ema) * $multiplier + $ema;
+            $series[] = round($ema, 8);
         }
 
-        // Initial average (first period) - simple average
-        $avgGain = array_sum(array_slice($gains, 0, $period)) / $period;
-        $avgLoss = array_sum(array_slice($losses, 0, $period)) / $period;
-
-        // Wilder's smoothing for remaining periods
-        // Formula: AvgGain = (PrevAvgGain * (n-1) + CurrentGain) / n
-        for ($i = $period; $i < count($gains); $i++) {
-            $avgGain = (($avgGain * ($period - 1)) + $gains[$i]) / $period;
-            $avgLoss = (($avgLoss * ($period - 1)) + $losses[$i]) / $period;
-        }
-
-        if ($avgLoss == 0) {
-            return 100;
-        }
-
-        $rs = $avgGain / $avgLoss;
-        $rsi = 100 - (100 / (1 + $rs));
-
-        return round($rsi, 4);
-    }
-
-    /**
-     * Calculate RSI series
-     */
-    private function calculateRSISeries(array $prices, int $period = 14): array
-    {
-        $rsiSeries = [];
-
-        for ($i = $period + 1; $i <= count($prices); $i++) {
-            $subset = array_slice($prices, 0, $i);
-            $rsiSeries[] = $this->calculateRSI($subset, $period);
-        }
-
-        return $rsiSeries;
-    }
-
-    /**
-     * Calculate ATR (Average True Range) with Wilder's Smoothing
-     * Standard ATR uses Wilder's smoothing, not simple moving average
-     */
-    private function calculateATR(array $highs, array $lows, array $closes, int $period = 14): float
-    {
-        if (count($highs) < $period + 1) {
-            return 0;
-        }
-
-        $trueRanges = [];
-
-        for ($i = 1; $i < count($highs); $i++) {
-            $tr = max(
-                $highs[$i] - $lows[$i],
-                abs($highs[$i] - $closes[$i - 1]),
-                abs($lows[$i] - $closes[$i - 1])
-            );
-            $trueRanges[] = $tr;
-        }
-
-        // Initial ATR (first period) - simple average
-        $atr = array_sum(array_slice($trueRanges, 0, $period)) / $period;
-
-        // Wilder's smoothing for remaining periods
-        // Formula: ATR = (PrevATR * (n-1) + CurrentTR) / n
-        for ($i = $period; $i < count($trueRanges); $i++) {
-            $atr = (($atr * ($period - 1)) + $trueRanges[$i]) / $period;
-        }
-
-        return round($atr, 8);
+        return $series;
     }
 
     /**
@@ -486,99 +366,6 @@ class MarketDataService
             'plus_di' => round($plusDI, 4),
             'minus_di' => round($minusDI, 4),
         ];
-    }
-
-    /**
-     * Get funding rate from Binance (futures only)
-     */
-    private function getFundingRate(string $symbol): float
-    {
-        try {
-            $exchange = $this->binance->getExchange();
-
-            // Convert symbol format: BTC/USDT -> BTCUSDT
-            $marketSymbol = str_replace('/', '', $symbol);
-
-            $fundingRate = $exchange->fapiPublicGetPremiumIndex(['symbol' => $marketSymbol]);
-
-            return (float) ($fundingRate['lastFundingRate'] ?? 0);
-        } catch (\Exception $e) {
-            Log::warning("Could not fetch funding rate for {$symbol}: " . $e->getMessage());
-            return 0;
-        }
-    }
-
-    /**
-     * Get open interest from Binance (futures only)
-     */
-    private function getOpenInterest(string $symbol): float
-    {
-        try {
-            $exchange = $this->binance->getExchange();
-
-            $marketSymbol = str_replace('/', '', $symbol);
-
-            $oi = $exchange->fapiPublicGetOpenInterest(['symbol' => $marketSymbol]);
-
-            return (float) ($oi['openInterest'] ?? 0);
-        } catch (\Exception $e) {
-            Log::warning("Could not fetch open interest for {$symbol}: " . $e->getMessage());
-            return 0;
-        }
-    }
-
-
-    /**
-     * Check if overall market volatility is too low (skip AI call if true)
-     * Returns true if market is too quiet to trade
-     */
-    public function isMarketTooQuiet(array $allMarketData): bool
-    {
-        $quietCoins = 0;
-        $totalCoins = 0;
-
-        foreach ($allMarketData as $symbol => $data) {
-            if (!$data || !isset($data['4h']['atr14'])) {
-                continue;
-            }
-
-            $totalCoins++;
-            $atr = $data['4h']['atr14'];
-            $currentPrice = $data['3m']['price'];
-
-            // ATR as percentage of price
-            $atrPercent = ($atr / $currentPrice) * 100;
-
-            // If ATR is less than 1% of price, consider it "quiet"
-            if ($atrPercent < 1.0) {
-                $quietCoins++;
-            }
-        }
-
-        // If 70% or more coins are quiet, skip AI
-        if ($totalCoins > 0 && ($quietCoins / $totalCoins) >= 0.7) {
-            Log::info("🔇 Market too quiet: {$quietCoins}/{$totalCoins} coins have low volatility");
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Get latest market data for all coins from database
-     */
-    public function getLatestDataAllCoins(string $timeframe = '3m'): array
-    {
-        $data = [];
-
-        foreach (self::getSupportedCoins() as $symbol) {
-            $latest = MarketData::getLatest($symbol, $timeframe);
-            if ($latest) {
-                $data[$symbol] = $latest->toArray();
-            }
-        }
-
-        return $data;
     }
 
     /**
@@ -702,6 +489,46 @@ class MarketDataService
     }
 
     /**
+     * Calculate RSI (Relative Strength Index) with Wilder's Smoothing
+     * Standard RSI uses Wilder's smoothing, not simple moving average
+     */
+    private function calculateRSI(array $prices, int $period = 14): float
+    {
+        if (count($prices) < $period + 1) {
+            return 50; // Neutral
+        }
+
+        $gains = [];
+        $losses = [];
+
+        for ($i = 1; $i < count($prices); $i++) {
+            $change = $prices[$i] - $prices[$i - 1];
+            $gains[] = $change > 0 ? $change : 0;
+            $losses[] = $change < 0 ? abs($change) : 0;
+        }
+
+        // Initial average (first period) - simple average
+        $avgGain = array_sum(array_slice($gains, 0, $period)) / $period;
+        $avgLoss = array_sum(array_slice($losses, 0, $period)) / $period;
+
+        // Wilder's smoothing for remaining periods
+        // Formula: AvgGain = (PrevAvgGain * (n-1) + CurrentGain) / n
+        for ($i = $period; $i < count($gains); $i++) {
+            $avgGain = (($avgGain * ($period - 1)) + $gains[$i]) / $period;
+            $avgLoss = (($avgLoss * ($period - 1)) + $losses[$i]) / $period;
+        }
+
+        if ($avgLoss == 0) {
+            return 100;
+        }
+
+        $rs = $avgGain / $avgLoss;
+        $rsi = 100 - (100 / (1 + $rs));
+
+        return round($rsi, 4);
+    }
+
+    /**
      * Calculate Supertrend Indicator
      * Returns trend direction and value
      *
@@ -802,6 +629,190 @@ class MarketDataService
             'value' => round($currentSupertrendValue, 8),
             'is_bullish' => $currentTrend == 1,
             'is_bearish' => $currentTrend == -1,
+        ];
+    }
+
+    /**
+     * Calculate ATR (Average True Range) with Wilder's Smoothing
+     * Standard ATR uses Wilder's smoothing, not simple moving average
+     */
+    private function calculateATR(array $highs, array $lows, array $closes, int $period = 14): float
+    {
+        if (count($highs) < $period + 1) {
+            return 0;
+        }
+
+        $trueRanges = [];
+
+        for ($i = 1; $i < count($highs); $i++) {
+            $tr = max(
+                $highs[$i] - $lows[$i],
+                abs($highs[$i] - $closes[$i - 1]),
+                abs($lows[$i] - $closes[$i - 1])
+            );
+            $trueRanges[] = $tr;
+        }
+
+        // Initial ATR (first period) - simple average
+        $atr = array_sum(array_slice($trueRanges, 0, $period)) / $period;
+
+        // Wilder's smoothing for remaining periods
+        // Formula: ATR = (PrevATR * (n-1) + CurrentTR) / n
+        for ($i = $period; $i < count($trueRanges); $i++) {
+            $atr = (($atr * ($period - 1)) + $trueRanges[$i]) / $period;
+        }
+
+        return round($atr, 8);
+    }
+
+    /**
+     * Calculate EMA (Exponential Moving Average)
+     */
+    private function calculateEMA(array $prices, int $period): float
+    {
+        if (count($prices) < $period) {
+            return end($prices);
+        }
+
+        $multiplier = 2 / ($period + 1);
+        $ema = array_sum(array_slice($prices, 0, $period)) / $period;
+
+        for ($i = $period; $i < count($prices); $i++) {
+            $ema = ($prices[$i] - $ema) * $multiplier + $ema;
+        }
+
+        return round($ema, 8);
+    }
+
+    /**
+     * Calculate RSI series
+     */
+    private function calculateRSISeries(array $prices, int $period = 14): array
+    {
+        $rsiSeries = [];
+
+        for ($i = $period + 1; $i <= count($prices); $i++) {
+            $subset = array_slice($prices, 0, $i);
+            $rsiSeries[] = $this->calculateRSI($subset, $period);
+        }
+
+        return $rsiSeries;
+    }
+
+    /**
+     * Get funding rate from Binance (futures only)
+     */
+    private function getFundingRate(string $symbol): float
+    {
+        try {
+            $exchange = $this->binance->getExchange();
+
+            // Convert symbol format: BTC/USDT -> BTCUSDT
+            $marketSymbol = str_replace('/', '', $symbol);
+
+            $fundingRate = $exchange->fapiPublicGetPremiumIndex(['symbol' => $marketSymbol]);
+
+            return (float)($fundingRate['lastFundingRate'] ?? 0);
+        } catch (Exception $e) {
+            Log::warning("Could not fetch funding rate for {$symbol}: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Get open interest from Binance (futures only)
+     */
+    private function getOpenInterest(string $symbol): float
+    {
+        try {
+            $exchange = $this->binance->getExchange();
+
+            $marketSymbol = str_replace('/', '', $symbol);
+
+            $oi = $exchange->fapiPublicGetOpenInterest(['symbol' => $marketSymbol]);
+
+            return (float)($oi['openInterest'] ?? 0);
+        } catch (Exception $e) {
+            Log::warning("Could not fetch open interest for {$symbol}: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Check if overall market volatility is too low (skip AI call if true)
+     * Returns true if market is too quiet to trade
+     */
+    public function isMarketTooQuiet(array $allMarketData): bool
+    {
+        $quietCoins = 0;
+        $totalCoins = 0;
+
+        foreach ($allMarketData as $symbol => $data) {
+            if (!$data || !isset($data['4h']['atr14'])) {
+                continue;
+            }
+
+            $totalCoins++;
+            $atr = $data['4h']['atr14'];
+            $currentPrice = $data['3m']['price'];
+
+            // ATR as percentage of price
+            $atrPercent = ($atr / $currentPrice) * 100;
+
+            // If ATR is less than 1% of price, consider it "quiet"
+            if ($atrPercent < 1.0) {
+                $quietCoins++;
+            }
+        }
+
+        // If 70% or more coins are quiet, skip AI
+        if ($totalCoins > 0 && ($quietCoins / $totalCoins) >= 0.7) {
+            Log::info("🔇 Market too quiet: {$quietCoins}/{$totalCoins} coins have low volatility");
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Get latest market data for all coins from database
+     */
+    public function getLatestDataAllCoins(string $timeframe = '3m'): array
+    {
+        $data = [];
+
+        foreach (self::getSupportedCoins() as $symbol) {
+            $latest = MarketData::getLatest($symbol, $timeframe);
+            if ($latest) {
+                $data[$symbol] = $latest->toArray();
+            }
+        }
+
+        return $data;
+    }
+
+    public function deleteOldMarketData(int $days = 30): void
+    {
+        $cutoffDate = now()->subDays($days);
+        $deleted = MarketData::where('data_timestamp', '<', $cutoffDate)->delete();
+        Log::info("🗑️ Deleted {$deleted} old market data records older than {$days} days");
+    }
+
+//deleteOldMarketData
+
+    /**
+     * Calculate MACD (Moving Average Convergence Divergence)
+     */
+    private function calculateMACD(array $prices): array
+    {
+        $ema12 = $this->calculateEMA($prices, 12);
+        $ema26 = $this->calculateEMA($prices, 26);
+        $macd = $ema12 - $ema26;
+
+        return [
+            'macd' => round($macd, 8),
+            'ema12' => $ema12,
+            'ema26' => $ema26,
         ];
     }
 }
