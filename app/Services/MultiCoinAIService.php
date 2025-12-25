@@ -73,7 +73,7 @@ class MultiCoinAIService
             Log::info("🎯 AI calculated " . count($allMarketData) . " promising coins (saved " . (30 - count($allMarketData)) . " API calls)");
 
             // Build prompt with AI-calculated data
-            $prompt = $this->buildMultiCoinPrompt($allMarketData, $allMarketData, $account['cash']);
+            $prompt = $this->buildMultiCoinPrompt($account, $allMarketData);
             
             // Get trading decision
             $response = $this->aiService->makeRequest($prompt);
@@ -386,6 +386,9 @@ class MultiCoinAIService
 
             $cleanSymbol = str_replace('/USDT', '', $symbol);
 
+            // Track this coin (add BEFORE building prompt data)
+            $coinsToAnalyze[] = $symbol;
+
             $prompt .= "ALL {$cleanSymbol} DATA\n";
             $macdHistogram = ($data3m['macd_histogram'] ?? ($data3m['macd'] - ($data3m['macd_signal'] ?? 0)));
             $macdHistogramRising = ($data3m['macd_histogram_rising'] ?? false);
@@ -537,9 +540,6 @@ class MultiCoinAIService
                 $atrPercent,
                 $atrWarning
             );
-
-            // Track this coin for analysis
-            $coinsToAnalyze[] = $symbol;
         }
 
         // Account information
