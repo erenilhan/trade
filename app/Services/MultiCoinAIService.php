@@ -743,7 +743,7 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
      */
     private function callOpenRouter(string $prompt): array
     {
-        $model = config('openrouter.model', 'deepseek/deepseek-chat');
+        $model = trim(config('openrouter.model', 'deepseek/deepseek-chat'));
         $maxRetries = 3;
         $retryDelay = 2; // seconds
 
