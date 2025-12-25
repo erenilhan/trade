@@ -61,14 +61,12 @@ class PositionsTable
 
                 TextColumn::make('opened_at')
                     ->label('Opened')
-                    ->dateTime('M j, H:i')
-                    ->since()
+                    ->dateTime('d/m H:i')
                     ->sortable(),
 
                 TextColumn::make('closed_at')
                     ->label('Closed')
-                    ->dateTime('M j, H:i')
-                    ->since()
+                    ->dateTime('d/m H:i')
                     ->placeholder('Open')
                     ->sortable(),
 
