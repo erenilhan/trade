@@ -191,6 +191,20 @@ class MultiCoinTradingController extends Controller
             return ['action' => 'hold', 'reason' => 'Position already exists'];
         }
 
+        // 🛑 STOP LOSS COOLDOWN: Prevent re-entering failed setup
+        $lastPosition = Position::where('symbol', $symbol)
+            ->orderBy('closed_at', 'desc')
+            ->first();
+        
+        $stopLossCooldown = BotSetting::get('stop_loss_cooldown_minutes', 120);
+        if ($lastPosition && $lastPosition->close_reason === 'stop_loss' && $lastPosition->closed_at) {
+            $minutesSinceStopLoss = $lastPosition->closed_at->diffInMinutes(now());
+            if ($minutesSinceStopLoss < $stopLossCooldown) {
+                Log::info("🛑 Stop loss cooldown: Skipping {$symbol} LONG - stopped out {$minutesSinceStopLoss}min ago");
+                return ['action' => 'hold', 'reason' => "Stop loss cooldown ({$minutesSinceStopLoss}/{$stopLossCooldown}min)"];
+            }
+        }
+
         // Calculate position size
         $positionSize = BotSetting::get('position_size_usdt', 10);
 
@@ -337,6 +351,20 @@ class MultiCoinTradingController extends Controller
         $existingPosition = Position::active()->bySymbol($symbol)->first();
         if ($existingPosition) {
             return ['action' => 'hold', 'reason' => 'Position already exists'];
+        }
+
+        // 🛑 STOP LOSS COOLDOWN: Prevent re-entering failed setup
+        $lastPosition = Position::where('symbol', $symbol)
+            ->orderBy('closed_at', 'desc')
+            ->first();
+        
+        $stopLossCooldown = BotSetting::get('stop_loss_cooldown_minutes', 120);
+        if ($lastPosition && $lastPosition->close_reason === 'stop_loss' && $lastPosition->closed_at) {
+            $minutesSinceStopLoss = $lastPosition->closed_at->diffInMinutes(now());
+            if ($minutesSinceStopLoss < $stopLossCooldown) {
+                Log::info("🛑 Stop loss cooldown: Skipping {$symbol} SHORT - stopped out {$minutesSinceStopLoss}min ago");
+                return ['action' => 'hold', 'reason' => "Stop loss cooldown ({$minutesSinceStopLoss}/{$stopLossCooldown}min)"];
+            }
         }
 
         // Calculate position size

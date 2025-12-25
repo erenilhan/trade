@@ -5,7 +5,10 @@
       "Bash(php artisan:*)",
       "Bash(php -r:*)",
       "Bash(php:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(mysql -u root:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
