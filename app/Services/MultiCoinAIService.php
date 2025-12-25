@@ -416,15 +416,20 @@ class MultiCoinAIService
             }
 
             // Price position relative to EMA20
-            $priceVsEma = (($data3m['price'] - $data3m['ema20']) / $data3m['ema20']) * 100;
-            if ($priceVsEma >= 0 && $priceVsEma <= 2) {
-                $prompt .= sprintf("PRICE POSITION: ✅ %.2f%% above EMA20 - good for LONG (riding uptrend)\n", $priceVsEma);
-            } elseif ($priceVsEma < 0 && $priceVsEma >= -2) {
-                $prompt .= sprintf("PRICE POSITION: ✅ %.2f%% below EMA20 - good for SHORT (riding downtrend)\n", abs($priceVsEma));
-            } elseif ($priceVsEma > 2) {
-                $prompt .= sprintf("PRICE POSITION: ⚠️ %.2f%% above EMA20 - too extended for LONG\n", $priceVsEma);
+            $ema20 = $data3m['ema20'] ?? 0;
+            if ($ema20 > 0) {
+                $priceVsEma = (($data3m['price'] - $ema20) / $ema20) * 100;
+                if ($priceVsEma >= 0 && $priceVsEma <= 2) {
+                    $prompt .= sprintf("PRICE POSITION: ✅ %.2f%% above EMA20 - good for LONG (riding uptrend)\n", $priceVsEma);
+                } elseif ($priceVsEma < 0 && $priceVsEma >= -2) {
+                    $prompt .= sprintf("PRICE POSITION: ✅ %.2f%% below EMA20 - good for SHORT (riding downtrend)\n", abs($priceVsEma));
+                } elseif ($priceVsEma > 2) {
+                    $prompt .= sprintf("PRICE POSITION: ⚠️ %.2f%% above EMA20 - too extended for LONG\n", $priceVsEma);
+                } else {
+                    $prompt .= sprintf("PRICE POSITION: ⚠️ %.2f%% below EMA20 - too extended for SHORT\n", abs($priceVsEma));
+                }
             } else {
-                $prompt .= sprintf("PRICE POSITION: ⚠️ %.2f%% below EMA20 - too extended for SHORT\n", abs($priceVsEma));
+                $prompt .= "PRICE POSITION: ⚠️ No EMA20 data available\n";
             }
             $prompt .= "\n";
 
