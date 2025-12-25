@@ -20,13 +20,15 @@ class MultiCoinAIService
     private MarketDataService $marketData;
     private string $provider;
     private $aiCalculation;
+    private AIService $aiService;
 
-    public function __construct(MarketDataService $marketData)
+    public function __construct(MarketDataService $marketData, AIService $aiService)
     {
         set_time_limit(9999);
         ini_set('memory_limit', '99999M');
         ini_set('max_execution_time', '99999');
         $this->marketData = $marketData;
+        $this->aiService = $aiService;
         $this->aiCalculation = app(AICalculationService::class);
 
         // Get AI provider from BotSetting or .env
