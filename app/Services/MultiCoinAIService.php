@@ -795,12 +795,12 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
                 $latest4h = \App\Models\MarketData::getLatest($symbol, '4h');
 
                 if ($latest3m && $latest4h) {
-                    $rsi = $latest3m->rsi_7 ?? 0;
+                    $rsi = $latest3m->rsi7 ?? 0;
                     $macd = $latest3m->macd ?? 0;
                     $signal = $latest3m->macd_signal ?? 0;
-                    $adx = $latest4h->adx ?? 0;
+                    $adx = $latest4h->indicators["adx"] ?? 0;
                     $volumeRatio = $latest3m->volume_ratio ?? 0;
-                    $atr = $latest3m->atr_3 ?? 0;
+                    $atr = $latest3m->atr3 ?? 0;
 
                     // Check if valid data
                     if ($rsi == 0 && $adx == 0) {
