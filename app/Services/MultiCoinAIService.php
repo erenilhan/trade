@@ -602,19 +602,37 @@ class MultiCoinAIService
         $response = preg_replace('/^```json\s*/i', '', $response);
         $response = preg_replace('/\s*```$/', '', $response);
 
-        $cleanResponse = preg_replace('/[\x00-\x1F\x7F]/', '', $response);
+        // Extract JSON from response (handles extra text before/after JSON)
+        $response = $this->extractJsonFromResponse($response);
+
+        $cleanResponse = $this->cleanJsonResponse($response);
+
+        // Debug: log cleaned response sample
+        Log::debug('🧹 Cleaned JSON response', [
+            'length' => strlen($cleanResponse),
+            'first_100' => substr($cleanResponse, 0, 100),
+            'last_100' => substr($cleanResponse, -100),
+        ]);
+
         $decision = json_decode($cleanResponse, true);
 
         // Better error handling with full details
         if (json_last_error() !== JSON_ERROR_NONE) {
             Log::error('DeepSeek JSON decode error', [
                 'error' => json_last_error_msg(),
-                'content_length' => strlen($response),
-                'content_start' => substr($response, 0, 200),
-                'content_end' => substr($response, -200),
+                'content_length' => strlen($cleanResponse),
+                'content_start' => substr($cleanResponse, 0, 200),
+                'content_end' => substr($cleanResponse, -200),
+                'raw_sample' => bin2hex(substr($cleanResponse, 0, 50)), // Show hex to see hidden chars
             ]);
-            throw new Exception('JSON decode error: ' . json_last_error_msg() . ' (length: ' . strlen($response) . ')');
+            throw new Exception('JSON decode error: ' . json_last_error_msg() . ' (length: ' . strlen($cleanResponse) . ')');
         }
+
+        // Debug: log successful decode
+        Log::debug('✅ JSON decoded successfully', [
+            'decisions_count' => isset($decision['decisions']) ? count($decision['decisions']) : 0,
+            'has_chain_of_thought' => isset($decision['chain_of_thought']),
+        ]);
 
         if (!$decision || !isset($decision['decisions'])) {
             Log::error('Invalid DeepSeek response structure', [
@@ -737,19 +755,37 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
         $content = preg_replace('/^```json\s*/i', '', $content);
         $content = preg_replace('/\s*```$/', '', $content);
 
-        $cleanContent = preg_replace('/[\x00-\x1F\x7F]/', '', $content);
+        // Extract JSON from response (handles extra text before/after JSON)
+        $content = $this->extractJsonFromResponse($content);
+
+        $cleanContent = $this->cleanJsonResponse($content);
+
+        // Debug: log cleaned response sample
+        Log::debug('🧹 Cleaned JSON response (OpenRouter)', [
+            'length' => strlen($cleanContent),
+            'first_100' => substr($cleanContent, 0, 100),
+            'last_100' => substr($cleanContent, -100),
+        ]);
+
         $decision = json_decode($cleanContent, true);
 
         // Better error handling with full details
         if (json_last_error() !== JSON_ERROR_NONE) {
             Log::error('JSON decode error', [
                 'error' => json_last_error_msg(),
-                'content_length' => strlen($content),
-                'content_start' => substr($content, 0, 200),
-                'content_end' => substr($content, -200),
+                'content_length' => strlen($cleanContent),
+                'content_start' => substr($cleanContent, 0, 200),
+                'content_end' => substr($cleanContent, -200),
+                'raw_sample' => bin2hex(substr($cleanContent, 0, 50)), // Show hex to see hidden chars
             ]);
-            throw new Exception('JSON decode error: ' . json_last_error_msg() . ' (length: ' . strlen($content) . ')');
+            throw new Exception('JSON decode error: ' . json_last_error_msg() . ' (length: ' . strlen($cleanContent) . ')');
         }
+
+        // Debug: log successful decode
+        Log::debug('✅ JSON decoded successfully (OpenRouter)', [
+            'decisions_count' => isset($decision['decisions']) ? count($decision['decisions']) : 0,
+            'has_chain_of_thought' => isset($decision['chain_of_thought']),
+        ]);
 
         if (!$decision || !isset($decision['decisions'])) {
             Log::error('Invalid response structure', [
@@ -889,6 +925,96 @@ JSON: {\"decisions\":[{\"symbol\":\"X/USDT\",\"action\":\"buy|sell|hold\",\"reas
             
             echo "\n";
         }
+    }
+
+    /**
+     * Extract JSON object from response text (handles extra text before/after)
+     */
+    private function extractJsonFromResponse(string $response): string
+    {
+        // Find first { and last }
+        $firstBrace = strpos($response, '{');
+        $lastBrace = strrpos($response, '}');
+
+        if ($firstBrace === false || $lastBrace === false || $firstBrace >= $lastBrace) {
+            // No valid JSON structure found, return as-is
+            return $response;
+        }
+
+        // Extract the JSON portion
+        $json = substr($response, $firstBrace, $lastBrace - $firstBrace + 1);
+
+        // Verify balanced braces
+        $braceCount = 0;
+        $length = strlen($json);
+        $inString = false;
+        $escapeNext = false;
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $json[$i];
+
+            if ($escapeNext) {
+                $escapeNext = false;
+                continue;
+            }
+
+            if ($char === '\\') {
+                $escapeNext = true;
+                continue;
+            }
+
+            if ($char === '"') {
+                $inString = !$inString;
+                continue;
+            }
+
+            if (!$inString) {
+                if ($char === '{') {
+                    $braceCount++;
+                } elseif ($char === '}') {
+                    $braceCount--;
+                }
+            }
+        }
+
+        // If braces are balanced, return extracted JSON
+        if ($braceCount === 0) {
+            return $json;
+        }
+
+        // If not balanced, return original response
+        return $response;
+    }
+
+    /**
+     * Comprehensive JSON response cleaning
+     */
+    private function cleanJsonResponse(string $response): string
+    {
+        // First ensure valid UTF-8 encoding, replacing invalid sequences
+        if (!mb_check_encoding($response, 'UTF-8')) {
+            $response = mb_convert_encoding($response, 'UTF-8', 'UTF-8');
+        }
+
+        // Remove ONLY actual control characters (preserve UTF-8 multibyte chars)
+        // \x00-\x08: NULL and control chars
+        // \x0B: vertical tab
+        // \x0C: form feed
+        // \x0E-\x1F: more control chars
+        // \x7F: DELETE
+        // We keep \x09 (tab), \x0A (LF), \x0D (CR) temporarily for normalization
+        $clean = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $response);
+
+        // Normalize line endings
+        $clean = str_replace(["\r\n", "\r"], "\n", $clean);
+
+        // Normalize horizontal whitespace (spaces and tabs) but preserve newlines
+        $clean = preg_replace('/[ \t]+/', ' ', $clean);
+
+        // Remove excessive newlines (more than 2 consecutive)
+        $clean = preg_replace('/\n{3,}/', "\n\n", $clean);
+
+        return trim($clean);
     }
 
 }
