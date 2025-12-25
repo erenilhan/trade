@@ -15,7 +15,7 @@ Schedule::command('trading:multi-coin')
     ->onOneServer()
     ->runInBackground();
 
-// Collect market data every 3 minutes (before trading)
+// Collect market data every 3 minutes (all supported coins)
 Schedule::command('market:collect')
     ->everyThreeMinutes()
     ->withoutOverlapping()

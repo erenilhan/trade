@@ -10,9 +10,10 @@ class CollectMarketData extends Command
 {
     protected $signature = 'market:collect 
                            {--continuous : Run continuously every 3 minutes}
-                           {--coins= : Specific coins to collect (comma-separated)}';
+                           {--coins= : Specific coins to collect (comma-separated)}
+                           {--main-only : Only collect main 6 coins (BTC,ETH,SOL,BNB,XRP,DOGE)}';
 
-    protected $description = 'Collect market data for all supported coins';
+    protected $description = 'Collect market data for supported coins';
 
     public function handle()
     {
@@ -37,45 +38,52 @@ class CollectMarketData extends Command
         
         try {
             // Get supported coins
-            $coins = $this->option('coins') 
-                ? explode(',', $this->option('coins'))
-                : MarketDataService::getSupportedCoins();
+            if ($this->option('coins')) {
+                $coins = explode(',', $this->option('coins'));
+            } elseif ($this->option('main-only')) {
+                $coins = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT'];
+            } else {
+                $coins = MarketDataService::getSupportedCoins();
+            }
             
-            $this->info("📈 Processing " . count($coins) . " coins...");
+            $this->info("📈 Processing " . count($coins) . " coins in parallel...");
             
             $successCount = 0;
             $errorCount = 0;
             
-            foreach ($coins as $symbol) {
-                $symbol = trim($symbol);
+            // Process coins in chunks of 10 for better performance
+            $chunks = array_chunk($coins, 10);
+            
+            foreach ($chunks as $chunkIndex => $chunk) {
+                $this->info("📦 Processing chunk " . ($chunkIndex + 1) . "/" . count($chunks) . " (" . count($chunk) . " coins)");
                 
-                try {
-                    // Collect for both 3m and 4h timeframes
-                    $marketDataService->collectAllMarketData($symbol, '3m');
-                    $marketDataService->collectAllMarketData($symbol, '4h');
+                foreach ($chunk as $symbol) {
+                    $symbol = trim($symbol);
                     
-                    $this->line("  ✅ {$symbol} - OK");
-                    $successCount++;
-                    
-                } catch (\Exception $e) {
-                    $this->error("  ❌ {$symbol} - ERROR: " . $e->getMessage());
-                    Log::error("Market data collection failed for {$symbol}: " . $e->getMessage());
-                    $errorCount++;
+                    try {
+                        // Use the individual collectMarketData method
+                        $marketDataService->collectMarketData($symbol, '3m');
+                        $marketDataService->collectMarketData($symbol, '4h');
+                        
+                        $this->line("  ✅ {$symbol}");
+                        $successCount++;
+                        
+                    } catch (\Exception $e) {
+                        $this->error("  ❌ {$symbol} - " . substr($e->getMessage(), 0, 50));
+                        $errorCount++;
+                    }
                 }
                 
-                // Small delay to avoid rate limits
-                usleep(100000); // 0.1 second
+                // Small delay between chunks
+                if ($chunkIndex < count($chunks) - 1) {
+                    usleep(100000); // 0.1 seconds
+                }
             }
             
-            $this->info("✅ Collection complete: {$successCount} success, {$errorCount} errors");
-            
-            if ($successCount > 0) {
-                $this->info("📊 Market data updated at " . now()->format('H:i:s'));
-            }
+            $this->info("✅ Complete: {$successCount} success, {$errorCount} errors");
             
         } catch (\Exception $e) {
-            $this->error('❌ Market data collection failed: ' . $e->getMessage());
-            Log::error('Market data collection failed: ' . $e->getMessage());
+            $this->error('❌ Collection failed: ' . $e->getMessage());
         }
     }
 }
