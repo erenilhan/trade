@@ -34,6 +34,7 @@ class MultiCoinAIService
 
     /**
      * Make multi-coin trading decision (with optional batch processing)
+     * FIXED: Use database market data instead of live API calls
      */
     public function makeDecision(array $account): array
     {
