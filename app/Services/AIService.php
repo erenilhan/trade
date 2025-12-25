@@ -9,6 +9,7 @@ use MoeMizrak\LaravelOpenrouter\DTO\MessageData;
 use MoeMizrak\LaravelOpenrouter\Types\RoleType;
 use OpenAI\Laravel\Facades\OpenAI;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 use App\Models\Trade;
 use App\Models\TradeLog;
 use App\Models\BotSetting;
@@ -27,8 +28,86 @@ class AIService
     }
 
     /**
-     * Make trading decision using selected AI provider
+     * Make AI request with specific model support
      */
+    public function makeRequest(string $prompt, ?string $model = null): string
+    {
+        $provider = $this->provider;
+        $selectedModel = $model ?? BotSetting::get('ai_model', 'xiaomi/mimo-v2-flash:free');
+        
+        Log::info("🤖 AI Request: Provider={$provider}, Model={$selectedModel}");
+        
+        switch ($provider) {
+            case 'openrouter':
+                return $this->makeOpenRouterRequest($prompt, $selectedModel);
+            case 'deepseek':
+                return $this->makeDeepSeekRequest($prompt);
+            case 'openai':
+                return $this->makeOpenAIRequest($prompt, $selectedModel);
+            default:
+                throw new \Exception("Unsupported AI provider: {$provider}");
+        }
+    }
+
+    private function makeOpenRouterRequest(string $prompt, string $model): string
+    {
+        $apiKey = config('openrouter.api_key');
+        if (!$apiKey) {
+            throw new \Exception('OpenRouter API key not configured');
+        }
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $apiKey,
+            'Content-Type' => 'application/json',
+        ])->post('https://openrouter.ai/api/v1/chat/completions', [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'user', 'content' => $prompt]
+            ],
+            'max_tokens' => 2000,
+            'temperature' => 0.1,
+        ]);
+
+        if (!$response->successful()) {
+            throw new \Exception('OpenRouter API error: ' . $response->body());
+        }
+
+        $data = $response->json();
+        return $data['choices'][0]['message']['content'] ?? '';
+    }
+
+    private function makeOpenAIRequest(string $prompt, string $model): string
+    {
+        $apiKey = config('openai.api_key');
+        if (!$apiKey) {
+            throw new \Exception('OpenAI API key not configured');
+        }
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $apiKey,
+            'Content-Type' => 'application/json',
+        ])->post('https://api.openai.com/v1/chat/completions', [
+            'model' => str_replace('openai/', '', $model),
+            'messages' => [
+                ['role' => 'user', 'content' => $prompt]
+            ],
+            'max_tokens' => 2000,
+            'temperature' => 0.1,
+        ]);
+
+        if (!$response->successful()) {
+            throw new \Exception('OpenAI API error: ' . $response->body());
+        }
+
+        $data = $response->json();
+        return $data['choices'][0]['message']['content'] ?? '';
+    }
+
+    private function makeDeepSeekRequest(string $prompt): string
+    {
+        // DeepSeek implementation (existing code)
+        throw new \Exception('DeepSeek not implemented yet');
+    }
     public function makeDecision(array $account): array
     {
         try {

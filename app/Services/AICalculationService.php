@@ -71,7 +71,7 @@ class AICalculationService
         $prompt = $this->buildCompactCalculationPrompt($symbol, $ohlcvData);
         
         try {
-            $response = $this->aiService->makeRequest($prompt);
+            $response = $this->aiService->makeRequest($prompt, $this->calculationModel);
             $calculations = json_decode($response, true);
             
             if (json_last_error() === JSON_ERROR_NONE && isset($calculations['i'])) {
