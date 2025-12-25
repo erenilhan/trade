@@ -99,8 +99,9 @@ class ExecuteMultiCoinTrading extends Command
                 return self::SUCCESS;
             }
 
-            // Get AI decision
-            $aiDecision = $this->ai->makeDecision($account);
+            // Get AI decision (FORCED: Always use AI calculations)
+            $this->info("🧠 FORCED: Using AI-calculated indicators (from Command)");
+            $aiDecision = $this->ai->makeDecisionWithAICalculations($account);
 
             // Show AI response details
             $this->info("🤖 AI made " . count($aiDecision['decisions'] ?? []) . " decisions");
