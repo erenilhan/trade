@@ -518,16 +518,20 @@ class MultiCoinAIService
             // Volume info
             $currentVolume = $data3m['volume'] ?? 0;
             $prompt .= sprintf(
-                "Volume: current=%.2f\n\n",
+                "Volume: current=%.2f\n",
                 $currentVolume
             );
 
             $prompt .= sprintf(
-                "4H: EMA20=%.2f, EMA50=%.2f, ATR=%.2f, ADX(14)=%.2f (Moderate trend if >20, Strong if >25)\n",
+                "3m ADX(14): %.2f (Trend strength: Weak if <10, Moderate if 10-20, Strong if >20)\n\n",
+                $data3m['adx'] ?? 0
+            );
+
+            $prompt .= sprintf(
+                "4H: EMA20=%.2f, EMA50=%.2f, ATR=%.2f\n",
                 $data4h['ema20'],
                 $data4h['ema50'],
-                $data4h['atr14'],
-                $data4h['adx'] ?? 0
+                $data4h['atr14']
             );
 
             // ATR volatility warning (critical safety check)
