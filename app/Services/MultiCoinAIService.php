@@ -720,15 +720,15 @@ LONG (all 5 must pass):
 1. MACD>Signal & MACD>0
 2. RSI7: {$rsiLongMin}-{$rsiLongMax}
 3. Price 0-2% above EMA20
-4. 4H: EMA20>EMA50 & ADX>20
-5. Volume≥1.0x
+4. 4H: EMA20>EMA50 & ADX>10
+5. Volume≥0.5x
 
 SHORT (all 5 must pass):
 1. MACD<Signal & MACD<0
 2. RSI7: {$rsiShortMin}-{$rsiShortMax}
 3. Price 0-2% below EMA20
-4. 4H: EMA20<EMA50 & ADX>20
-5. Volume≥1.0x
+4. 4H: EMA20<EMA50 & ADX>10
+5. Volume≥0.5x
 
 HOLD if: ATR>8% OR criteria not met OR low confidence (<60%)
 
