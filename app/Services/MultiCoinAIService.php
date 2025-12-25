@@ -264,6 +264,9 @@ class MultiCoinAIService
         $enablePreFiltering = BotSetting::get('enable_pre_filtering', true);
         $filteredCoins = [];
 
+        // Track which coins we're sending to AI
+        $coinsToAnalyze = [];
+
         // Add each coin's data
         foreach ($allMarketData as $symbol => $data) {
             if (!$data) continue;
@@ -534,6 +537,9 @@ class MultiCoinAIService
                 $atrPercent,
                 $atrWarning
             );
+
+            // Track this coin for analysis
+            $coinsToAnalyze[] = $symbol;
         }
 
         // Account information
@@ -571,7 +577,12 @@ class MultiCoinAIService
         $prompt .= "\nACTIONS:\n";
         $prompt .= "- buy = LONG position (profit when price goes UP)\n";
         $prompt .= "- sell = SHORT position (profit when price goes DOWN)\n";
-        $prompt .= "- hold = No trade (criteria not met or ATR > 8%)\n";
+        $prompt .= "- hold = No trade (criteria not met or ATR > 8%)\n\n";
+
+        // CRITICAL: Explicitly list coins to analyze (prevents AI hallucination)
+        $prompt .= "⚠️ ANALYZE ONLY THESE COINS:\n";
+        $prompt .= implode(', ', $coinsToAnalyze) . "\n";
+        $prompt .= "DO NOT analyze BTC, ETH, LINK, or any other coins not in this list!\n";
 
         return $prompt;
     }
