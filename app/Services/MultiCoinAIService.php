@@ -41,12 +41,7 @@ class MultiCoinAIService
     public function makeDecisionWithAICalculations(array $account): array
     {
         try {
-            $useAICalculations = BotSetting::get('use_ai_calculations', false);
-            
-            if (!$useAICalculations) {
-                return $this->makeDecision($account);
-            }
-
+            // FORCED: Always use AI calculations
             Log::info("🧠 Using OPTIMIZED AI calculations (cached + pre-filtered)");
             
             $supportedCoins = MarketDataService::getSupportedCoins();
