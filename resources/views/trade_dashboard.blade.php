@@ -580,6 +580,18 @@
                                 <span class="text-gray-400">Entry</span>
                                 <span class="text-white">${formatMoney(pos.entry_price)}</span>
                             </div>
+                            ${pos.opened_at ? `
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">⏰ Opened</span>
+                                <span class="text-blue-400 font-semibold">${pos.opened_at}</span>
+                            </div>
+                            ${pos.duration ? `
+                            <div class="flex justify-between">
+                                <span class="text-gray-400">⏱️ Duration</span>
+                                <span class="text-purple-400 font-semibold">${pos.duration}</span>
+                            </div>
+                            ` : ''}
+                            ` : ''}
                             <div class="flex justify-between">
                                 <span class="text-gray-400">Current</span>
                                 <span class="text-white font-semibold">${formatMoney(pos.current_price)}</span>
