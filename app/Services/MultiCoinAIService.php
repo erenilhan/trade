@@ -38,15 +38,27 @@ class MultiCoinAIService
     public function makeDecision(array $account): array
     {
         try {
-            // Collect all market data
-            $allMarketData = $this->marketData->collectAllMarketData();
+            // Get market data from database (not live API)
+            $data3m = $this->marketData->getLatestDataAllCoins('3m');
+            $data4h = $this->marketData->getLatestDataAllCoins('4h');
+            
+            // Convert to expected format
+            $allMarketData = [];
+            foreach ($data3m as $symbol => $data) {
+                if (isset($data4h[$symbol])) {
+                    $allMarketData[$symbol] = [
+                        '3m' => $data,
+                        '4h' => $data4h[$symbol],
+                    ];
+                }
+            }
 
-            // Check if market is too quiet (low volatility = skip AI)
-            if ($this->marketData->isMarketTooQuiet($allMarketData)) {
-                Log::info("🔇 Skipping AI call - market volatility too low");
+            // Check if we have any market data
+            if (empty($allMarketData)) {
+                Log::warning("⚠️ No market data available in database");
                 return [
                     'decisions' => [],
-                    'reasoning' => 'Market volatility too low - no trading opportunities',
+                    'reasoning' => 'No market data available in database',
                 ];
             }
 
