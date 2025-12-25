@@ -35,8 +35,8 @@ class MultiCoinAIService
     }
 
     /**
-     * Make multi-coin trading decision using AI calculations
-     * EXPERIMENTAL: Let AI calculate its own indicators
+     * Make multi-coin trading decision using OPTIMIZED AI calculations
+     * SMART: Pre-filter + Cache + Batch processing
      */
     public function makeDecisionWithAICalculations(array $account): array
     {
@@ -44,58 +44,70 @@ class MultiCoinAIService
             $useAICalculations = BotSetting::get('use_ai_calculations', false);
             
             if (!$useAICalculations) {
-                // Fallback to normal method
                 return $this->makeDecision($account);
             }
 
-            Log::info("🤖 Using AI-calculated indicators for trading decisions");
+            Log::info("🧠 Using OPTIMIZED AI calculations (cached + pre-filtered)");
             
-            $allMarketData = [];
             $supportedCoins = MarketDataService::getSupportedCoins();
             
-            foreach ($supportedCoins as $symbol) {
-                // Get AI-calculated indicators
-                $aiData3m = $this->aiCalculation->getAICalculatedData($symbol, '3m');
-                $aiData4h = $this->aiCalculation->getAICalculatedData($symbol, '4h');
-                
-                if ($aiData3m && $aiData4h) {
+            // Get batch AI calculations (only for promising coins)
+            $aiData3m = $this->aiCalculation->getBatchAICalculations($supportedCoins, '3m');
+            $aiData4h = $this->aiCalculation->getBatchAICalculations($supportedCoins, '4h');
+            
+            $allMarketData = [];
+            foreach ($aiData3m as $symbol => $data3m) {
+                if (isset($aiData4h[$symbol])) {
                     $allMarketData[$symbol] = [
-                        '3m' => $aiData3m['indicators'],
-                        '4h' => $aiData4h['indicators'],
-                        'ai_trend' => $aiData4h['trend_analysis'] ?? null,
+                        '3m' => $this->convertCompactFormat($data3m['i']),
+                        '4h' => $this->convertCompactFormat($aiData4h[$symbol]['i']),
                     ];
                 }
             }
 
             if (empty($allMarketData)) {
-                Log::warning("⚠️ No AI-calculated market data available");
-                return [
-                    'decisions' => [],
-                    'reasoning' => 'No AI-calculated market data available',
-                ];
+                Log::warning("⚠️ No promising coins found for AI calculation");
+                return $this->makeDecision($account); // Fallback
             }
+
+            Log::info("🎯 AI calculated " . count($allMarketData) . " promising coins (saved " . (30 - count($allMarketData)) . " API calls)");
 
             // Build prompt with AI-calculated data
             $prompt = $this->buildMultiCoinPrompt($allMarketData, $allMarketData, $account['cash']);
             
-            // Get trading decision from AI
+            // Get trading decision
             $response = $this->aiService->makeRequest($prompt);
             $decision = json_decode($response, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new \Exception("Invalid JSON response from AI");
+                throw new \Exception("Invalid JSON response");
             }
 
-            Log::info("🤖 AI decision with AI calculations: " . json_encode($decision));
-            
             return $decision;
 
         } catch (\Exception $e) {
-            Log::error("❌ AI calculation decision failed: " . $e->getMessage());
-            
-            // Fallback to normal method
-            return $this->makeDecision($account);
+            Log::error("❌ Optimized AI calculation failed: " . $e->getMessage());
+            return $this->makeDecision($account); // Always fallback
         }
+    }
+
+    /**
+     * Convert compact AI format to standard format
+     */
+    private function convertCompactFormat(array $compact): array
+    {
+        return [
+            'rsi7' => $compact['r7'] ?? 50,
+            'rsi14' => $compact['r14'] ?? 50,
+            'macd' => $compact['m'] ?? 0,
+            'macd_signal' => $compact['ms'] ?? 0,
+            'ema20' => $compact['e20'] ?? 0,
+            'ema50' => $compact['e50'] ?? 0,
+            'adx' => $compact['adx'] ?? 0,
+            'atr14' => $compact['atr'] ?? 0,
+            'volume_ratio' => $compact['vr'] ?? 1,
+            'price' => $compact['e20'] ?? 0, // Use EMA20 as current price
+        ];
     }
     public function makeDecision(array $account): array
     {

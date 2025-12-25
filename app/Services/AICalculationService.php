@@ -15,105 +15,134 @@ class AICalculationService
     }
 
     /**
-     * Get raw OHLCV data and let AI calculate indicators
+     * Get AI-calculated data with caching and pre-filtering
      */
-    public function getAICalculatedData(string $symbol, string $timeframe = '3m'): ?array
+    public function getOptimizedAIData(string $symbol, string $timeframe = '3m'): ?array
     {
-        // Get raw OHLCV data from database
-        $rawData = MarketData::where('symbol', $symbol)
-            ->where('timeframe', $timeframe)
-            ->orderBy('data_timestamp', 'desc')
-            ->limit(50) // Last 50 candles for calculations
-            ->get(['price', 'ema20', 'ema50', 'volume', 'price_series', 'data_timestamp'])
-            ->reverse()
-            ->values();
+        // Check cache first (1 hour TTL)
+        $cacheKey = "ai_calc_{$symbol}_{$timeframe}";
+        $cached = cache()->get($cacheKey);
+        
+        if ($cached) {
+            Log::info("📦 Using cached AI calculation for {$symbol}");
+            return $cached;
+        }
 
-        if ($rawData->isEmpty()) {
+        // Pre-filter: Only calculate for promising coins
+        if (!$this->isPromising($symbol, $timeframe)) {
+            Log::info("⏭️ Skipping AI calculation for {$symbol} - not promising");
             return null;
         }
 
-        // Prepare data for AI
+        // Get minimal OHLCV data (last 14 candles only)
+        $rawData = MarketData::where('symbol', $symbol)
+            ->where('timeframe', $timeframe)
+            ->orderBy('data_timestamp', 'desc')
+            ->limit(14) // Reduced from 50 to 14
+            ->get(['price', 'volume', 'price_series', 'data_timestamp'])
+            ->reverse()
+            ->values();
+
+        if ($rawData->count() < 14) {
+            return null;
+        }
+
+        // Prepare compact data
         $ohlcvData = [];
         foreach ($rawData as $candle) {
             $priceArray = json_decode($candle->price_series, true);
             if (is_array($priceArray) && count($priceArray) >= 4) {
                 $ohlcvData[] = [
-                    'timestamp' => $candle->data_timestamp,
-                    'open' => $priceArray[0] ?? $candle->price,
-                    'high' => $priceArray[1] ?? $candle->price,
-                    'low' => $priceArray[2] ?? $candle->price,
-                    'close' => $priceArray[3] ?? $candle->price,
-                    'volume' => $candle->volume,
+                    'o' => round($priceArray[0], 4),
+                    'h' => round($priceArray[1], 4), 
+                    'l' => round($priceArray[2], 4),
+                    'c' => round($priceArray[3], 4),
+                    'v' => round($candle->volume, 0),
                 ];
             }
         }
 
-        if (empty($ohlcvData)) {
-            return null;
-        }
-
-        // Ask AI to calculate indicators
-        $prompt = $this->buildCalculationPrompt($symbol, $ohlcvData);
+        // Compact AI prompt (minimal tokens)
+        $prompt = $this->buildCompactCalculationPrompt($symbol, $ohlcvData);
         
         try {
             $response = $this->aiService->makeRequest($prompt);
             $calculations = json_decode($response, true);
             
-            if (json_last_error() === JSON_ERROR_NONE && isset($calculations['indicators'])) {
-                Log::info("✅ AI calculated indicators for {$symbol}: " . json_encode($calculations['indicators']));
+            if (json_last_error() === JSON_ERROR_NONE && isset($calculations['i'])) {
+                // Cache for 1 hour
+                cache()->put($cacheKey, $calculations, 3600);
+                
+                Log::info("✅ AI calculated {$symbol}: RSI=" . ($calculations['i']['r7'] ?? 'N/A'));
                 return $calculations;
             }
             
         } catch (\Exception $e) {
-            Log::error("❌ AI calculation failed for {$symbol}: " . $e->getMessage());
+            Log::error("❌ AI calc failed {$symbol}: " . $e->getMessage());
         }
 
         return null;
     }
 
-    private function buildCalculationPrompt(string $symbol, array $ohlcvData): string
+    /**
+     * Pre-filter promising coins to reduce AI calls
+     */
+    private function isPromising(string $symbol, string $timeframe): bool
     {
-        $dataJson = json_encode(array_slice($ohlcvData, -20)); // Last 20 candles
+        $latest = MarketData::getLatest($symbol, $timeframe);
+        if (!$latest) return false;
+
+        // Quick filters
+        $volumeRatio = $latest->volume_ratio ?? 0;
+        $rsi = $latest->rsi7 ?? 50;
         
-        return "You are a technical analysis expert. Calculate the following indicators from this OHLCV data for {$symbol}:
+        // Only process if:
+        return $volumeRatio >= 0.8 && // Decent volume
+               ($rsi <= 30 || $rsi >= 70 || // Extreme RSI
+                ($rsi >= 45 && $rsi <= 65)); // Or healthy range
+    }
 
-OHLCV Data (last 20 candles):
-{$dataJson}
+    /**
+     * Ultra-compact prompt to minimize tokens
+     */
+    private function buildCompactCalculationPrompt(string $symbol, array $ohlcvData): string
+    {
+        $data = json_encode($ohlcvData);
+        
+        return "Calculate indicators for {$symbol}. OHLCV data: {$data}
 
-Calculate these indicators for the LATEST candle:
-1. RSI(7) - 7-period Relative Strength Index
-2. RSI(14) - 14-period Relative Strength Index  
-3. MACD(12,26,9) - MACD line, Signal line, Histogram
-4. EMA(20) - 20-period Exponential Moving Average
-5. EMA(50) - 50-period Exponential Moving Average
-6. ADX(14) - Average Directional Index with +DI and -DI
-7. ATR(14) - Average True Range
-8. Volume Ratio - Current volume vs 20-period average
+Return JSON only:
+{\"i\":{\"r7\":45.6,\"r14\":52.3,\"m\":0.012,\"ms\":0.009,\"e20\":98500,\"e50\":97800,\"adx\":25.6,\"atr\":1250,\"vr\":1.23}}
 
-IMPORTANT: Use proper technical analysis formulas. Return ONLY valid JSON:
+Where: r7=RSI7, r14=RSI14, m=MACD, ms=MACD_signal, e20=EMA20, e50=EMA50, adx=ADX, atr=ATR14, vr=volume_ratio";
+    }
 
-{
-  \"symbol\": \"{$symbol}\",
-  \"indicators\": {
-    \"rsi7\": 45.67,
-    \"rsi14\": 52.34,
-    \"macd\": 0.0123,
-    \"macd_signal\": 0.0098,
-    \"macd_histogram\": 0.0025,
-    \"ema20\": 98500.45,
-    \"ema50\": 97800.23,
-    \"adx\": 25.67,
-    \"plus_di\": 18.45,
-    \"minus_di\": 12.34,
-    \"atr14\": 1250.67,
-    \"volume_ratio\": 1.23,
-    \"current_price\": 98750.00
-  },
-  \"trend_analysis\": {
-    \"4h_trend\": \"bullish|bearish|sideways\",
-    \"strength\": \"strong|moderate|weak\",
-    \"recommendation\": \"LONG|SHORT|HOLD\"
-  }
-}";
+    /**
+     * Batch process multiple coins efficiently
+     */
+    public function getBatchAICalculations(array $symbols, string $timeframe = '3m'): array
+    {
+        $results = [];
+        $batchSize = 5; // Process 5 coins at once
+        
+        $batches = array_chunk($symbols, $batchSize);
+        
+        foreach ($batches as $batch) {
+            $batchData = [];
+            
+            foreach ($batch as $symbol) {
+                $data = $this->getOptimizedAIData($symbol, $timeframe);
+                if ($data) {
+                    $batchData[$symbol] = $data;
+                }
+            }
+            
+            $results = array_merge($results, $batchData);
+            
+            // Small delay between batches
+            usleep(500000); // 0.5 seconds
+        }
+        
+        return $results;
     }
 }
