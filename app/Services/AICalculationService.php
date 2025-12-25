@@ -72,7 +72,7 @@ class AICalculationService
         
         try {
             $response = $this->aiService->makeRequest($prompt, $this->calculationModel);
-            $calculations = json_decode($response, true);
+            $calculations = is_string($response) ? json_decode($response, true) : $response;
             
             if (json_last_error() === JSON_ERROR_NONE && isset($calculations['i'])) {
                 // Cache for 1 hour
