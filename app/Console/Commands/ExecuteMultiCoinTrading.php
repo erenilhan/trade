@@ -99,9 +99,9 @@ class ExecuteMultiCoinTrading extends Command
                 return self::SUCCESS;
             }
 
-            // Get AI decision (TEMP: Using PHP calculations to test ADX)
-            $this->info("🧪 TEMP: Using PHP-calculated indicators (testing ADX)");
-            $aiDecision = $this->ai->makeDecision($account);
+            // Get AI decision (Using AI calculations)
+            $this->info("🧠 Using AI-calculated indicators");
+            $aiDecision = $this->ai->makeDecisionWithAICalculations($account);
 
             // Show AI response details
             $this->info("🤖 AI made " . count($aiDecision['decisions'] ?? []) . " decisions");
