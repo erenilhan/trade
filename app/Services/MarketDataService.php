@@ -696,8 +696,8 @@ class MarketDataService
         return [
             'trend' => $currentTrend,
             'value' => round($currentSupertrendValue, 8),
-            'is_bullish' => $currentTrend == 1,
-            'is_bearish' => $currentTrend == -1,
+            'supertrend_is_bullish' => $currentTrend == 1,
+            'supertrend_is_bearish' => $currentTrend == -1,
         ];
     }
 
