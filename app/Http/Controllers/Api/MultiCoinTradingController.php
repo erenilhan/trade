@@ -105,9 +105,9 @@ class MultiCoinTradingController extends Controller
                 ]);
             }
 
-            // Get AI decision for all coins (ALWAYS use AI calculations - forced)
-            Log::info("🧠 FORCED: Using AI-calculated indicators");
-            $aiDecision = $this->ai->makeDecisionWithAICalculations($account);
+            // Get AI decision for all coins (using PHP-calculated indicators from database)
+            Log::info("🧠 Using PHP-calculated indicators from database");
+            $aiDecision = $this->ai->makeDecision($account);
 
             $results = [];
 
