@@ -307,8 +307,8 @@ class MarketDataService
             'stoch_rsi_d' => $stochRsi['d'],
             'supertrend_trend' => $supertrend['trend'],
             'supertrend_value' => $supertrend['value'],
-            'supertrend_is_bullish' => $supertrend['is_bullish'],
-            'supertrend_is_bearish' => $supertrend['is_bearish'],
+            'supertrend_is_bullish' => $supertrend['supertrend_is_bullish'],
+            'supertrend_is_bearish' => $supertrend['supertrend_is_bearish'],
         ];
     }
 
