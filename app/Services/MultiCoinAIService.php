@@ -49,15 +49,15 @@ class MultiCoinAIService
             $supportedCoins = MarketDataService::getSupportedCoins();
             
             // Get batch AI calculations (only for promising coins)
-            $aiData3m = $this->aiCalculation->getBatchAICalculations($supportedCoins, '3m');
-            $aiData4h = $this->aiCalculation->getBatchAICalculations($supportedCoins, '4h');
-            
+            $aiData15m = $this->aiCalculation->getBatchAICalculations($supportedCoins, '15m');
+            $aiData1h = $this->aiCalculation->getBatchAICalculations($supportedCoins, '1h');
+
             $allMarketData = [];
-            foreach ($aiData3m as $symbol => $data3m) {
-                if (isset($aiData4h[$symbol])) {
+            foreach ($aiData15m as $symbol => $data15m) {
+                if (isset($aiData1h[$symbol])) {
                     $allMarketData[$symbol] = [
-                        '3m' => $this->convertCompactFormat($data3m['i']),
-                        '4h' => $this->convertCompactFormat($aiData4h[$symbol]['i']),
+                        '15m' => $this->convertCompactFormat($data15m['i']),
+                        '1h' => $this->convertCompactFormat($aiData1h[$symbol]['i']),
                     ];
                 }
             }
@@ -110,16 +110,16 @@ class MultiCoinAIService
     {
         try {
             // Get market data from database (not live API)
-            $data3m = $this->marketData->getLatestDataAllCoins('3m');
-            $data4h = $this->marketData->getLatestDataAllCoins('4h');
-            
+            $data15m = $this->marketData->getLatestDataAllCoins('15m');
+            $data1h = $this->marketData->getLatestDataAllCoins('1h');
+
             // Convert to expected format
             $allMarketData = [];
-            foreach ($data3m as $symbol => $data) {
-                if (isset($data4h[$symbol])) {
+            foreach ($data15m as $symbol => $data) {
+                if (isset($data1h[$symbol])) {
                     $allMarketData[$symbol] = [
-                        '3m' => $data,
-                        '4h' => $data4h[$symbol],
+                        '15m' => $data,
+                        '1h' => $data1h[$symbol],
                     ];
                 }
             }
@@ -281,13 +281,13 @@ class MultiCoinAIService
 
             // PRE-FILTERING: Hybrid filtering (time-aware + volume-aware)
             if ($enablePreFiltering) {
-                $data3m = $data['3m'];
-                $data4h = $data['4h'];
+                $data15m = $data['15m'];
+                $data1h = $data['1h'];
 
                 // CRITICAL: Skip coins with no market data (RSI=0)
-                $hasMarketData = ($data3m['rsi7'] ?? 0) > 0;
+                $hasMarketData = ($data15m['rsi7'] ?? 0) > 0;
                 if (!$hasMarketData) {
-                    Log::info("⏭️ Pre-filtered {$symbol} - No market data available (RSI={$data3m['rsi7']})");
+                    Log::info("⏭️ Pre-filtered {$symbol} - No market data available (RSI={$data15m['rsi7']})");
                     continue;
                 }
 
@@ -321,23 +321,23 @@ class MultiCoinAIService
 
                 Log::info("⏰ Current: {$currentHour} UTC, Region: {$region}, Min Volume: {$minVolumeRatio}x");
 
-                // Determine 4H trend direction first
-                $is4hUptrend = ($data4h['ema20'] ?? 0) > ($data4h['ema50'] ?? 0);
-                $is4hDowntrend = ($data4h['ema20'] ?? 0) < ($data4h['ema50'] ?? 0);
+                // Determine 1H trend direction first (for multi-timeframe confirmation)
+                $is1hUptrend = ($data1h['ema20'] ?? 0) > ($data1h['ema50'] ?? 0);
+                $is1hDowntrend = ($data1h['ema20'] ?? 0) < ($data1h['ema50'] ?? 0);
 
-                // 2025 OPTIMIZATION: Stronger ADX requirement (20+)
-                $adxOk = ($data4h['adx'] ?? 0) > 20; // Back to 20 for consistency
+                // 2025 OPTIMIZATION: ADX threshold at 20
+                $adxOk = ($data1h['adx'] ?? 0) > 20;
 
-                // If 4H ADX too weak (< 20), skip - NO weak trends
-                if (($data4h['adx'] ?? 0) < 20) {
-                    Log::info("⏭️ Pre-filtered {$symbol} - 4H too weak (ADX < 20)");
+                // If 1H ADX too weak (< 20), skip - NO weak trends
+                if (($data1h['adx'] ?? 0) < 20) {
+                    Log::info("⏭️ Pre-filtered {$symbol} - 1H too weak (ADX < 20)");
                     continue;
                 }
 
-                // Check volume first (critical for liquidity)
-                $volumeRatio = $data3m['volume_ratio'] ?? 0;
-                if ($volumeRatio < $minVolumeRatio) {
-                    Log::info("⏭️ Pre-filtered {$symbol} - Volume {$volumeRatio}x < {$minVolumeRatio}x minimum");
+                // Check volume first (critical for liquidity) - NEW: 1.1x minimum
+                $volumeRatio = $data15m['volume_ratio'] ?? 0;
+                if ($volumeRatio < 1.1) {
+                    Log::info("⏭️ Pre-filtered {$symbol} - Volume {$volumeRatio}x < 1.1x minimum");
                     continue;
                 }
 
@@ -345,25 +345,27 @@ class MultiCoinAIService
                 $longScore = 0;
                 $shortScore = 0;
 
-                // Get RSI thresholds from database
-                $rsiLongMin = BotSetting::get('rsi_long_min', 50);
+                // Get RSI thresholds from database (NEW: 40-70 for long, 30-60 for short)
+                $rsiLongMin = BotSetting::get('rsi_long_min', 40);
                 $rsiLongMax = BotSetting::get('rsi_long_max', 70);
                 $rsiShortMin = BotSetting::get('rsi_short_min', 30);
-                $rsiShortMax = BotSetting::get('rsi_short_max', 55);
+                $rsiShortMax = BotSetting::get('rsi_short_max', 60);
 
                 // LONG scoring (volume NOT counted in score)
-                if ($is4hUptrend) {
-                    if (($data3m['macd'] ?? 0) > ($data3m['macd_signal'] ?? 0)) $longScore++;
-                    if (($data3m['rsi7'] ?? 0) >= $rsiLongMin && ($data3m['rsi7'] ?? 0) <= $rsiLongMax) $longScore++;
-                    if ($data3m['price'] >= $data3m['ema20'] * 0.98 && $data3m['price'] <= $data3m['ema20'] * 1.05) $longScore++;
+                if ($is1hUptrend) {
+                    if (($data15m['macd'] ?? 0) > ($data15m['macd_signal'] ?? 0)) $longScore++;
+                    if (($data15m['rsi7'] ?? 0) >= $rsiLongMin && ($data15m['rsi7'] ?? 0) <= $rsiLongMax) $longScore++;
+                    // NEW: Price can be 0-3% from EMA20 (extended from 0-2%)
+                    if ($data15m['price'] >= $data15m['ema20'] * 0.97 && $data15m['price'] <= $data15m['ema20'] * 1.03) $longScore++;
                     if ($adxOk) $longScore++;
                 }
 
                 // SHORT scoring (volume NOT counted in score)
-                if ($is4hDowntrend) {
-                    if (($data3m['macd'] ?? 0) < ($data3m['macd_signal'] ?? 0)) $shortScore++;
-                    if (($data3m['rsi7'] ?? 0) >= $rsiShortMin && ($data3m['rsi7'] ?? 0) <= $rsiShortMax) $shortScore++;
-                    if ($data3m['price'] <= $data3m['ema20'] * 1.02 && $data3m['price'] >= $data3m['ema20'] * 0.95) $shortScore++;
+                if ($is1hDowntrend) {
+                    if (($data15m['macd'] ?? 0) < ($data15m['macd_signal'] ?? 0)) $shortScore++;
+                    if (($data15m['rsi7'] ?? 0) >= $rsiShortMin && ($data15m['rsi7'] ?? 0) <= $rsiShortMax) $shortScore++;
+                    // NEW: Price can be 0-3% from EMA20 (extended from 0-2%)
+                    if ($data15m['price'] <= $data15m['ema20'] * 1.03 && $data15m['price'] >= $data15m['ema20'] * 0.97) $shortScore++;
                     if ($adxOk) $shortScore++;
                 }
 
@@ -378,8 +380,8 @@ class MultiCoinAIService
                 }
             }
 
-            $data3m = $data['3m'];
-            $data4h = $data['4h'];
+            $data15m = $data['15m'];
+            $data1h = $data['1h'];
 
             $cleanSymbol = str_replace('/USDT', '', $symbol);
 
@@ -387,25 +389,25 @@ class MultiCoinAIService
             $coinsToAnalyze[] = $symbol;
 
             $prompt .= "ALL {$cleanSymbol} DATA\n";
-            $macdHistogram = ($data3m['macd_histogram'] ?? ($data3m['macd'] - ($data3m['macd_signal'] ?? 0)));
-            $macdHistogramRising = ($data3m['macd_histogram_rising'] ?? false);
-            
+            $macdHistogram = ($data15m['macd_histogram'] ?? ($data15m['macd'] - ($data15m['macd_signal'] ?? 0)));
+            $macdHistogramRising = ($data15m['macd_histogram_rising'] ?? false);
+
             $prompt .= sprintf(
                 "current_price = %.2f, current_ema20 = %.2f, current_macd = %.3f, macd_signal = %.3f, macd_histogram = %.3f, current_rsi (7 period) = %.2f\n",
-                $data3m['price'],
-                $data3m['ema20'],
-                $data3m['macd'],
-                $data3m['macd_signal'] ?? 0,
+                $data15m['price'],
+                $data15m['ema20'],
+                $data15m['macd'],
+                $data15m['macd_signal'] ?? 0,
                 $macdHistogram,
-                $data3m['rsi7']
+                $data15m['rsi7']
             );
 
-            // RSI direction check (from database settings)
-            $rsi = $data3m['rsi7'];
-            $rsiLongMin = BotSetting::get('rsi_long_min', 50);
+            // RSI direction check (from database settings) - NEW RANGES: 40-70 for long, 30-60 for short
+            $rsi = $data15m['rsi7'];
+            $rsiLongMin = BotSetting::get('rsi_long_min', 40);
             $rsiLongMax = BotSetting::get('rsi_long_max', 70);
             $rsiShortMin = BotSetting::get('rsi_short_min', 30);
-            $rsiShortMax = BotSetting::get('rsi_short_max', 55);
+            $rsiShortMax = BotSetting::get('rsi_short_max', 60);
 
             if ($rsi >= $rsiLongMin && $rsi <= $rsiLongMax) {
                 $prompt .= "RSI STATUS: ✅ IN LONG RANGE ({$rsiLongMin}-{$rsiLongMax}, current: {$rsi}) - healthy for LONG\n";
@@ -417,15 +419,15 @@ class MultiCoinAIService
                 $prompt .= "RSI STATUS: ⚠️ OVERBOUGHT (> {$rsiLongMax}, current: {$rsi}) - too strong, avoid LONG (pullback risk)\n";
             }
 
-            // Price position relative to EMA20
-            $ema20 = $data3m['ema20'] ?? 0;
+            // Price position relative to EMA20 - NEW: Extended to 3% max distance
+            $ema20 = $data15m['ema20'] ?? 0;
             if ($ema20 > 0) {
-                $priceVsEma = (($data3m['price'] - $ema20) / $ema20) * 100;
-                if ($priceVsEma >= 0 && $priceVsEma <= 2) {
+                $priceVsEma = (($data15m['price'] - $ema20) / $ema20) * 100;
+                if ($priceVsEma >= 0 && $priceVsEma <= 3) {
                     $prompt .= sprintf("PRICE POSITION: ✅ %.2f%% above EMA20 - good for LONG (riding uptrend)\n", $priceVsEma);
-                } elseif ($priceVsEma < 0 && $priceVsEma >= -2) {
+                } elseif ($priceVsEma < 0 && $priceVsEma >= -3) {
                     $prompt .= sprintf("PRICE POSITION: ✅ %.2f%% below EMA20 - good for SHORT (riding downtrend)\n", abs($priceVsEma));
-                } elseif ($priceVsEma > 2) {
+                } elseif ($priceVsEma > 3) {
                     $prompt .= sprintf("PRICE POSITION: ⚠️ %.2f%% above EMA20 - too extended for LONG\n", $priceVsEma);
                 } else {
                     $prompt .= sprintf("PRICE POSITION: ⚠️ %.2f%% below EMA20 - too extended for SHORT\n", abs($priceVsEma));
@@ -435,23 +437,20 @@ class MultiCoinAIService
             }
             $prompt .= "\n";
 
-            // Direction-aware MACD check (helps AI know which criteria to evaluate)
-            $macdBullish = $data3m['macd'] > ($data3m['macd_signal'] ?? 0);
-            $macdPositive = $data3m['macd'] > 0;
+            // Direction-aware MACD check - NEW: REMOVED MACD>0 requirement, only check crossover
+            $macdBullish = $data15m['macd'] > ($data15m['macd_signal'] ?? 0);
 
-            if ($macdBullish && $macdPositive) {
-                $prompt .= "MACD STATUS: ✅ BULLISH (MACD > Signal AND > 0) - **LONG signal** - evaluate LONG criteria\n\n";
-            } elseif (!$macdBullish && $data3m['macd'] < 0) {
-                $prompt .= "MACD STATUS: ✅ BEARISH (MACD < Signal AND < 0) - **SHORT signal** - evaluate SHORT criteria\n\n";
+            if ($macdBullish) {
+                $prompt .= "MACD STATUS: ✅ BULLISH (MACD > Signal) - **LONG signal** - evaluate LONG criteria\n\n";
             } else {
-                $prompt .= "MACD STATUS: ⚠️ NEUTRAL (mixed signals) - HOLD or low confidence\n\n";
+                $prompt .= "MACD STATUS: ✅ BEARISH (MACD < Signal) - **SHORT signal** - evaluate SHORT criteria\n\n";
             }
 
             // 2025 NEW: Bollinger Bands analysis
-            $bbUpper = $data3m['indicators']['bb_upper'] ?? 0;
-            $bbLower = $data3m['indicators']['bb_lower'] ?? 0;
-            $bbMiddle = $data3m['indicators']['bb_middle'] ?? 0;
-            $percentB = $data3m['indicators']['bb_percent_b'] ?? 0.5;
+            $bbUpper = $data15m['indicators']['bb_upper'] ?? 0;
+            $bbLower = $data15m['indicators']['bb_lower'] ?? 0;
+            $bbMiddle = $data15m['indicators']['bb_middle'] ?? 0;
+            $percentB = $data15m['indicators']['bb_percent_b'] ?? 0.5;
 
             if ($percentB < 0.2) {
                 $prompt .= "BOLLINGER BANDS: ✅ OVERSOLD (%B < 0.2) - Price near lower band, potential LONG reversal\n";
@@ -465,8 +464,8 @@ class MultiCoinAIService
             $prompt .= sprintf("  Upper: %.2f | Middle: %.2f | Lower: %.2f\n\n", $bbUpper, $bbMiddle, $bbLower);
 
             // 2025 NEW: Supertrend confirmation
-            $supertrendBullish = $data3m['indicators']['supertrend_is_bullish'] ?? false;
-            $supertrendBearish = $data3m['indicators']['supertrend_is_bearish'] ?? false;
+            $supertrendBullish = $data15m['indicators']['supertrend_is_bullish'] ?? false;
+            $supertrendBearish = $data15m['indicators']['supertrend_is_bearish'] ?? false;
 
             if ($supertrendBullish) {
                 $prompt .= "SUPERTREND: ✅ BULLISH TREND - Strong confirmation for LONG positions\n\n";
@@ -476,16 +475,16 @@ class MultiCoinAIService
                 $prompt .= "SUPERTREND: ⚠️ NEUTRAL - Trend unclear\n\n";
             }
 
-            // Core volume indicator with quality assessment
-            $volumeRatio = $data3m['volume_ratio'] ?? 1.0;
+            // Core volume indicator with quality assessment - NEW: 1.1x minimum threshold
+            $volumeRatio = $data15m['volume_ratio'] ?? 1.0;
             if ($volumeRatio >= 1.5) {
                 $volumeStatus = '✅ EXCELLENT (high liquidity, full position OK)';
             } elseif ($volumeRatio >= 1.2) {
                 $volumeStatus = '✅ GOOD (normal liquidity, standard position)';
-            } elseif ($volumeRatio >= 1.0) {
+            } elseif ($volumeRatio >= 1.1) {
                 $volumeStatus = '⚠️ ACCEPTABLE (moderate liquidity, prefer smaller position)';
             } else {
-                $volumeStatus = '❌ WEAK (low liquidity, high risk - HOLD recommended)';
+                $volumeStatus = '❌ WEAK (< 1.1x minimum - HOLD recommended)';
             }
 
             $prompt .= sprintf(
@@ -494,68 +493,68 @@ class MultiCoinAIService
                 $volumeStatus
             );
 
-            $prompt .= "Funding Rate: " . number_format($data3m['funding_rate'] ?? 0, 10) . "\n";
-            $prompt .= "Open Interest: Latest: " . number_format($data3m['open_interest'] ?? 0, 2) . "\n\n";
+            $prompt .= "Funding Rate: " . number_format($data15m['funding_rate'] ?? 0, 10) . "\n";
+            $prompt .= "Open Interest: Latest: " . number_format($data15m['open_interest'] ?? 0, 2) . "\n\n";
 
-            // Shortened series (5 candles = 15min context, saves tokens)
+            // Shortened series (5 candles = 75min context with 15m timeframe)
             // Only show if data available (AI calculations may not have series)
-            if (isset($data3m['price_series']) && is_array($data3m['price_series'])) {
-                $prompt .= "Recent 3m data (last 5 candles):\n";
-                $prompt .= "Price: [" . implode(',', array_map(fn($p) => number_format($p, 2), array_slice($data3m['price_series'], -5))) . "]\n";
+            if (isset($data15m['price_series']) && is_array($data15m['price_series'])) {
+                $prompt .= "Recent 15m data (last 5 candles = 75 minutes):\n";
+                $prompt .= "Price: [" . implode(',', array_map(fn($p) => number_format($p, 2), array_slice($data15m['price_series'], -5))) . "]\n";
 
-                if (isset($data3m['indicators']['ema_series'])) {
-                    $prompt .= "EMA20: [" . implode(',', array_map(fn($e) => number_format($e, 2), array_slice($data3m['indicators']['ema_series'], -5))) . "]\n";
+                if (isset($data15m['indicators']['ema_series'])) {
+                    $prompt .= "EMA20: [" . implode(',', array_map(fn($e) => number_format($e, 2), array_slice($data15m['indicators']['ema_series'], -5))) . "]\n";
                 }
-                if (isset($data3m['indicators']['macd_series'])) {
-                    $prompt .= "MACD: [" . implode(',', array_map(fn($m) => number_format($m, 3), array_slice($data3m['indicators']['macd_series'], -5))) . "]\n";
+                if (isset($data15m['indicators']['macd_series'])) {
+                    $prompt .= "MACD: [" . implode(',', array_map(fn($m) => number_format($m, 3), array_slice($data15m['indicators']['macd_series'], -5))) . "]\n";
                 }
-                if (isset($data3m['indicators']['rsi7_series'])) {
-                    $prompt .= "RSI7: [" . implode(',', array_map(fn($r) => number_format($r, 1), array_slice($data3m['indicators']['rsi7_series'], -5))) . "]\n";
+                if (isset($data15m['indicators']['rsi7_series'])) {
+                    $prompt .= "RSI7: [" . implode(',', array_map(fn($r) => number_format($r, 1), array_slice($data15m['indicators']['rsi7_series'], -5))) . "]\n";
                 }
                 $prompt .= "\n";
             }
 
             // Volume info
-            $currentVolume = $data3m['volume'] ?? 0;
+            $currentVolume = $data15m['volume'] ?? 0;
             $prompt .= sprintf(
                 "Volume: current=%.2f\n",
                 $currentVolume
             );
 
             $prompt .= sprintf(
-                "3m ADX(14): %.2f (Trend strength: Weak if <10, Moderate if 10-20, Strong if >20)\n\n",
-                $data3m['adx'] ?? 0
+                "15m ADX(14): %.2f (Trend strength: Weak if <10, Moderate if 10-20, Strong if >20)\n\n",
+                $data15m['adx'] ?? 0
             );
 
             $prompt .= sprintf(
-                "4H: EMA20=%.2f, EMA50=%.2f, ATR=%.2f\n",
-                $data4h['ema20'],
-                $data4h['ema50'],
-                $data4h['atr14']
+                "1H: EMA20=%.2f, EMA50=%.2f, ATR=%.2f\n",
+                $data1h['ema20'],
+                $data1h['ema50'],
+                $data1h['atr14']
             );
 
             // ATR volatility warning (critical safety check)
-            $currentPrice = $data3m['price'] ?? 0;
+            $currentPrice = $data15m['price'] ?? 0;
             if ($currentPrice > 0) {
-                $atrPercent = ($data4h['atr14'] / $currentPrice) * 100;
+                $atrPercent = ($data1h['atr14'] / $currentPrice) * 100;
                 $atrWarning = $atrPercent > 8 ? '⚠️ TOO VOLATILE → HOLD' : '✅ OK';
             } else {
                 $atrPercent = 0;
                 $atrWarning = '⚠️ No price data';
             }
 
-            // Direction-aware 4H trend check (critical for determining LONG vs SHORT)
-            $is4hUptrend = $data4h['ema20'] > ($data4h['ema50'] * 0.999);
-            $adxStrong = ($data4h['adx'] ?? 0) > 20; // Back to 20 (25 was too strict)
+            // Direction-aware 1H trend check (critical for multi-timeframe confirmation)
+            $is1hUptrend = $data1h['ema20'] > ($data1h['ema50'] * 0.999);
+            $adxStrong = ($data1h['adx'] ?? 0) > 20;
 
-            if ($is4hUptrend && $adxStrong) {
-                $prompt .= "4H TREND: ✅ STRONG BULLISH UPTREND (EMA20 > EMA50, ADX > 20) - **Favor LONG positions**\n";
-            } elseif (!$is4hUptrend && $adxStrong) {
-                $prompt .= "4H TREND: ✅ STRONG BEARISH DOWNTREND (EMA20 < EMA50, ADX > 20) - **Favor SHORT positions**\n";
-            } elseif ($is4hUptrend && !$adxStrong) {
-                $prompt .= "4H TREND: ⚠️ WEAK UPTREND (EMA20 > EMA50, ADX < 20) - Too weak, prefer HOLD\n";
+            if ($is1hUptrend && $adxStrong) {
+                $prompt .= "1H TREND: ✅ STRONG BULLISH UPTREND (EMA20 > EMA50, ADX > 20) - **Favor LONG positions**\n";
+            } elseif (!$is1hUptrend && $adxStrong) {
+                $prompt .= "1H TREND: ✅ STRONG BEARISH DOWNTREND (EMA20 < EMA50, ADX > 20) - **Favor SHORT positions**\n";
+            } elseif ($is1hUptrend && !$adxStrong) {
+                $prompt .= "1H TREND: ⚠️ WEAK UPTREND (EMA20 > EMA50, ADX < 20) - Too weak, prefer HOLD\n";
             } else {
-                $prompt .= "4H TREND: ⚠️ WEAK DOWNTREND (EMA20 < EMA50, ADX < 20) - Too weak, prefer HOLD\n";
+                $prompt .= "1H TREND: ⚠️ WEAK DOWNTREND (EMA20 < EMA50, ADX < 20) - Too weak, prefer HOLD\n";
             }
 
             $prompt .= sprintf(
@@ -711,30 +710,32 @@ class MultiCoinAIService
             return $customPrompt;
         }
 
-        // COMPACT system prompt (optimized for free models with token limits)
+        // COMPACT system prompt (optimized for 15m/1H scalping strategy)
         // Get RSI thresholds from database
-        $rsiLongMin = BotSetting::get('rsi_long_min', 50);
+        $rsiLongMin = BotSetting::get('rsi_long_min', 40);
         $rsiLongMax = BotSetting::get('rsi_long_max', 70);
         $rsiShortMin = BotSetting::get('rsi_short_min', 30);
-        $rsiShortMax = BotSetting::get('rsi_short_max', 55);
+        $rsiShortMax = BotSetting::get('rsi_short_max', 60);
 
-        return "Crypto trader. LONG=buy uptrends, SHORT=sell downtrends.
+        return "Crypto scalper. 15m entries, 1H trend confirmation. LONG=buy uptrends, SHORT=sell downtrends.
 
 LONG (all 5 must pass):
-1. MACD>Signal & MACD>0
+1. MACD>Signal (15m) - NO MACD>0 requirement
 2. RSI7: {$rsiLongMin}-{$rsiLongMax}
-3. Price 0-2% above EMA20
-4. 4H: EMA20>EMA50 (uptrend)
-5. Volume≥0.5x & 3m ADX>10
+3. Price 0-3% above EMA20 (extended from 2%)
+4. 1H: EMA20>EMA50 (uptrend confirmation)
+5. Volume≥1.1x & 1H ADX>20
 
 SHORT (all 5 must pass):
-1. MACD<Signal & MACD<0
+1. MACD<Signal (15m) - NO MACD<0 requirement
 2. RSI7: {$rsiShortMin}-{$rsiShortMax}
-3. Price 0-2% below EMA20
-4. 4H: EMA20<EMA50 (downtrend)
-5. Volume≥0.5x & 3m ADX>10
+3. Price 0-3% below EMA20 (extended from 2%)
+4. 1H: EMA20<EMA50 (downtrend confirmation)
+5. Volume≥1.1x & 1H ADX>20
 
-HOLD if: ATR>8% OR criteria not met OR low confidence (<60%)
+HOLD if: ATR>8% OR criteria not met OR confidence <50%
+
+Confidence range: 50-90% (avoid overconfidence >90%)
 
 Max 1-2 trades/cycle. Leverage=2x always.
 

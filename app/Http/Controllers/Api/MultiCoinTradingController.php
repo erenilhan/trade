@@ -119,26 +119,19 @@ class MultiCoinTradingController extends Controller
 
                 Log::info("🎯 Decision for {$symbol}", ['action' => $action, 'confidence' => $confidence]);
 
-                // 2025 FIX: Skip TOO HIGH confidence (inverse correlation detected!)
-                // Analytics show: 80-84% confidence = 28.6% win rate (WORST!)
-                // vs 60-69% confidence = 57.1% win rate (BEST!)
-                if ($confidence > 0.82 && in_array($action, ['buy', 'sell'])) {
-                    Log::warning("🚨 {$symbol}: Suspiciously HIGH confidence ({$confidence}) - Analytics show this is a trap! Overriding to HOLD");
-                    $results[$symbol] = ['action' => 'hold', 'reason' => 'Overconfident AI (inverse correlation risk)'];
+                // NEW 2026: Confidence range 50-90% (sweet spot for scalping)
+                // Skip TOO HIGH confidence (>90% often overconfident)
+                if ($confidence > 0.90 && in_array($action, ['buy', 'sell'])) {
+                    Log::warning("🚨 {$symbol}: Overconfident AI ({$confidence}) - Skipping (>90% threshold)");
+                    $results[$symbol] = ['action' => 'hold', 'reason' => 'Overconfident AI (>90%)'];
                     continue;
                 }
 
-                // Skip if confidence too low
-                if ($confidence < 0.60 && $action !== 'hold') {
+                // Skip if confidence too low (<50%)
+                if ($confidence < 0.50 && $action !== 'hold') {
                     Log::warning("⚠️ {$symbol}: Confidence too low ({$confidence}), overriding to hold");
-                    $results[$symbol] = ['action' => 'hold', 'reason' => 'Low confidence'];
+                    $results[$symbol] = ['action' => 'hold', 'reason' => 'Low confidence (<50%)'];
                     continue;
-                }
-
-                // Reduce leverage for risky 75-82% confidence range (historically poor performance)
-                if ($confidence >= 0.75 && $confidence < 0.82 && in_array($action, ['buy', 'sell'])) {
-                    $decision['leverage'] = min($decision['leverage'] ?? 2, 2); // Cap at 2x for this range
-                    Log::warning("⚠️ {$symbol}: Confidence {$confidence} in risky range (75-82%), capping leverage at 2x");
                 }
 
                 // Execute action
@@ -226,30 +219,47 @@ class MultiCoinTradingController extends Controller
 
             // SYSTEM CALCULATES entry/target/stop (AI just decides action)
             $entryPrice = $this->binance->fetchTicker($symbol)['last'];
-            $targetPrice = $entryPrice * 1.06; // +6% profit target (trailing L2 will activate here)
 
-            // 2025 OPTIMIZATION: ATR-based dynamic stop loss
-            // Get latest market data for ATR
+            // NEW 2026: Staged exit strategy
+            // TP1: 1% profit (close half position, move stop to break-even)
+            // TP2: Continue riding trend until MACD reversal
+            $tp1Price = $entryPrice * 1.01; // +1% for first partial exit
+            $tp2Price = $entryPrice * 1.04; // +4% for full exit (if trend continues)
+
+            // 2025 OPTIMIZATION: ATR-based dynamic stop loss (1.5x ATR for tighter scalping)
+            // Get latest market data for ATR from 15m timeframe
             $marketData = \App\Models\MarketData::where('symbol', $symbol)
-                ->where('timeframe', '4h')
+                ->where('timeframe', '15m')
                 ->orderBy('data_timestamp', 'desc')
                 ->first();
 
             $atr14 = $marketData->indicators['atr14'] ?? null;
 
             if ($atr14) {
-                // ATR-based stop: 2.5x ATR distance
+                // ATR-based stop: 1.5x ATR distance (tighter for 15m scalping)
                 $atrPercent = ($atr14 / $entryPrice) * 100;
-                $priceStopPercent = min(max($atrPercent * 2.5, 5.0), 15.0); // Min 5%, Max 15%
+                $priceStopPercent = min(max($atrPercent * 1.5, 3.0), 10.0); // Min 3%, Max 10%
                 Log::info("🎯 {$symbol}: ATR-based stop loss: {$priceStopPercent}% (ATR: {$atrPercent}%)");
             } else {
-                // Fallback to old formula if no ATR data
-                $maxPnlLoss = 15.0;
-                $priceStopPercent = max($maxPnlLoss / $leverage, 5.0);
+                // Fallback for 15m scalping
+                $priceStopPercent = 5.0; // Default 5% stop for scalping
                 Log::warning("⚠️ {$symbol}: No ATR data, using fallback stop loss: {$priceStopPercent}%");
             }
 
             $stopPrice = $entryPrice * (1 - ($priceStopPercent / 100));
+
+            // Calculate Risk/Reward ratio
+            $riskAmount = $entryPrice - $stopPrice;
+            $rewardAmount = $tp1Price - $entryPrice;
+            $rrRatio = $riskAmount > 0 ? $rewardAmount / $riskAmount : 0;
+
+            // NEW: Enforce minimum 1:1.5 Risk/Reward ratio
+            if ($rrRatio < 1.5) {
+                Log::warning("⚠️ {$symbol}: R/R ratio {$rrRatio} < 1.5, skipping trade");
+                return ['action' => 'hold', 'reason' => "R/R ratio too low ({$rrRatio})"];
+            }
+
+            Log::info("✅ {$symbol}: R/R ratio {$rrRatio} meets 1:1.5 minimum");
 
             // Calculate liquidation price
             $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage);
@@ -291,12 +301,15 @@ class MultiCoinTradingController extends Controller
                 'notional_usd' => $positionSize * $leverage,
                 'entry_order_id' => $order['id'],
                 'exit_plan' => [
-                    'profit_target' => $targetPrice,
+                    'tp1' => $tp1Price, // +1% partial exit
+                    'tp2' => $tp2Price, // +4% full exit
                     'stop_loss' => $stopPrice,
-                    'invalidation_condition' => $decision['invalidation'] ?? "Price closes below " . ($actualEntryPrice * 0.95),
+                    'invalidation_condition' => $decision['invalidation'] ?? "Price closes below EMA20 or MACD crosses down",
+                    'staged_exit' => true, // Enable staged exit
+                    'rr_ratio' => round($rrRatio, 2),
                 ],
                 'confidence' => $decision['confidence'],
-                'risk_usd' => $positionSize * ($leverage / 100) * 3, // 3% risk
+                'risk_usd' => $positionSize * ($priceStopPercent / 100), // Actual risk in USD
                 'is_open' => true,
                 'opened_at' => now(),
             ]);
@@ -312,7 +325,7 @@ class MultiCoinTradingController extends Controller
                 'cost' => ($order['filled'] ?? $quantity) * $actualEntryPrice,
                 'leverage' => $leverage,
                 'stop_loss' => $stopPrice,
-                'take_profit' => $targetPrice,
+                'take_profit' => $tp1Price, // Use TP1 for first target
                 'status' => 'filled',
                 'response_data' => json_encode($order),
             ]);
@@ -388,16 +401,44 @@ class MultiCoinTradingController extends Controller
 
             // SYSTEM CALCULATES entry/target/stop (AI just decides action)
             $entryPrice = $this->binance->fetchTicker($symbol)['last'];
-            // SHORT: profit when price goes DOWN, stop when price goes UP
-            $targetPrice = $entryPrice * 0.94; // -6% profit target (trailing L2 will activate here)
 
-            // Dynamic stop loss: max 15% P&L loss with 5% minimum price stop
-            // Formula: price_stop% = max(15% / leverage, 5%)
-            // Examples: 2x = 7.5% price stop, 3x = 5% price stop
-            // CRITICAL FIX: Previous 8% P&L caused 0% win rate (24 trades lost)
-            $maxPnlLoss = 15.0; // Maximum P&L loss %
-            $priceStopPercent = max($maxPnlLoss / $leverage, 5.0); // Never tighter than 5%
+            // NEW 2026: Staged exit strategy for SHORT
+            // TP1: -1% (price down 1%, close half position, move stop to break-even)
+            // TP2: Continue riding trend until MACD reversal
+            $tp1Price = $entryPrice * 0.99; // -1% for first partial exit (SHORT)
+            $tp2Price = $entryPrice * 0.96; // -4% for full exit (SHORT)
+
+            // ATR-based stop loss for SHORT (1.5x ATR for tighter scalping)
+            $marketData = \App\Models\MarketData::where('symbol', $symbol)
+                ->where('timeframe', '15m')
+                ->orderBy('data_timestamp', 'desc')
+                ->first();
+
+            $atr14 = $marketData->indicators['atr14'] ?? null;
+
+            if ($atr14) {
+                $atrPercent = ($atr14 / $entryPrice) * 100;
+                $priceStopPercent = min(max($atrPercent * 1.5, 3.0), 10.0); // Min 3%, Max 10%
+                Log::info("🎯 {$symbol}: ATR-based stop loss (SHORT): {$priceStopPercent}% (ATR: {$atrPercent}%)");
+            } else {
+                $priceStopPercent = 5.0; // Default 5% stop for scalping
+                Log::warning("⚠️ {$symbol}: No ATR data, using fallback stop loss: {$priceStopPercent}%");
+            }
+
             $stopPrice = $entryPrice * (1 + ($priceStopPercent / 100)); // SHORT: stop ABOVE entry
+
+            // Calculate Risk/Reward ratio for SHORT
+            $riskAmount = $stopPrice - $entryPrice;
+            $rewardAmount = $entryPrice - $tp1Price;
+            $rrRatio = $riskAmount > 0 ? $rewardAmount / $riskAmount : 0;
+
+            // NEW: Enforce minimum 1:1.5 Risk/Reward ratio
+            if ($rrRatio < 1.5) {
+                Log::warning("⚠️ {$symbol}: R/R ratio {$rrRatio} < 1.5, skipping SHORT");
+                return ['action' => 'hold', 'reason' => "R/R ratio too low ({$rrRatio})"];
+            }
+
+            Log::info("✅ {$symbol}: R/R ratio {$rrRatio} meets 1:1.5 minimum (SHORT)");
 
             // Calculate liquidation price for SHORT
             $liqPrice = $this->binance->calculateLiquidationPrice($entryPrice, $leverage, 'short');
@@ -439,13 +480,16 @@ class MultiCoinTradingController extends Controller
                 'notional_usd' => $positionSize * $leverage,
                 'entry_order_id' => $order['id'],
                 'exit_plan' => [
-                    'profit_target' => $targetPrice,
+                    'tp1' => $tp1Price, // -1% partial exit (SHORT)
+                    'tp2' => $tp2Price, // -4% full exit (SHORT)
                     'stop_loss' => $stopPrice,
-                    'invalidation_condition' => $decision['invalidation'] ?? "Price closes above " . ($actualEntryPrice * 1.05),
+                    'invalidation_condition' => $decision['invalidation'] ?? "Price closes above EMA20 or MACD crosses up",
                     'reasoning' => $decision['reasoning'] ?? 'SHORT position based on bearish signals',
+                    'staged_exit' => true, // Enable staged exit
+                    'rr_ratio' => round($rrRatio, 2),
                 ],
                 'confidence' => $decision['confidence'],
-                'risk_usd' => $positionSize * ($leverage / 100) * 3, // 3% risk
+                'risk_usd' => $positionSize * ($priceStopPercent / 100), // Actual risk in USD
                 'is_open' => true,
                 'opened_at' => now(),
             ]);
@@ -461,7 +505,7 @@ class MultiCoinTradingController extends Controller
                 'cost' => ($order['filled'] ?? $quantity) * $actualEntryPrice,
                 'leverage' => $leverage,
                 'stop_loss' => $stopPrice,
-                'take_profit' => $targetPrice,
+                'take_profit' => $tp1Price, // Use TP1 for first target (SHORT)
                 'status' => 'filled',
                 'response_data' => json_encode($order),
             ]);
@@ -667,7 +711,7 @@ class MultiCoinTradingController extends Controller
         $positions = Position::active()->get()->mapWithKeys(function ($pos) {
             return [$pos->symbol => $pos->toPromptFormat()];
         });
-        $marketData = $this->marketData->getLatestDataAllCoins('3m');
+        $marketData = $this->marketData->getLatestDataAllCoins('15m');
 
         return response()->json([
             'success' => true,

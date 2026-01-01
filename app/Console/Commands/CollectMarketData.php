@@ -8,24 +8,24 @@ use Illuminate\Support\Facades\Log;
 
 class CollectMarketData extends Command
 {
-    protected $signature = 'market:collect 
-                           {--continuous : Run continuously every 3 minutes}
+    protected $signature = 'market:collect
+                           {--continuous : Run continuously every 15 minutes}
                            {--coins= : Specific coins to collect (comma-separated)}
                            {--main-only : Only collect main 6 coins (BTC,ETH,SOL,BNB,XRP,DOGE)}';
 
-    protected $description = 'Collect market data for supported coins';
+    protected $description = 'Collect market data for supported coins (15m and 1H timeframes)';
 
     public function handle()
     {
         $marketDataService = app(MarketDataService::class);
 
         if ($this->option('continuous')) {
-            $this->info('🔄 Starting continuous market data collection (every 3 minutes)...');
+            $this->info('🔄 Starting continuous market data collection (every 15 minutes)...');
             $this->info('Press Ctrl+C to stop');
 
             while (true) {
                 $this->collectData($marketDataService);
-                sleep(180); // 3 minutes
+                sleep(900); // 15 minutes
             }
         } else {
             $this->collectData($marketDataService);
@@ -68,8 +68,8 @@ class CollectMarketData extends Command
 
                     try {
                         // Use the individual collectMarketData method
-                        $marketDataService->collectMarketData($symbol, '3m');
-                        $marketDataService->collectMarketData($symbol, '4h');
+                        $marketDataService->collectMarketData($symbol, '15m');
+                        $marketDataService->collectMarketData($symbol, '1h');
 
                         $this->line("  ✅ {$symbol}");
                         $successCount++;

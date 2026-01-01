@@ -26,15 +26,15 @@ class MarketDataService
 
         foreach (self::getSupportedCoins() as $symbol) {
             try {
-                // Get 3m data
-                $data3m = $this->collectMarketData($symbol, '3m');
+                // Get 15m data (intraday scalping timeframe)
+                $data15m = $this->collectMarketData($symbol, '15m');
 
-                // Get 4h data
-                $data4h = $this->collectMarketData($symbol, '4h');
+                // Get 1h data (trend confirmation timeframe)
+                $data1h = $this->collectMarketData($symbol, '1h');
 
                 $allData[$symbol] = [
-                    '3m' => $data3m,
-                    '4h' => $data4h,
+                    '15m' => $data15m,
+                    '1h' => $data1h,
                 ];
 
                 Log::info("📊 Market data collected for {$symbol}");
@@ -83,7 +83,7 @@ class MarketDataService
     /**
      * Collect market data for a single symbol and timeframe
      */
-    public function collectMarketData(string $symbol, string $timeframe = '3m'): array
+    public function collectMarketData(string $symbol, string $timeframe = '15m'): array
     {
         // Fetch OHLCV data
         $ohlcv = $this->fetchOHLCV($symbol, $timeframe, 50); // Last 50 candles for indicators
@@ -748,13 +748,13 @@ class MarketDataService
         $totalCoins = 0;
 
         foreach ($allMarketData as $symbol => $data) {
-            if (!$data || !isset($data['4h']['atr14'])) {
+            if (!$data || !isset($data['1h']['atr14'])) {
                 continue;
             }
 
             $totalCoins++;
-            $atr = $data['4h']['atr14'];
-            $currentPrice = $data['3m']['price'];
+            $atr = $data['1h']['atr14'];
+            $currentPrice = $data['15m']['price'];
 
             // ATR as percentage of price
             $atrPercent = ($atr / $currentPrice) * 100;
@@ -777,7 +777,7 @@ class MarketDataService
     /**
      * Get latest market data for all coins from database
      */
-    public function getLatestDataAllCoins(string $timeframe = '3m'): array
+    public function getLatestDataAllCoins(string $timeframe = '15m'): array
     {
         $data = [];
 

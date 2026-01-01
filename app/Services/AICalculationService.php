@@ -22,12 +22,13 @@ class AICalculationService
     /**
      * Get AI-calculated data with caching and pre-filtering
      */
-    public function getOptimizedAIData(string $symbol, string $timeframe = '3m'): ?array
+    public function getOptimizedAIData(string $symbol, string $timeframe = '15m'): ?array
     {
-        // Check cache first (1 hour TTL)
+        // Check cache first (15 minute TTL for 15m timeframe)
         $cacheKey = "ai_calc_{$symbol}_{$timeframe}";
+        $cacheTTL = $timeframe === '15m' ? 900 : 3600; // 15 min for 15m, 1 hour for 1h
         $cached = cache()->get($cacheKey);
-        
+
         if ($cached) {
             Log::info("📦 Using cached AI calculation for {$symbol}");
             return $cached;
@@ -39,16 +40,16 @@ class AICalculationService
             return null;
         }
 
-        // Get minimal OHLCV data (last 14 candles only)
+        // Get minimal OHLCV data (last 50 candles for accurate indicator calculation)
         $rawData = MarketData::where('symbol', $symbol)
             ->where('timeframe', $timeframe)
             ->orderBy('data_timestamp', 'desc')
-            ->limit(14) // Reduced from 50 to 14
+            ->limit(50) // Need 50 for EMA50, MACD, ADX
             ->get(['price', 'volume', 'price_series', 'data_timestamp'])
             ->reverse()
             ->values();
 
-        if ($rawData->count() < 14) {
+        if ($rawData->count() < 50) {
             return null;
         }
 
@@ -80,8 +81,8 @@ class AICalculationService
                 $latestCandle = $rawData->last();
                 $calculations['i']['price'] = $latestCandle->price ?? 0;
 
-                // Cache for 1 hour
-                cache()->put($cacheKey, $calculations, 3600);
+                // Cache with dynamic TTL
+                cache()->put($cacheKey, $calculations, $cacheTTL);
 
                 Log::info("✅ AI calculated {$symbol}: RSI=" . ($calculations['i']['r7'] ?? 'N/A'));
                 return $calculations;
@@ -102,14 +103,14 @@ class AICalculationService
         $latest = MarketData::getLatest($symbol, $timeframe);
         if (!$latest) return false;
 
-        // Quick filters
+        // Quick filters (NEW 2026: stricter volume for scalping)
         $volumeRatio = $latest->volume_ratio ?? 0;
         $rsi = $latest->rsi7 ?? 50;
 
         // Only process if:
-        return $volumeRatio >= 0.3 && // Lower threshold for more coverage
-               ($rsi <= 35 || $rsi >= 65 || // Extreme RSI
-                ($rsi >= 40 && $rsi <= 60)); // Or healthy range
+        return $volumeRatio >= 1.0 && // Higher threshold for 15m scalping (closer to 1.1x requirement)
+               ($rsi <= 35 || $rsi >= 65 || // Extreme RSI (potential reversals)
+                ($rsi >= 40 && $rsi <= 70)); // Or expanded healthy range (40-70 for long, 30-60 for short)
     }
 
     /**
@@ -140,7 +141,7 @@ Return ONLY this JSON:
     /**
      * Batch process multiple coins efficiently
      */
-    public function getBatchAICalculations(array $symbols, string $timeframe = '3m'): array
+    public function getBatchAICalculations(array $symbols, string $timeframe = '15m'): array
     {
         $results = [];
         $batchSize = 5; // Process 5 coins at once
