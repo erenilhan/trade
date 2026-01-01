@@ -156,7 +156,76 @@ class MarketDataService
         ];
 
         // Store in database
-        MarketData::store($symbol, $timeframe, $marketData);
+        // If this is first time (no existing data), store all 50 candles for accurate calculations
+        $existingCount = MarketData::where('symbol', $symbol)
+            ->where('timeframe', $timeframe)
+            ->count();
+
+        if ($existingCount < 50) {
+            // First time or insufficient data - store all historical candles
+            Log::info("📦 First time for {$symbol} {$timeframe}, storing all {$existingCount}/50 candles");
+
+            // We need to fetch and store each historical candle
+            // This is a one-time operation
+            for ($i = 0; $i < count($ohlcv); $i++) {
+                $candle = $ohlcv[$i];
+                $timestamp = \Carbon\Carbon::createFromTimestampMs($candle[0]);
+
+                // Calculate indicators up to this point
+                $historicalOhlcv = array_slice($ohlcv, 0, $i + 1);
+                $historicalIndicators = $this->calculateIndicators($historicalOhlcv);
+
+                $historicalData = [
+                    'symbol' => $symbol,
+                    'timeframe' => $timeframe,
+                    'price' => $candle[4], // close price
+                    'ema20' => $historicalIndicators['ema20'],
+                    'ema50' => $historicalIndicators['ema50'],
+                    'macd' => $historicalIndicators['macd'],
+                    'macd_signal' => $historicalIndicators['macd_signal'],
+                    'macd_histogram' => $historicalIndicators['macd_histogram'] ?? 0,
+                    'macd_histogram_rising' => $historicalIndicators['macd_histogram_rising'] ?? false,
+                    'rsi7' => $historicalIndicators['rsi7'],
+                    'rsi14' => $historicalIndicators['rsi14'],
+                    'atr3' => $historicalIndicators['atr3'] ?? 0,
+                    'atr14' => $historicalIndicators['atr14'] ?? 0,
+                    'adx' => $historicalIndicators['adx'],
+                    'plus_di' => $historicalIndicators['plus_di'],
+                    'minus_di' => $historicalIndicators['minus_di'],
+                    'volume' => $candle[5],
+                    'funding_rate' => $fundingRate,
+                    'open_interest' => $openInterest,
+                    'price_series' => [$candle[1], $candle[2], $candle[3], $candle[4]], // OHLC
+                    'bb_upper' => $historicalIndicators['bb_upper'],
+                    'bb_middle' => $historicalIndicators['bb_middle'],
+                    'bb_lower' => $historicalIndicators['bb_lower'],
+                    'bb_width' => $historicalIndicators['bb_width'],
+                    'bb_percent_b' => $historicalIndicators['bb_percent_b'],
+                    'volume_ma' => $historicalIndicators['volume_ma'],
+                    'volume_ratio' => $historicalIndicators['volume_ratio'],
+                    'stoch_rsi_k' => $historicalIndicators['stoch_rsi_k'],
+                    'stoch_rsi_d' => $historicalIndicators['stoch_rsi_d'],
+                    'indicators' => [
+                        'adx' => $historicalIndicators['adx'],
+                        'plus_di' => $historicalIndicators['plus_di'],
+                        'minus_di' => $historicalIndicators['minus_di'],
+                        'bb_upper' => $historicalIndicators['bb_upper'],
+                        'bb_middle' => $historicalIndicators['bb_middle'],
+                        'bb_lower' => $historicalIndicators['bb_lower'],
+                        'stoch_rsi_k' => $historicalIndicators['stoch_rsi_k'],
+                        'stoch_rsi_d' => $historicalIndicators['stoch_rsi_d'],
+                        'supertrend_is_bullish' => $historicalIndicators['supertrend_is_bullish'],
+                        'supertrend_is_bearish' => $historicalIndicators['supertrend_is_bearish'],
+                    ],
+                    'data_timestamp' => $timestamp,
+                ];
+
+                MarketData::store($symbol, $timeframe, $historicalData);
+            }
+        } else {
+            // Normal operation - just store latest candle
+            MarketData::store($symbol, $timeframe, $marketData);
+        }
 
         return $marketData;
     }
