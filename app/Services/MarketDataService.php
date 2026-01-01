@@ -615,7 +615,8 @@ class MarketDataService
             return [
                 'trend' => 0,
                 'value' => end($closes),
-                'is_bullish' => false,
+                'supertrend_is_bullish' => false,
+                'supertrend_is_bearish' => false,
             ];
         }
 
